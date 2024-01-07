@@ -5,3 +5,5 @@ https://github.com/facebookresearch/faiss.git
 
 https://github.com/weaviate/weaviate.git
 https://github.com/chroma-core/chroma.git
+https://github.com/qdrant/qdrant.git
+https://github.com/run-llama/llama_index.git

@@ -1,0 +1,7 @@
+https://github.com/langchain-ai/langchain.git
+https://github.com/scikit-learn/scikit-learn.git
+https://github.com/milvus-io/milvus.git
+https://github.com/facebookresearch/faiss.git
+
+https://github.com/weaviate/weaviate.git
+https://github.com/chroma-core/chroma.git

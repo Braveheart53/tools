@@ -65,6 +65,14 @@
       "host": "stottawa.netcrawler.ca:8080",
       "location": "Ottawa, ON",
       "country": "Canada"
+    },
+    {
+      "backend": "pyspeedtest",
+      "server_id": "auto",
+      "name": "auto",
+      "host": "",
+      "location": "",
+      "country": ""
     }
   ],
   "schedule": {
@@ -91,6 +99,7 @@
   "export_csv": true,
   "export_veusz": true,
   "veusz_time_axis": "local",
-  "export_every_n_rounds": 0,
+  "export_every_n": 3,
+  "export_every_unit": "rounds",
   "notes": ""
 }

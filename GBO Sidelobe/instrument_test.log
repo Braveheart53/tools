@@ -1,0 +1,2 @@
+2025-08-07 10:03:51,656 - INFO - Test Connection: FAILED - Failed to connect: VI_ERROR_RSRC_NFOUND (-1073807343): Insufficient location information or the requested device or resource is not present in the system. (0.000s)
+2025-08-07 10:04:10,706 - INFO - Found 1 instruments: ASRL1::INSTR

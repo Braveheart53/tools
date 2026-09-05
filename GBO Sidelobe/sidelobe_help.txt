@@ -1,0 +1,60 @@
+
+Program to compute contribution of sidelobes.  Usage:
+
+sidelobe --help           Briefly describe the usual arguments.
+sidelobe --help [OPTION]  Describe the given option & related ones.
+sidelobe --help opt       Briefly list the most useful arguments.
+sidelobe --help test      Also list less-useful/test arguments.
+sidelobe --help env       Describe relevant environment variables.
+sidelobe --help main      Describe the most useful arguments.
+sidelobe --help use       Describe other useful arguments.
+sidelobe --help all       Describe ALL arguments (some briefly).
+sidelobe --help err       Discuss sources of error in strayscan.
+sidelobe --help pos       Discuss the telescope positions.
+sidelobe --help full      Describe EVERYTHING in full detail.
+sidelobe [ARGUMENTS]      Run sidelobe with given command-line arguments.
+
+TYPICAL USAGE:  sidelobe [OPTIONS] <inputScanFilename> <outputScanFilename>
+
+OR:  sidelobe [OPTIONS] --in <inputScanFilename> --out <outputScanFilename>
+
+Create a sidelobe correction ("strayscan") output file, of the same type as the
+input file (whether SDD-file or SDFITS file), by convolving the telescope's
+sidelobe pattern with an all-sky HI survey.  [Note that, for each output
+strayscan, the string "STRAY" is appended to the OBJECT name, and in a FITS
+file the value of the variable IFNUM is set to 99.]
+
+Brief summaries of some useful options:
+  --overwrite : overwrite any existing output scan-file.
+  --append : if output scan-file exists, keep it and append new scans to it.
+  --correct-stray : instead of outputting the strayscans, subtract the computed
+      strayscans from the input (at each point), renormalize, and output the
+      resulting stray-corrected spectra.  Note that the string "STCOR" will
+      be appended to the OBJECT name of each output stray-corrected spectrum,
+      and for a FITS file the variable IFNUM will be incremented by 100.
+  --out-stray <strayOutputFilename> : if '--correct-stray' was specified, also
+      output the calculated strayscans (to this file).
+  --in-stray <strayInputFilename> : alternatively, the previously-computed
+      strayscans in this file will be used to obtain the stray-corrected
+      output spectra (this option implies '--correct-stray').
+  --in-cal <FinCAL> : provide a calibration factor (e.g., 1.08) to multiply the
+      input spectra as they are read in (optionally, you can also supply a
+      STOKES value, plus a different calibration factor to apply to spectra
+      having this STOKES value).
+  --force : force the calculation of strayscans for input spectra that would
+      normally be ignored (e.g., if the input file already contains strayscans
+      or stray-subtracted spectra).
+  --GBT : produce sidelobe corrections for the GBT at NRAO (the default is to
+      look for the telescope name in the input scan-file).
+  --140 : produce sidelobe corrections for the NRAO 140-foot (43 m) Telescope.
+  --log-min : minimize log-output to the terminal (standard output), listing
+      only scan-number and index-position in file for each scan processed (the
+      default is to list several summary lines per scan).
+  --quiet : absolute minimum log output: only a few lines of initial and final
+      status information, with no listing of scans processed.
+  --list : summarize to the terminal (but do not actually process) the scans in
+      the input file (no output file should be provided); for example,
+      'sidelobe --list --log-min gbt_scan_file.fits'
+
+[To see other options and other modes of operation, use the HELP options above.]
+

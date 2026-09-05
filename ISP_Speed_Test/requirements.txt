@@ -1,0 +1,12 @@
+# ISP Speed Monitor — pip requirements — version 1.1.0
+# revision history (newest first)
+#   1.1.0  2026-09-04  speedtest-cli commented out (its `speedtest` shim shadows the Ookla CLI)
+#   1.0.0  2026-09-04  initial requirements for isp_speed_monitor.py 1.0.0
+qtpy>=2.4
+PySide6>=6.6
+pyqtgraph>=0.13.3
+numpy>=1.26
+h5py>=3.10
+# OPTIONAL pure-python fallback back-end (rate-limited, no jitter/packet loss).
+# Not needed with the Ookla CLI; it installs a same-named `speedtest` shim.
+# speedtest-cli>=2.1.3

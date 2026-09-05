@@ -1,0 +1,48 @@
+ISP Speed Monitor — required modules
+====================================
+File version : 1.3.2
+For script   : isp_speed_monitor.py 1.2.0
+
+Revision history (newest first)
+  1.3.2  2026-09-05  follows script 1.2.0 (no dependency changes)
+  1.3.1  2026-09-05  follows script 1.1.1 (no dependency changes)
+  1.3.0  2026-09-04  follows script 1.1.0 (no dependency changes; Qt >= 6.8 recommended for title-bar theming)
+  1.2.0  2026-09-04  speedtest-cli marked optional-and-not-recommended alongside the Ookla CLI (PATH shadowing)
+  1.1.1  2026-09-04  script reference bumped to 1.0.1
+  1.1.0  2026-09-04  added uv install route (pyproject.toml / uv sync)
+  1.0.0  2026-09-04  initial list (pip + mamba routes)
+
+
+Python 3.12 (tested 3.12.13; 3.10+ expected to work)
+
+Third-party — install with any one of:
+  uv    : uv sync            (pyproject.toml + .python-version; add --extra fallback for speedtest-cli)
+  mamba : mamba env create -f environment.yml
+  pip   : pip install -r requirements.txt
+--------------------------------------------------------------------------------------------------
+module          min version   tested    purpose
+qtpy            2.4           2.4.3     Qt abstraction layer (script sets QT_API=pyside6)
+PySide6         6.6           6.11.2    Qt 6 binding (GUI, QThread worker, QSettings)
+pyqtgraph       0.13.3        0.14.0    live plots (3x2 grid, DateAxisItem, ErrorBarItem)
+numpy           1.26          2.5.2     array maths / round statistics / Veusz arrays
+h5py            3.10          3.16.0    writes the native Veusz .vszh5 (HDF5) document
+speedtest-cli   2.1.3         2.1.3     OPTIONAL fallback back-end. NOT recommended next to the Ookla CLI:
+                                        it installs a same-named `speedtest`/`speedtest.exe` shim in the
+                                        env's bin/Scripts folder that shadows the real CLI on PATH.
+
+Standard library only (no install): argparse, csv, dataclasses, datetime, json, logging,
+math, os, platform, random, re, shutil, signal, socket, sqlite3, subprocess, sys, time,
+traceback, typing.
+
+External programs (install at least one; auto-detected on PATH or set in the GUI)
+---------------------------------------------------------------------------------
+speedtest        Ookla Speedtest CLI 1.2.x   https://www.speedtest.net/apps/cli   (recommended)
+librespeed-cli   LibreSpeed CLI (Go)         https://github.com/librespeed/speedtest-cli
+(none)           Simulated back-end          built in, for exercising the pipeline offline
+veusz            Veusz 4.x (optional)        https://veusz.github.io  — only to open the .vszh5 files
+
+Safe degradation
+----------------
+pyqtgraph missing  -> Plots tab shows an install hint, everything else works
+h5py missing       -> Veusz export skipped with a logged error, other exports work
+no back-end found  -> status bar reports it; campaign will not start

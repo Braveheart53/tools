@@ -1,0 +1,752 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ParamWithValueList xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <version>20080502</version>
+  <parameterTypes>
+    <ParamType>
+      <typeName>Inventor</typeName>
+      <typeCode>0</typeCode>
+    </ParamType>
+    <ParamType>
+      <typeName>String</typeName>
+      <typeCode>1</typeCode>
+    </ParamType>
+    <ParamType>
+      <typeName>Boolean</typeName>
+      <typeCode>2</typeCode>
+    </ParamType>
+  </parameterTypes>
+  <parameters>
+    <ParamWithValue>
+      <name>d1</name>
+      <typeCode>in</typeCode>
+      <value>QZ_offset</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d4</name>
+      <typeCode>in</typeCode>
+      <value>-QZ_offset</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d5</name>
+      <typeCode>in</typeCode>
+      <value>QZ_offset</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>QZ_offset</name>
+      <typeCode>ft</typeCode>
+      <value>7.5 ft</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Chamber_ht</name>
+      <typeCode>in</typeCode>
+      <value>15'-0"</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Chamber_len</name>
+      <typeCode>in</typeCode>
+      <value>36'-10 1/2"</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Chamber_wd</name>
+      <typeCode>in</typeCode>
+      <value>178.5 in</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d6</name>
+      <typeCode>in</typeCode>
+      <value>-Chamber_len</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>QZ_Rad</name>
+      <typeCode>in</typeCode>
+      <value>12 in</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d12</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d13</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d14</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d15</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d16</name>
+      <typeCode>in</typeCode>
+      <value>Chamber_wd / 2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d17</name>
+      <typeCode>in</typeCode>
+      <value>-Chamber_wd / 2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Chamber_Wall_thk</name>
+      <typeCode>in</typeCode>
+      <value>0.25 in</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d19</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d20</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d21</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d22</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d23</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d24</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d25</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d26</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d27</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d28</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d29</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Abz_num_wd</name>
+      <typeCode>ul</typeCode>
+      <value>( Chamber_wd - 2 ul * Abz_base_ht ) / ( 24 in )</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Abz_base_ht</name>
+      <typeCode>in</typeCode>
+      <value>1.5 in</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Abz_num_ht</name>
+      <typeCode>ul</typeCode>
+      <value>Chamber_ht / Abz_base_len</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d66</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d67</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d68</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d69</name>
+      <typeCode>in</typeCode>
+      <value>0 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d70</name>
+      <typeCode>in</typeCode>
+      <value>2.0 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d71</name>
+      <typeCode>in</typeCode>
+      <value>24 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d72</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d73</name>
+      <typeCode>ul</typeCode>
+      <value>Abz_num_wd</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d74</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d75</name>
+      <typeCode>in</typeCode>
+      <value>Abz_base_ht</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d76</name>
+      <typeCode>in</typeCode>
+      <value>2.0 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d77</name>
+      <typeCode>in</typeCode>
+      <value>24 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d78</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d79</name>
+      <typeCode>ul</typeCode>
+      <value>Abz_num_ht - 1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d80</name>
+      <typeCode>in</typeCode>
+      <value>2.0 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d81</name>
+      <typeCode>in</typeCode>
+      <value>0 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d82</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d83</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d84</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d85</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d86</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d87</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d88</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d89</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d90</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d91</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d92</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d93</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d94</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d95</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d96</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d97</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d98</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d99</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d100</name>
+      <typeCode>in</typeCode>
+      <value>2.0 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d101</name>
+      <typeCode>in</typeCode>
+      <value>Chamber_wd - Abz_base_ht</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d102</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d103</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d104</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d105</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d106</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d107</name>
+      <typeCode>in</typeCode>
+      <value>24 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d108</name>
+      <typeCode>in</typeCode>
+      <value>24 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d109</name>
+      <typeCode>ul</typeCode>
+      <value>Abz_num_ht - 1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d110</name>
+      <typeCode>ul</typeCode>
+      <value>Abz_num_wd</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d111</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d112</name>
+      <typeCode>in</typeCode>
+      <value>0.000 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d113</name>
+      <typeCode>in</typeCode>
+      <value>6 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Abz_num_len</name>
+      <typeCode>ul</typeCode>
+      <value>Chamber_len / Abz_base_len</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d114</name>
+      <typeCode>in</typeCode>
+      <value>2.0 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d115</name>
+      <typeCode>in</typeCode>
+      <value>24 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d116</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d117</name>
+      <typeCode>ul</typeCode>
+      <value>Abz_num_len</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d118</name>
+      <typeCode>in</typeCode>
+      <value>2.0 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d119</name>
+      <typeCode>in</typeCode>
+      <value>Chamber_wd - 6 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d120</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d121</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d122</name>
+      <typeCode>in</typeCode>
+      <value>2.0 in</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d123</name>
+      <typeCode>in</typeCode>
+      <value>Chamber_ht - Abz_base_ht</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d124</name>
+      <typeCode>ul</typeCode>
+      <value>1 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>d125</name>
+      <typeCode>ul</typeCode>
+      <value>2 ul</value>
+      <comment />
+      <isKey>false</isKey>
+      <tolerance>Default;Nominal;Document Precision</tolerance>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Abz_base_len</name>
+      <typeCode>in</typeCode>
+      <value>24 in</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+    <ParamWithValue>
+      <name>Abz_base_wd</name>
+      <typeCode>in</typeCode>
+      <value>24 in</value>
+      <comment />
+      <isKey>false</isKey>
+    </ParamWithValue>
+  </parameters>
+</ParamWithValueList>

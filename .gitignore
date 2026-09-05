@@ -1,0 +1,6 @@
+/network
+misc/dev.ipynb
+*.pyc
+/ISP_Speed_Test/speedtest_output
+/ISP_Speed_Test/speedtest_output/
+/speedtest_output/

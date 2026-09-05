@@ -1,0 +1,58 @@
+name: Py3p12
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+
+  # Interactive development
+  - ipython
+  - jupyterlab
+  - spyder
+  - ipykernel
+
+  # Scientific/data work
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - seaborn
+  - xarray
+  - dask
+  - h5py
+  - netcdf4
+  - zarr
+  - pyarrow
+
+  # Domain and engineering tools
+  - astropy
+  - allantools
+  - scikit-rf
+  - pyvisa
+  - pyvisa-py
+  - pyaedt
+  - ezdxf
+  - pyvista
+  - vtk
+  - veusz
+
+  # Development/tooling
+  - black
+  - flake8
+  - pylint
+  - pytest
+  - sphinx
+  - rich
+
+  # GUI and visualization
+  - pyqt
+  - pyqtgraph
+  - pyside6
+  - bokeh
+  - holoviews
+  - panel
+  - bqplot
+
+  # Packages installed from PyPI only
+  - pip:
+      - rich-cli

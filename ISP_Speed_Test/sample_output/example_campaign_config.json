@@ -1,0 +1,43 @@
+{
+  "name": "example_campaign",
+  "output_dir": "./speedtest_output",
+  "endpoints": [
+    {
+      "backend": "ookla",
+      "server_id": "30561",
+      "name": "Ashburn (pinned)"
+    },
+    {
+      "backend": "ookla",
+      "server_id": "auto",
+      "name": "Ookla nearest"
+    }
+  ],
+  "schedule": {
+    "mode": "interval",
+    "interval_s": 10,
+    "min_gap_s": 300.0,
+    "max_gap_s": 1800.0,
+    "window_s": 3600.0,
+    "per_window": 4,
+    "duration_s": 1,
+    "end_at_local": "",
+    "start_at_local": "",
+    "first_test_immediately": true,
+    "random_seed": null
+  },
+  "ookla_exe": "",
+  "librespeed_exe": "",
+  "test_download": true,
+  "test_upload": true,
+  "test_timeout_s": 120,
+  "pause_between_endpoints_s": 2.0,
+  "write_jsonl": true,
+  "export_json": true,
+  "export_csv": true,
+  "export_veusz": true,
+  "veusz_time_axis": "local",
+  "export_every_n": 1,
+  "export_every_unit": "tests",
+  "notes": ""
+}

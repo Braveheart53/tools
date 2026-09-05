@@ -1,0 +1,30 @@
+# mamba environment for dwg2pdf 0.2.0 (engine) + dwg2pdf_gui 0.1.0 (Qt GUI)
+#
+#   mamba env create -f environment-dwg2pdf.yml
+#   mamba activate dwg2pdf
+#   python dwg2pdf_gui.py
+#
+# This covers everything except a DWG decoder. On a machine with AutoCAD you
+# need no decoder at all — the accoreconsole backend is found automatically.
+# Without AutoCAD, add one decoder; see README §4.
+name: dwg2pdf
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  # --- optional DWG decoder, for machines without AutoCAD -----------------
+  # conda-forge ships libredwg 0.11.3876 (uploaded 2020-11-17), six years
+  # behind the 0.14 this tool was verified against. Usable as a fallback;
+  # QCAD Professional or DWG TrueView are stronger Windows choices, and
+  # build_libredwg.sh builds current LibreDWG on Linux.
+  # - libredwg
+  - pip:
+      - ezdxf>=1.4           # DXF parsing + the drawing/export add-on
+      - pymupdf>=1.24        # PDF backend, and --merge
+      - qtpy>=2.4            # Qt abstraction layer (GUI)
+      - PySide6>=6.6         # the Qt binding qtpy targets here
+      - psutil               # optional: enables --report-memory
+      # pywin32 is NOT required. The AutoCAD backend drives accoreconsole.exe
+      # as a subprocess rather than through COM, so there is no pywin32
+      # dependency and no "Invalid execution context" class of failure.

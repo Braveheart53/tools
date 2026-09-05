@@ -1,0 +1,34 @@
+# file version: 1.2.0   ([project].version below tracks the script version)
+# revision history (newest first)
+#   1.2.0  2026-09-05  project version follows script 1.2.0
+#   1.1.1  2026-09-05  project version follows script 1.1.1
+#   1.1.0  2026-09-04  project version follows script 1.1.0; author metadata
+#   1.0.3  2026-09-04  project version follows script 1.0.3
+#   1.0.2  2026-09-04  project version follows script 1.0.2
+#   1.0.1  2026-09-04  project version follows script 1.0.1
+#   1.0.0  2026-09-04  initial uv project for isp_speed_monitor.py 1.0.0
+# ISP Speed Monitor — uv project file
+#   uv sync                                  # creates .venv with Python 3.12 (downloads it if needed)
+#   uv run isp_speed_monitor.py              # GUI
+#   uv run isp_speed_monitor.py --headless --config campaign.json
+# One-off without a project:  uv run --with qtpy,pyside6,pyqtgraph,numpy,h5py isp_speed_monitor.py
+[project]
+name = "isp-speed-monitor"
+version = "1.2.0"
+description = "Scheduled / random multi-endpoint ISP speed-test logger with qtpy GUI, SQLite and native Veusz export"
+authors = [{ name = "W. Wallace", email = "wwallace@nrao.edu" }]
+requires-python = ">=3.10"
+dependencies = [
+    "qtpy>=2.4",
+    "PySide6>=6.6",
+    "pyqtgraph>=0.13.3",
+    "numpy>=1.26",
+    "h5py>=3.10",
+]
+
+[project.optional-dependencies]
+# optional pure-python fallback back-end:  uv sync --extra fallback
+fallback = ["speedtest-cli>=2.1.3"]
+
+[tool.uv]
+package = false

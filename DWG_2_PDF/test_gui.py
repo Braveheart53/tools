@@ -80,6 +80,7 @@ def run_test() -> int:
     chk("AutoCAD script override field present",
         hasattr(w, "accscript_edit"))
     chk("AutoCAD language field present", hasattr(w, "acclang_edit"))
+    chk("AutoCAD plotter (.pc3) field present", hasattr(w, "pc3_edit"))
     unit_vals = [w.units_combo.itemData(i)
                  for i in range(w.units_combo.count())]
     chk("drawing-units control present, auto by default",
@@ -129,6 +130,26 @@ def run_test() -> int:
         cmd.count("dwg_samples") == 1 and cmd.count("test_drawings") == 1)
 
     # -- archive naming -----------------------------------------------
+    # -- merge bookmarks ----------------------------------------------
+    bm = [w.bookmark_combo.itemData(i)
+          for i in range(w.bookmark_combo.count())]
+    chk("bookmark modes offered, tree by default",
+        bm == ["tree", "flat", "none"])
+    chk("bookmark control disabled until merging is on",
+        not w.bookmark_combo.isEnabled())
+    w.merge_cb.setChecked(True)
+    app.processEvents()
+    chk("bookmark control enabled with merging on",
+        w.bookmark_combo.isEnabled())
+    chk("tree is the engine default, so not in the command",
+        "--merge-bookmarks" not in w.command_view.toPlainText())
+    w.bookmark_combo.setCurrentIndex(1)          # flat
+    app.processEvents()
+    chk("a non-default bookmark mode reaches the command",
+        "--merge-bookmarks flat" in w.command_view.toPlainText())
+    w.merge_cb.setChecked(False)
+    app.processEvents()
+
     chk("archive name carries both revisions",
         ("v" + engine.__revision__) in w.archive_edit.text()
         and ("gui" + gui.__revision__) in w.archive_edit.text())

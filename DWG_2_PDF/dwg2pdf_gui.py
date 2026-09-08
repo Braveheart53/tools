@@ -17,6 +17,32 @@ window shows the equivalent command line so the two stay interchangeable.
 Author Email: (set your email here)
 # %%% Revisions
 Semantic versioning: External Release.Internal Release.Working version
+# %%%% 0.2.11: AutoCAD plotter-configuration field.
+# Date: 2026-09-08
+#              NEW "AutoCAD plotter (.pc3)" field on the Engine tab, wired
+#              to the engine's --acad-pc3.  This is the only way to stop
+#              AutoCAD opening every finished PDF in a viewer: "open in
+#              viewer when done" is a custom property of the .pc3 itself,
+#              not a system variable, so the GUI cannot switch it off with
+#              a SETVAR -- the tooltip gives the Plotter Manager steps to
+#              make a copy with it cleared.
+#              Companion to engine 0.3.15, which fixes --monochrome being
+#              silently ignored by both AutoCAD backends and stops a single
+#              AutoCAD crash from failing every remaining drawing.
+# %%%% 0.2.10: Merge bookmarks.
+# Date: 2026-09-03
+#              "Also merge every PDF into one document" now produces a
+#              navigable document rather than a long scroll.  New "Merge
+#              bookmarks" selector on the Finish tab: Folder tree (default,
+#              nests each drawing under its source folders), Flat list (one
+#              entry per drawing with its full relative path), or none.  The
+#              selector is enabled only while merging is on -- a control that
+#              silently does nothing is worse than an absent one.  The
+#              equivalent-command box omits --merge-bookmarks when it is the
+#              engine default, so the command stays the shortest one that
+#              reproduces the run.  in_root is now passed through to the
+#              engine's merge_pdfs: without it the outline falls back to bare
+#              filenames and the folder structure is lost.
 # %%%% 0.2.9: Revision history completed; scrub verified.
 # Date: 2026-09-03
 #              Documentation revision, no behavioural change.  The history
@@ -197,7 +223,7 @@ import dwg2pdf as engine   # noqa: E402
 # ============================================================================
 # %% SCRIPT-LEVEL KNOBS  (kept at the top per spec)
 # ============================================================================
-__revision__ = "0.2.9"
+__revision__ = "0.2.11"
 
 #: Percent of logical cores used by the "Automatic (by CPU cores)" mode.
 DEFAULT_CORE_PERCENT = 75
@@ -537,7 +563,14 @@ class ConversionWorker(QtCore.QObject):
                                   % (csv_path.name, json_path.name))
 
             if rows and opts.get("merge_path"):
-                merged = engine.merge_pdfs(rows, Path(opts["merge_path"]))
+                # in_root is what the bookmark titles are made relative to --
+                # without it the outline degrades to bare filenames and the
+                # folder structure the user asked for is lost.
+                merged = engine.merge_pdfs(
+                    rows, Path(opts["merge_path"]),
+                    in_root=opts.get("in_root"),
+                    bookmarks=opts.get("merge_bookmarks", "tree"),
+                )
                 if merged:
                     self.message.emit("Merged PDF: %s" % merged)
 
@@ -1097,6 +1130,23 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.acclang_edit.textChanged.connect(self._update_command)
         f.addRow("AutoCAD language", self.acclang_edit)
+
+        self.pc3_edit = QtWidgets.QLineEdit()
+        self.pc3_edit.setPlaceholderText("blank = DWG To PDF.pc3")
+        self.pc3_edit.setToolTip(
+            "Plotter configuration for the full-AutoCAD (acad-com) backend.\n"
+            "\n"
+            "THIS IS HOW YOU STOP AUTOCAD OPENING EVERY FINISHED PDF IN A\n"
+            "VIEWER. 'Open in viewer when done' is a custom property of the\n"
+            ".pc3 itself, not a system variable, so no SETVAR can turn it\n"
+            "off from here.\n"
+            "\n"
+            "In AutoCAD: Plotter Manager -> copy 'DWG To PDF.pc3' ->\n"
+            "Properties -> Custom Properties -> clear that box -> save the\n"
+            "copy under a new name, and put that name here."
+        )
+        self.pc3_edit.textChanged.connect(self._update_command)
+        f.addRow("AutoCAD plotter (.pc3)", self.pc3_edit)
         lay.addWidget(gb)
 
         gb2 = QtWidgets.QGroupBox("Engines detected on this machine")
@@ -1390,8 +1440,39 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.merge_cb = QtWidgets.QCheckBox(
             "Also merge every PDF into one document")
-        self.merge_cb.stateChanged.connect(self._update_command)
+        self.merge_cb.setToolTip(
+            "Concatenate every converted sheet into a single PDF, in the "
+            "order they were discovered. The merged document gets a bookmark "
+            "outline so that a few hundred sheets stay navigable -- choose "
+            "its shape below."
+        )
+        self.merge_cb.stateChanged.connect(self._merge_changed)
         f.addRow("", self.merge_cb)
+
+        self.bookmark_combo = QtWidgets.QComboBox()
+        # (label, engine value).  'tree' first: it is the engine default, and
+        # the one that makes a merged archive navigate the way the folders do.
+        for label, value in (
+            ("Folder tree - nest each drawing under its source folders",
+             "tree"),
+            ("Flat list - one entry per drawing, full relative path", "flat"),
+            ("No bookmarks", "none"),
+        ):
+            self.bookmark_combo.addItem(label, value)
+        self.bookmark_combo.setToolTip(
+            "How the merged PDF's bookmark outline is built.\n\n"
+            "Folder tree: the outline mirrors the source folder structure, so "
+            "the merged document navigates the same way the archive does. "
+            "Best for a deep tree.\n\n"
+            "Flat list: one entry per drawing, titled with its whole relative "
+            "path. Better for a shallow tree, or when you would rather search "
+            "bookmark titles than expand folders.\n\n"
+            "A drawing that produced several layout PDFs gets one child entry "
+            "per layout in either mode."
+        )
+        self.bookmark_combo.currentIndexChanged.connect(self._update_command)
+        self.bookmark_combo.setEnabled(False)   # follows the merge checkbox
+        f.addRow("Merge bookmarks", self.bookmark_combo)
 
         self.archive_cb = QtWidgets.QCheckBox(
             "Package the output folder into one archive")
@@ -1770,6 +1851,16 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self._update_command()
 
+    def _merge_changed(self) -> None:
+        """Enable the bookmark-style control only while merging is on.
+
+        A bookmark style with nothing to bookmark is a control that does
+        nothing, which is worse than an absent one -- it invites the reader to
+        believe it had an effect.
+        """
+        self.bookmark_combo.setEnabled(self.merge_cb.isChecked())
+        self._update_command()
+
     def _archive_changed(self) -> None:
         """Enable the archive controls and refresh the default name."""
         on = self.archive_cb.isChecked()
@@ -1875,6 +1966,11 @@ class MainWindow(QtWidgets.QMainWindow):
             parts.append("--no-manifest")
         if self.merge_cb.isChecked():
             parts += ["--merge", '"merged.pdf"']
+            # 'tree' is the engine default, so showing it would be noise --
+            # the command line stays the shortest one that reproduces the run.
+            bookmarks = self.bookmark_combo.currentData()
+            if bookmarks != "tree":
+                parts += ["--merge-bookmarks", bookmarks]
         if self.mem_cb.isChecked():
             parts.append("--report-memory")
         if self.recycle_spin.value():
@@ -1886,6 +1982,8 @@ class MainWindow(QtWidgets.QMainWindow):
                       '"%s"' % self.accscript_edit.text().strip()]
         if self.acclang_edit.text().strip():
             parts += ["--accore-lang", self.acclang_edit.text().strip()]
+        if self.pc3_edit.text().strip():
+            parts += ["--acad-pc3", '"%s"' % self.pc3_edit.text().strip()]
 
         n = resolve_worker_count(self.par_combo.currentData(),
                                  self.core_pct_spin.value(),
@@ -1939,6 +2037,7 @@ class MainWindow(QtWidgets.QMainWindow):
             engine.AcCoreConsoleBackend.script_override = None
         engine.AcCoreConsoleBackend.language = (
             self.acclang_edit.text().strip() or None)
+        engine.AcadComBackend.pc3 = self.pc3_edit.text().strip() or None
 
         out_root = Path(out_text).expanduser().resolve()
         archive = None
@@ -1963,6 +2062,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "write_manifest": self.manifest_cb.isChecked(),
             "merge_path": (str(out_root / "merged.pdf")
                            if self.merge_cb.isChecked() else None),
+            "merge_bookmarks": self.bookmark_combo.currentData(),
             "archive_path": archive,
             "archive_format": self.archive_fmt.currentData(),
         }

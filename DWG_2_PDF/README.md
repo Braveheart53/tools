@@ -1,6 +1,6 @@
 # dwg2pdf — batch 2D AutoCAD drawing → PDF conversion
 
-**Engine `dwg2pdf.py` rev 0.3.13 · GUI `dwg2pdf_gui.py` rev 0.2.9**
+**Engine `dwg2pdf.py` rev 0.3.15 · GUI `dwg2pdf_gui.py` rev 0.2.11**
 Python 3.12 · QtPy/PySide6 · MIT-licensed tooling around GPL-3 LibreDWG
 
 Converts a tree of 2D AutoCAD drawings (`.dwg`, `.dxf`) into a mirrored tree of
@@ -11,15 +11,16 @@ the big batch, GUI for everything else.
 > (a mix of AutoCAD R14 from 1997 and R2018) convert 5/5 to correctly-sized
 > ANSI E pages — border zones, revision block, title block, tolerances and
 > detail views all intact. Getting there exposed three more defects; see
-> §8.10–8.12.
+> §8.10–8.15.
 >
 > **The headline.** This has been run end-to-end against **real DWG files
 > spanning R11 → R2013**, converting all of them, **with no Autodesk software
 > installed anywhere** — so it works whether or not AutoCAD is present. On a
 > machine that *has* AutoCAD, AutoCAD becomes an
 > automatic **per-drawing fallback** for sheets the free engines cannot decode.
-> Testing found five defects; four produced a *silently wrong* PDF rather than
-> an error. All fixed. See §8.
+> Testing and field runs have found **fifteen** defects so far; **six**
+> produced a *silently wrong* PDF rather than an error — a plausible-looking
+> file, a clean log, and the wrong thing on the page. All fixed. See §8.
 
 ## What changed in this release
 
@@ -39,6 +40,9 @@ the big batch, GUI for everything else.
 | **`--layouts auto`** *(new default)* | Renders paper space where paper space has drawable content, model space otherwise — **per drawing**. Asking for `paper` on a model-space drawing finds AutoCAD's empty default `Layout1` and fails the sheet; `auto` never does. §5.1 |
 | **AutoCAD script paths quoted** | In a `.scr` file **a space is Enter**, so an unquoted output path was chopped at every space and its fragments run as commands — AutoCAD exited 0 having written nothing. Fixed, plus `--accore-script` / `--accore-lang` overrides and full console capture on failure. §8.7 |
 | **Start-up log noise absorbed** | fontTools' `'name' table stringOffset` and ezdxf's `ignoring DIMTXSTY override` are explained once instead of repeated per font and per dimension, and all Python logging now goes to the GUI's Detailed log tab. §8.8 |
+| **⚠️ `--monochrome` silently ignored by AutoCAD** *(fixed)* | The ezdxf renderer honoured it, so the flag looked as though it worked — and then AutoCAD produced a colour PDF with no warning anywhere. `PlotToFile` takes a `.pc3` but **not** a `.ctb`, and `-EXPORTPDF` has no plot-style argument at all: the style table belongs to the *layout*. Both backends now push `monochrome.ctb` onto the layouts first. §8.13 |
+| **⚠️ One AutoCAD crash failed every remaining drawing** *(fixed)* | The COM `Application` is cached so AutoCAD starts once, not per drawing — but nothing checked it was still alive, so after a crash every later sheet called into a dead object. That is "it converted one file and then errored out". Liveness is now probed before each drawing and AutoCAD restarted when it has gone. §8.14 |
+| **`--acad-pc3`** *(new)* | AutoCAD opening every finished PDF in a viewer is **a custom property of the `.pc3`**, not a system variable — no `SETVAR` reaches it. Point this at a copy of the plotter config with that box cleared. §8.15 |
 | **Worker recycling off by default** | `--recycle-after` was 25. With 4 workers that means all four processes respawn simultaneously at file 100 — indistinguishable from a freeze at the hundredth document — and each respawn re-imports the entry module under *spawn*. Measured: 24 trivial tasks, **1.21 s** off vs **not finished in two minutes** on. Default is now **0 (off)**. §7 |
 | **`retry-pending` status** *(new)* | A drawing that pass 1 could not convert was labelled `failed` before `acad-com` had ever been tried on it. It is now amber `retry-pending` until pass 2 actually runs it. §2.1 |
 | **Multiprocessing context fixed** | `max_tasks_per_child` silently forces the *spawn* start method, which re-imports the entry module in every worker. Caught by a test that printed its own output four times. Both files now choose the context deliberately. |
@@ -400,17 +404,17 @@ Then **one** DWG reader. On Windows, in order of preference:
 ## 5. Use
 
 ```bash
-python dwg2pdf.py --probe                              # what can this machine do?
-python dwg2pdf.py the archive/ -o pdf/ --dry-run          # plan only, touches nothing
-python dwg2pdf.py the archive/ -o pdf/ --workers 6        # convert, mirrored tree
-python dwg2pdf.py the archive/ -o pdf/ --skip-existing    # resume after interruption
-python dwg2pdf.py the archive/ -o pdf/ --merge set.pdf    # also concatenate
+python dwg2pdf.py --probe                            # what can this machine do?
+python dwg2pdf.py archive/ -o pdf/ --dry-run         # plan only, touches nothing
+python dwg2pdf.py archive/ -o pdf/ --workers 6       # convert, mirrored tree
+python dwg2pdf.py archive/ -o pdf/ --skip-existing   # resume after interruption
+python dwg2pdf.py archive/ -o pdf/ --merge set.pdf   # one bookmarked PDF as well
 
-# the ~20 drawings an EM model needs, not the 3000 structural-steel sheets
-python dwg2pdf.py the archive/ -o pdf/ --preset surface --trim-outliers
+# a named subset rather than the whole archive
+python dwg2pdf.py archive/ -o pdf/ --preset example-prefix --trim-outliers
 
 # AutoCAD only, for a sheet that came out wrong
-python dwg2pdf.py the archive/one.dwg -o pdf/ --backend accoreconsole
+python dwg2pdf.py archive/one.dwg -o pdf/ --backend accoreconsole
 ```
 
 ### 5.0 Presets
@@ -435,8 +439,10 @@ use; they appear in the CLI and the GUI dropdown automatically.
 **`--layouts`** — the most common cause of a batch that "succeeds" with wrong
 pages. Leave it on `auto` unless you know the whole set is one or the other.
 
-- `model` *(default)* — modelspace only. Right for older 2D drawings whose
-  title block is drawn as geometry in modelspace.
+- `auto` *(default)* — decided per drawing: paper space where paper space has
+  drawable content, model space otherwise. §5.1 above.
+- `model` — modelspace only. Right for older 2D drawings whose title block is
+  drawn as geometry in modelspace.
 - `paper` — every paperspace layout, one PDF each. Right for drawings with real
   title-block layouts.
 - `all` — both; use on a mixed archive, at the cost of redundant pages.
@@ -452,6 +458,74 @@ rendered. That is the signature of the wrong `--layouts` value.
 Also: monochrome is the default (`--colour` to keep colours);
 `--lineweight-scale 2.0` if lines look thin; `--paper A3 --landscape` for a
 fixed sheet; `--scale 0.02` for a true 1:50 plot instead of fit-to-page.
+
+### 5.2 `--merge` and its bookmark outline
+
+`--merge FILE` concatenates every produced PDF into one document, in discovery
+order. On an archive of any size that document is unusable without navigation
+— five hundred D-size sheets and no way to reach one but scrolling — so it is
+written **with a bookmark outline built from the source tree**.
+
+`--merge-bookmarks` chooses the shape:
+
+| Mode | Outline |
+|---|---|
+| `tree` *(default)* | Each drawing nested under its source folders, so the merged document navigates the same way the archive does. |
+| `flat` | One entry per drawing, titled with its whole relative path. Better on a shallow tree, or when you would rather search bookmark titles than expand folders. |
+| `none` | No outline. |
+
+From a real run over a nested tree:
+
+```
+Assembly                        -> p.1
+   Details                      -> p.1
+      example_2013.dwg          -> p.1
+   Panels                       -> p.2
+      example_2000.dwg          -> p.2
+      example_2004.dwg          -> p.3
+Subassembly                     -> p.4
+   v.dwg                        -> p.4
+entities-2d.dwg                 -> p.5
+```
+
+and the same set with `--merge-bookmarks flat`:
+
+```
+Assembly/Details/example_2013.dwg   -> p.1
+Assembly/Panels/example_2000.dwg    -> p.2
+Assembly/Panels/example_2004.dwg    -> p.3
+Subassembly/v.dwg                   -> p.4
+entities-2d.dwg                     -> p.5
+```
+
+**Layouts get their own children.** A drawing converted with `--layouts all`
+produces one PDF per layout, named `<stem>__<layout>.pdf`. Rather than listing
+three indistinguishable copies of the drawing name, the outline nests them and
+recovers the layout name from the suffix:
+
+```
+sub                             -> p.2
+   DEMO-002-bracket.dxf         -> p.2
+   DEMO-003-armature.dxf        -> p.3
+      Model                     -> p.3
+      D-SIZE                    -> p.4
+```
+
+A drawing with only one PDF gets no child — a lone child that repeats its
+parent is noise, not navigation.
+
+Two things worth knowing, because both are easy to get wrong:
+
+- **Page numbers come from where each PDF landed**, not from its position in
+  the manifest. A sheet whose PDF has three pages advances the counter by
+  three. A bookmark pointing at the wrong page is worse than no bookmark.
+- **The outline follows the *source* tree, not the output tree.** `--flat`
+  writes every PDF into one folder, and the bookmarks still show the folder
+  structure the drawings came from — which is the point of having them.
+
+Failure is contained: an unreadable PDF costs its own bookmark and is logged,
+not the whole merge of a thousand sheets; and if PyMuPDF rejects the outline
+the merged document is still written, without it.
 
 ---
 
@@ -505,10 +579,10 @@ streaming page-by-page. `--report-memory` logs RSS every ten files.
 
 ---
 
-## 8. Five defects found by testing — four of them silent
+## 8. Fifteen defects found by testing — six of them silent
 
 This is the section worth reading. Every one of these produced a *plausible
-looking* result, and four produced a wrong PDF with **no error anywhere**.
+looking* result, and six produced a wrong PDF with **no error anywhere**.
 
 ### 8.1 Empty layouts failed the whole sheet *(fixed)*
 
@@ -757,6 +831,95 @@ sets the renderer's scale to millimetres-per-drawing-unit.
 
 ANSI E is 44 × 34 in = 1117.6 × 863.6 mm; the extra 13 mm is the 5 mm margin
 on each side. `--units` can override when the heuristic is wrong.
+
+### 8.13 ⚠️ `--monochrome` was silently ignored by both AutoCAD backends *(fixed)*
+
+The sixth silent-wrong-output defect, and it hid behind a working flag. The
+ezdxf renderer honoured `--monochrome` correctly, so the option was visibly
+doing something — until a sheet fell through to AutoCAD, and that PDF came out
+in colour with nothing said in the log.
+
+Two different causes, one per backend, and both come down to the same fact:
+**a plot style table belongs to the layout, not to the plot call.**
+
+| Backend | Why it could not honour the flag |
+|---|---|
+| `acad-com` | `Plot.PlotToFile(target, pc3)` takes a **plotter configuration** (`.pc3`) but has no parameter for a **plot style table** (`.ctb`). Neither `Layout.StyleSheet` nor `Layout.PlotWithPlotStyles` was ever set, so the sheet plotted with whatever the drawing carried. |
+| `accoreconsole` | `-EXPORTPDF` has no plot-style argument whatsoever. It exports each layout using that layout's own page setup — and the plot style table is part of the page setup. |
+
+Both now set the style table before plotting. `acad-com` sets it directly;
+`accoreconsole` sets it with one AutoLISP expression in the generated script:
+
+```lisp
+(vl-load-com)(setq d2p-doc (vla-get-ActiveDocument (vlax-get-acad-object)))
+(vlax-for d2p-lay (vla-get-Layouts d2p-doc)
+  (vl-catch-all-apply 'vla-put-StyleSheet (list d2p-lay "monochrome.ctb"))
+  (vl-catch-all-apply 'vla-put-PlotWithPlotStyles (list d2p-lay :vlax-true)))
+(princ)
+```
+
+Three things about that line are deliberate:
+
+- **Every layout, not just the active one**, because the export scope may be
+  `_A` (all layouts).
+- **`PlotWithPlotStyles` as well as `StyleSheet`.** Assigning a style sheet
+  the layout is not told to plot with is a no-op — which would have looked
+  exactly like the original bug.
+- **It is one balanced expression on one line.** §8.7 established that a space
+  in a `.scr` is Enter; a line beginning with `(` is read as a single balanced
+  LISP expression, so the spaces *inside* it are safe. That is the one
+  exception, and it is why this is written as one line rather than several.
+
+The drawing is never saved, so nothing changes on disk.
+
+### 8.14 ⚠️ One AutoCAD crash failed every remaining drawing *(fixed)*
+
+Reported from a 1574-drawing run as "it worked for one file then errored out".
+
+Starting AutoCAD costs many seconds, so the COM `Application` is cached in a
+class attribute and reused for every drawing a worker handles. That is right.
+What was missing is that **nothing ever checked the cached object was still
+alive.** A few hundred 1990s drawings will eventually take AutoCAD down, and
+when it went, every subsequent sheet called into a dead COM object and failed —
+so a single crash converted the rest of the run into a wall of failures that
+looked like a code defect rather than one dead process.
+
+Now: a `Documents.Count` property read probes liveness **before** each drawing
+(the crash usually happens as the *previous* document closes, so the first
+symptom is this drawing's `Open` being refused), the application is restarted
+when it has died, and `Open` gets one more attempt on a fresh instance. A
+drawing that genuinely kills AutoCAD on open still fails, and is reported
+honestly, rather than taking the rest of the archive with it.
+
+The earlier prototype did exactly this; this backend had lost it.
+
+**Also fixed: two "busy" HRESULTs were treated as fatal.** `_is_busy` matched
+on message text only, so `RPC_E_CALL_REJECTED` (`0x80010001`) and
+`RPC_E_SERVERCALL_RETRYLATER` (`0x8001010A`) — whose wording is localised —
+were re-raised instead of retried. Both are now recognised by HRESULT.
+`DISP_E_EXCEPTION` (`0x80020009`) still needs the message text, because it is
+raised just as readily for a genuinely broken drawing; matching it by code
+alone would retry six times on every corrupt sheet.
+
+### 8.15 AutoCAD opens every finished PDF in a viewer
+
+Not a defect in this tool, but it makes an unattended run unusable: a thousand
+drawings means a thousand viewer windows.
+
+**"Open in viewer when done" is a custom property of the `.pc3` plotter
+configuration, not a system variable.** No `SETVAR` reaches it, so `--acad-pc3`
+is the answer rather than another entry in the `_quiet()` list:
+
+1. In AutoCAD, open **Plotter Manager**.
+2. Copy `DWG To PDF.pc3` to a new name, e.g. `DWG To PDF - batch.pc3`.
+3. Open the copy → **Properties** → **Custom Properties** → clear the
+   *open in viewer* box → save.
+4. Run with `--acad-pc3 "DWG To PDF - batch.pc3"`, or put that name in the
+   GUI's **AutoCAD plotter (.pc3)** field on the Engine tab.
+
+A viewer holding a PDF open can also lock it, which on Windows is enough to
+make the *next* write to that path fail — so this is worth doing before a long
+run, not after.
 
 ---
 

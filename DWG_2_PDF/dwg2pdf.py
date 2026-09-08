@@ -71,6 +71,70 @@ Revision history
 ----------------
 Semantic versioning, newest first: External.Internal.Working.
 
+0.3.15
+    Three AutoCAD-backend defects, reported from a 1574-drawing run.
+
+    1. **``--monochrome`` was silently ignored by BOTH AutoCAD backends.**
+       The ezdxf renderer honoured it, so the flag looked as though it
+       worked -- until AutoCAD produced the PDF, and then the output was in
+       colour with no warning anywhere.  Two different causes, one per
+       backend.  ``PlotToFile`` takes a plotter configuration (``.pc3``) but
+       **not** a plot style table (``.ctb``): the style table belongs to the
+       *layout*, and neither ``StyleSheet`` nor ``PlotWithPlotStyles`` was
+       ever set, so ``acad-com`` plotted with whatever the drawing carried.
+       ``-EXPORTPDF`` has no plot-style argument at all -- it exports each
+       layout using that layout's own page setup -- so ``accoreconsole``
+       could not have honoured it either.  Both now push ``monochrome.ctb``
+       onto the layouts before plotting, ``accoreconsole`` via one balanced
+       AutoLISP expression in the script (the one place in a ``.scr`` where
+       spaces are safe, since a balanced expression is read as a single
+       input).  Setting ``StyleSheet`` without ``PlotWithPlotStyles`` is a
+       no-op that would have looked exactly like the original bug, so both
+       are set together.
+    2. **One AutoCAD crash failed every remaining drawing.**  The COM
+       ``Application`` is cached in a class attribute so that AutoCAD is
+       started once rather than per drawing.  Nothing ever checked whether
+       it was still alive, so when AutoCAD went away -- and a few hundred
+       1990s drawings will eventually take it down -- every subsequent
+       sheet called into a dead object and failed.  That is the "it
+       converted one file and then errored out" report.  Liveness is now
+       probed before each drawing (a ``Documents.Count`` property read) and
+       the application restarted when it has died; ``Open`` also retries
+       once on a fresh application.  The earlier prototype did this and
+       this backend had lost it.
+    3. **Busy-detection missed two unambiguous HRESULTs.**  ``_is_busy``
+       matched on message text only, so ``RPC_E_CALL_REJECTED`` and
+       ``RPC_E_SERVERCALL_RETRYLATER`` -- whose wording is localised -- were
+       treated as fatal instead of "ask again".  Both are now recognised by
+       HRESULT.  ``DISP_E_EXCEPTION`` still needs the text, because it is
+       raised just as readily for a genuinely broken drawing.
+
+    Also adds ``--acad-pc3``.  AutoCAD opening every finished PDF in a
+    viewer is governed by "open in viewer when done", which is a **custom
+    property of the .pc3**, not a system variable -- no ``SETVAR`` can
+    switch it off.  Point this at a copy of the plotter configuration with
+    that box cleared.
+0.3.14
+    ``--merge`` now writes a **bookmark outline**.  Until now it concatenated
+    a few hundred D-size sheets into one PDF with no navigation at all: the
+    only way to find a drawing was to scroll.  The outline is built from the
+    source tree -- ``--merge-bookmarks tree`` (default) nests each drawing
+    under its folders so the merged document navigates the way the archive
+    does, ``flat`` gives one entry per drawing carrying its whole relative
+    path, ``none`` restores the old behaviour.  A drawing that produced
+    several layout PDFs gets one child entry per layout, named from the
+    ``<stem>__<layout>.pdf`` suffix.
+
+    Two details that are easy to get wrong, and are handled here.  Page
+    numbers come from where each PDF *landed* in the merged document, not
+    from its position in the manifest -- a three-page sheet advances the
+    counter by three, and a bookmark pointing at the wrong page is worse than
+    no bookmark.  And PyMuPDF rejects an outline whose level jumps by more
+    than one between consecutive rows, so a descent of several directories
+    emits a row for every intervening folder rather than only the one that
+    changed.  An unreadable PDF now costs its own bookmark instead of the
+    whole merge, and a rejected outline is logged with the merged document
+    still written.
 0.3.13
     Documentation revision, no behavioural change.  The module header still
     described SIX backends with ``trueview`` at rank 3 and no mention of
@@ -246,7 +310,7 @@ from typing import Any, Callable, Iterable, Iterator, Optional, Sequence
 # ---------------------------------------------------------------------------
 # Module metadata.  Semantic revisioning: X.Y.Z, 0.0.1 == first internal draft.
 # ---------------------------------------------------------------------------
-__revision__ = "0.3.13"
+__revision__ = "0.3.15"
 __all__ = [
     "PageSpec",
     "ConversionResult",
@@ -2110,6 +2174,10 @@ class AcCoreConsoleBackend(Backend):
     #: the machine does not have fails with "Unable to Process Configuration
     #: File", which reads like a plot problem and is not one.
     language: Optional[str] = None
+    #: Plot style table applied for ``--monochrome``.  See
+    #: :meth:`_script_text` for why this has to be pushed onto the layouts
+    #: rather than passed to ``-EXPORTPDF``.
+    MONO_CTB = "monochrome.ctb"
     #: AutoCAD is licensed per seat and the core console counts against it,
     #: so several at once may fail on licence checkout.  Kept True because a
     #: network licence usually permits it; drop to False with --workers 1 if
@@ -2160,8 +2228,8 @@ class AcCoreConsoleBackend(Backend):
             )
         return "accoreconsole (not found)"
 
-    @staticmethod
-    def _script_text(target: Path, spec: PageSpec) -> str:
+    @classmethod
+    def _script_text(cls, target: Path, spec: PageSpec) -> str:
         """Build the ``.scr`` contents for one drawing.
 
         .. warning::
@@ -2200,11 +2268,42 @@ class AcCoreConsoleBackend(Backend):
             export_scope = "_A"     # All layouts
         else:
             export_scope = "_C"     # Current layout
+
         lines = [
             "FILEDIA",              # set on its own line: a space is Enter
             "0",
             "CMDDIA",
             "0",
+        ]
+
+        if spec.monochrome:
+            # -EXPORTPDF HAS NO PLOT-STYLE ARGUMENT.  It exports each layout
+            # using that layout's own page setup, and the plot style table is
+            # part of the page setup -- so the only way to make the export
+            # monochrome is to put monochrome.ctb ON THE LAYOUTS first.
+            # Passing --monochrome and getting colour was exactly this: the
+            # flag was honoured by the ezdxf renderer and silently ignored by
+            # both AutoCAD backends.
+            #
+            # Every layout is set, not just the active one, because
+            # export_scope may be _A (all layouts).
+            #
+            # A script line beginning with "(" is read as one balanced LISP
+            # expression, so the spaces inside it are NOT Enter -- this is
+            # the one place in a .scr where spaces are safe.  The drawing is
+            # never saved, so this changes nothing on disk.
+            lines.append(
+                '(vl-load-com)'
+                '(setq d2p-doc (vla-get-ActiveDocument (vlax-get-acad-object)))'
+                '(vlax-for d2p-lay (vla-get-Layouts d2p-doc)'
+                ' (vl-catch-all-apply '
+                "'vla-put-StyleSheet (list d2p-lay \"%s\"))"
+                ' (vl-catch-all-apply '
+                "'vla-put-PlotWithPlotStyles (list d2p-lay :vlax-true)))"
+                '(princ)' % cls.MONO_CTB
+            )
+
+        lines += [
             "-EXPORTPDF",
             export_scope,
             # QUOTED -- see the warning above.  This is the fix for
@@ -2318,12 +2417,33 @@ class AcadComBackend(Backend):
     #: One COM Application per session: this cannot be parallelised.
     parallel_safe = False
 
-    #: Plotter configuration used when a layout names none.
+    #: Plotter configuration used when a layout names none.  Overridable
+    #: with ``--acad-pc3``, which is how you escape the "open the PDF in a
+    #: viewer when done" setting: that is a **custom property of the .pc3**,
+    #: not a system variable, so it cannot be switched off with SETVAR --
+    #: point this at a copy of the plotter configuration that has it
+    #: unchecked.  See :meth:`_convert_impl`.
     PC3 = "DWG To PDF.pc3"
 
-    #: HRESULTs and message fragments that mean "busy, ask again" rather
-    #: than "this drawing is broken".  DISP_E_EXCEPTION is generic, so the
-    #: message text is what distinguishes the two cases.
+    #: Set from ``--acad-pc3`` to override :attr:`PC3` for a run.
+    pc3: Optional[str] = None
+
+    #: Plot style table applied when ``--monochrome`` is in force (the
+    #: default).  Ships with every AutoCAD install.
+    MONO_CTB = "monochrome.ctb"
+
+    #: HRESULTs that mean "busy, ask again" rather than "this drawing is
+    #: broken".  Checked as well as the message text, because a COM error
+    #: does not always carry the words: 0x80010001 and 0x8001010A say
+    #: "busy" in the HRESULT alone.  0x80020009 (DISP_E_EXCEPTION) is
+    #: generic and only its text distinguishes the two cases, which is why
+    #: both tests exist.
+    _BUSY_HRESULTS = frozenset({
+        -2147418111,   # 0x80010001 RPC_E_CALL_REJECTED
+        -2147417846,   # 0x8001010A RPC_E_SERVERCALL_RETRYLATER
+    })
+
+    #: Message fragments that mean "busy, ask again".
     _BUSY_TEXT = (
         "invalid execution context",
         "call was rejected",
@@ -2376,8 +2496,24 @@ class AcadComBackend(Backend):
     # -- COM plumbing ------------------------------------------------------
     @classmethod
     def _is_busy(cls, exc: Exception) -> bool:
-        """Is this exception AutoCAD saying "not now" rather than "no"?"""
-        return any(token in str(exc).lower() for token in cls._BUSY_TEXT)
+        """Is this exception AutoCAD saying "not now" rather than "no"?
+
+        Tested two ways, because neither alone is enough.  ``RPC_E_CALL_
+        REJECTED`` and ``RPC_E_SERVERCALL_RETRYLATER`` are unambiguous in the
+        HRESULT and their message text varies by Windows locale, so matching
+        on words would miss them on a non-English machine.
+        ``DISP_E_EXCEPTION`` is the opposite: it is the generic "an
+        exception occurred" code, raised for a broken drawing just as
+        readily as for a busy application, so only the text
+        ("invalid execution context") separates them.
+        """
+        if any(token in str(exc).lower() for token in cls._BUSY_TEXT):
+            return True
+        code = getattr(exc, "hresult", None)
+        if code is None:
+            args = getattr(exc, "args", ())
+            code = args[0] if args and isinstance(args[0], int) else None
+        return code in cls._BUSY_HRESULTS
 
     @classmethod
     def _retry(cls, fn, tries: int = 6, base: float = 0.5):
@@ -2446,6 +2582,41 @@ class AcadComBackend(Backend):
                 _LOG.warning("could not hide the AutoCAD window: %s", exc)
         return cls._app
 
+    @classmethod
+    def _app_is_alive(cls) -> bool:
+        """Cheapest possible liveness probe on the cached Application.
+
+        ``Documents.Count`` is a property read that touches the application
+        object without changing anything.  If AutoCAD has died -- and a
+        thousand old drawings will eventually kill it -- this raises, and
+        that is the signal to drop the cached object.
+        """
+        if cls._app is None:
+            return False
+        try:
+            cls._app.Documents.Count
+            return True
+        except Exception:  # noqa: BLE001 - any refusal counts as dead
+            return False
+
+    @classmethod
+    def _restart_app(cls):
+        """Drop the dead Application and start a fresh hidden one.
+
+        Without this, a single AutoCAD crash poisoned the cached class
+        attribute and **every remaining drawing in the run failed**, because
+        each one kept calling into a COM object that was no longer there.
+        That is the "it converted one file and then errored out on all the
+        rest" failure: the first sheet is fine, AutoCAD goes away, and
+        nothing ever tries to bring it back.  The earlier prototype
+        restarted it; this backend did not, and now does.
+        """
+        _LOG.warning("AutoCAD is no longer responding; restarting it")
+        cls._app = None
+        cls._app_was_running = False
+        time.sleep(3.0)             # let the dying process release its files
+        return cls._get_app()
+
     @staticmethod
     def _quiet(doc) -> None:
         """Turn off everything that can raise a modal dialog mid-batch.
@@ -2475,10 +2646,26 @@ class AcadComBackend(Backend):
         self, source: Path, out_dir: Path, spec: PageSpec
     ) -> tuple[list[Path], int]:
         app = self._get_app()
+        if not self._app_is_alive():
+            # Checked BEFORE each drawing, not only after a failure: the
+            # crash usually happens as the previous document closes, so the
+            # first symptom is this drawing's Open being refused.
+            app = self._restart_app()
+        pc3 = self.pc3 or self.PC3
         target = out_dir / f"{source.stem}.pdf"
 
         self._wait_quiescent(app)
-        doc = self._retry(lambda: app.Documents.Open(str(source), True))
+        try:
+            doc = self._retry(lambda: app.Documents.Open(str(source), True))
+        except Exception:  # noqa: BLE001
+            # One more chance, on a fresh application.  A drawing that kills
+            # AutoCAD on open will fail again here and be reported honestly;
+            # a drawing that merely arrived after a crash now succeeds.
+            if self._app_is_alive():
+                raise
+            app = self._restart_app()
+            self._wait_quiescent(app)
+            doc = self._retry(lambda: app.Documents.Open(str(source), True))
         try:
             # Open usually activates the new document, but Plot belongs to
             # the ACTIVE document's state machine and "usually" is not good
@@ -2493,7 +2680,28 @@ class AcadComBackend(Backend):
 
             layout_obj = doc.ActiveLayout
             if not getattr(layout_obj, "ConfigName", ""):
-                layout_obj.ConfigName = self.PC3
+                layout_obj.ConfigName = pc3
+
+            if spec.monochrome:
+                # THE MONOCHROME FIX.  PlotToFile takes a plotter config
+                # (.pc3) but NOT a plot style table (.ctb) -- the style table
+                # belongs to the layout.  Setting neither is what made
+                # --monochrome silently produce colour PDFs through this
+                # backend while the ezdxf renderer honoured it.
+                #
+                # PlotWithPlotStyles must be true as well: assigning a
+                # StyleSheet that the layout is not told to plot with is a
+                # no-op, which would look exactly like the original bug.
+                try:
+                    layout_obj.StyleSheet = self.MONO_CTB
+                    layout_obj.PlotWithPlotStyles = True
+                except Exception as exc:  # noqa: BLE001
+                    # A machine missing monochrome.ctb is unusual but not
+                    # fatal -- say so once rather than failing the sheet.
+                    _LOG.warning(
+                        "could not apply %s (%s); this PDF will be in colour",
+                        self.MONO_CTB, exc,
+                    )
 
             if spec.paper.upper() not in ("AUTO", "FIT"):
                 # Only override the sheet when a specific size was asked
@@ -2508,7 +2716,7 @@ class AcadComBackend(Backend):
                     _LOG.debug("layout override skipped: %s", exc)
 
             self._wait_quiescent(app)
-            self._retry(lambda: doc.Plot.PlotToFile(str(target), self.PC3))
+            self._retry(lambda: doc.Plot.PlotToFile(str(target), pc3))
 
             # PlotToFile is synchronous only because BACKGROUNDPLOT is 0.
             # The file can still lag the call on a network share, so give it
@@ -3549,7 +3757,131 @@ def summarise(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
     return counts
 
 
-def merge_pdfs(rows: Sequence[dict[str, Any]], target: Path) -> Optional[Path]:
+#: How the merged PDF's bookmark outline is built.  ``tree`` mirrors the source
+#: folder hierarchy; ``flat`` gives one entry per drawing titled with its full
+#: relative path; ``none`` reproduces the pre-0.3.14 behaviour of no outline.
+BOOKMARK_MODES = ("tree", "flat", "none")
+
+
+def _layout_label(pdf: Path, source: Path) -> Optional[str]:
+    """The layout name encoded in a PDF filename, or ``None``.
+
+    A drawing with several layouts writes one PDF per layout, named
+    ``<stem>__<layout>.pdf``.  Recovering the layout name from the filename is
+    how the merged outline can say *which* layout a page belongs to, rather
+    than listing three indistinguishable copies of the drawing name.
+
+    Parameters
+    ----------
+    pdf : pathlib.Path
+        A produced PDF.
+    source : pathlib.Path
+        The drawing it came from.
+
+    Returns
+    -------
+    str or None
+        The layout name, or ``None`` when the PDF is the drawing's only one
+        and carries no ``__<layout>`` suffix.
+    """
+    stem, drawing = pdf.stem, source.stem
+    if stem.startswith(drawing + "__"):
+        return stem[len(drawing) + 2:] or None
+    return None
+
+
+def _merge_entries(rows: Sequence[dict[str, Any]],
+                   in_root: Optional[Path]) -> list[tuple[Path, Path, list[Path]]]:
+    """Group the converted rows into ``(source, relative, pdfs)`` triples.
+
+    ``relative`` is the source's path relative to *in_root*, which is what the
+    outline is built from.  A source outside *in_root* -- possible when
+    individual drawings are named on the command line alongside a folder --
+    falls back to its bare filename rather than leaking an absolute path into
+    the bookmark titles.
+    """
+    entries: list[tuple[Path, Path, list[Path]]] = []
+    for row in rows:
+        if row["status"] != "ok":
+            continue
+        pdfs = [Path(c) for c in str(row["outputs"]).split(";") if c]
+        if not pdfs:
+            continue
+        source = Path(row["source"])
+        relative = Path(source.name)
+        if in_root is not None:
+            try:
+                relative = source.resolve().relative_to(Path(in_root).resolve())
+            except ValueError:
+                pass
+        entries.append((source, relative, pdfs))
+    return entries
+
+
+def _build_toc(placed: Sequence[tuple[Path, Path, list[tuple[Path, int]]]],
+               mode: str) -> list[list[Any]]:
+    """Turn placed PDFs into a PyMuPDF table of contents.
+
+    Parameters
+    ----------
+    placed : sequence of (source, relative, [(pdf, first_page), ...])
+        One item per drawing, in merged order.  ``first_page`` is 1-based, as
+        :meth:`Document.set_toc` requires.
+    mode : {"tree", "flat"}
+        ``"tree"`` nests the drawing under its folders; ``"flat"`` emits one
+        level-1 entry per drawing titled with the whole relative path.
+
+    Returns
+    -------
+    list of list
+        ``[level, title, page]`` rows.
+
+    Notes
+    -----
+    PyMuPDF rejects an outline whose level jumps by more than one between
+    consecutive rows, so folder entries must be emitted for **every**
+    intervening directory when the tree descends -- not only for the one that
+    changed.  Tracking the previous drawing's folder parts and re-emitting
+    from the first differing component is what guarantees that.
+    """
+    toc: list[list[Any]] = []
+    previous: tuple[str, ...] = ()
+
+    for _source, relative, pages in placed:
+        first_page = pages[0][1]
+
+        if mode == "flat":
+            toc.append([1, relative.as_posix(), first_page])
+            base_level = 1
+        else:
+            parts = relative.parent.parts
+            if parts == (".",):
+                parts = ()
+            # Re-emit from the first component that differs, so a descent of
+            # two directories produces two rows rather than a level jump.
+            common = 0
+            while (common < len(parts) and common < len(previous)
+                   and parts[common] == previous[common]):
+                common += 1
+            for depth in range(common, len(parts)):
+                toc.append([depth + 1, parts[depth], first_page])
+            previous = parts
+            base_level = len(parts) + 1
+            toc.append([base_level, relative.name, first_page])
+
+        # One child per layout, but only when there is more than one PDF --
+        # a lone child that repeats its parent is noise, not navigation.
+        if len(pages) > 1:
+            for pdf, page in pages:
+                label = _layout_label(pdf, _source) or pdf.stem
+                toc.append([base_level + 1, label, page])
+
+    return toc
+
+
+def merge_pdfs(rows: Sequence[dict[str, Any]], target: Path,
+               *, in_root: Optional[Path] = None,
+               bookmarks: str = "tree") -> Optional[Path]:
     """Concatenate every produced PDF into one file, in manifest order.
 
     Parameters
@@ -3558,6 +3890,17 @@ def merge_pdfs(rows: Sequence[dict[str, Any]], target: Path) -> Optional[Path]:
         Manifest rows.
     target : pathlib.Path
         Output path for the merged document.
+    in_root : pathlib.Path, optional
+        The input root the drawings were discovered under.  Bookmark titles
+        are built from paths relative to it; without it the outline falls back
+        to bare filenames, which is why the caller should pass it.
+    bookmarks : {"tree", "flat", "none"}
+        Outline style.  ``"tree"`` (default) mirrors the source folder
+        hierarchy, so the merged document navigates the same way the archive
+        does.  ``"flat"`` gives one entry per drawing carrying its full
+        relative path -- better when the tree is one level deep, or when a
+        reader wants to search titles rather than expand folders.  ``"none"``
+        writes no outline.
 
     Returns
     -------
@@ -3569,15 +3912,19 @@ def merge_pdfs(rows: Sequence[dict[str, Any]], target: Path) -> Optional[Path]:
     -----
     Merging is streamed page-by-page rather than by loading every document at
     once; a few hundred D-size sheets is a large amount of memory otherwise.
+
+    The outline is built from where each drawing *landed* in the merged
+    document, not from where it sat in the manifest: a drawing whose PDF has
+    three pages advances the page counter by three, and a bookmark pointing at
+    the wrong page is worse than no bookmark at all.  Page numbers passed to
+    :meth:`Document.set_toc` are 1-based.
     """
-    paths: list[Path] = []
-    for row in rows:
-        if row["status"] != "ok":
-            continue
-        for chunk in str(row["outputs"]).split(";"):
-            if chunk:
-                paths.append(Path(chunk))
-    if not paths:
+    if bookmarks not in BOOKMARK_MODES:
+        raise ValueError("bookmarks must be one of %s, not %r"
+                         % (", ".join(BOOKMARK_MODES), bookmarks))
+
+    entries = _merge_entries(rows, in_root)
+    if not entries:
         return None
 
     try:
@@ -3590,16 +3937,56 @@ def merge_pdfs(rows: Sequence[dict[str, Any]], target: Path) -> Optional[Path]:
             return None
 
     merged = pymupdf.open()
+    placed: list[tuple[Path, Path, list[tuple[Path, int]]]] = []
+    n_pdfs = 0
     try:
-        for path in paths:
-            with pymupdf.open(str(path)) as doc:
-                merged.insert_pdf(doc)
+        for source, relative, pdfs in entries:
+            here: list[tuple[Path, int]] = []
+            for pdf in pdfs:
+                try:
+                    with pymupdf.open(str(pdf)) as doc:
+                        if doc.page_count == 0:
+                            _LOG.warning("merge: %s has no pages, skipping",
+                                         pdf.name)
+                            continue
+                        # +1 because set_toc page numbers are 1-based, and
+                        # page_count is the index of the first page about to
+                        # be appended.
+                        here.append((pdf, merged.page_count + 1))
+                        merged.insert_pdf(doc)
+                        n_pdfs += 1
+                except Exception as exc:              # noqa: BLE001
+                    # One unreadable PDF should cost its own bookmark, not the
+                    # whole merge of a thousand sheets.
+                    _LOG.warning("merge: could not append %s (%s)",
+                                 pdf.name, exc)
+            if here:
+                placed.append((source, relative, here))
+
+        if merged.page_count == 0:
+            _LOG.warning("merge: nothing appended; no file written")
+            return None
+
+        if bookmarks != "none":
+            toc = _build_toc(placed, bookmarks)
+            if toc:
+                try:
+                    merged.set_toc(toc)
+                except Exception as exc:              # noqa: BLE001
+                    # A malformed outline must not cost the merged document.
+                    _LOG.warning("merge: outline rejected (%s); "
+                                 "writing without bookmarks", exc)
+                else:
+                    _LOG.info("merge: %d bookmark(s), %s style",
+                              len(toc), bookmarks)
+
+        n_pages = merged.page_count
         target.parent.mkdir(parents=True, exist_ok=True)
         merged.save(str(target))
     finally:
         merged.close()
         gc.collect()
-    _LOG.info("merged %d PDF(s) -> %s", len(paths), target)
+    _LOG.info("merged %d PDF(s), %d page(s) -> %s", n_pdfs, n_pages, target)
     return target
 
 
@@ -3782,6 +4169,15 @@ def build_parser() -> argparse.ArgumentParser:
              "Configuration File'",
     )
     group.add_argument(
+        "--acad-pc3", default=None, metavar="NAME",
+        help="plotter configuration for the acad-com backend (default: "
+             "'DWG To PDF.pc3'). THIS IS HOW YOU STOP AUTOCAD OPENING EACH "
+             "PDF IN A VIEWER: 'open in viewer when done' is a custom "
+             "property OF THE .pc3, not a system variable, so no SETVAR can "
+             "switch it off. Copy the plotter config in AutoCAD's Plotter "
+             "Manager, clear that box in the copy, and name the copy here",
+    )
+    group.add_argument(
         "--workers", type=int, default=0, metavar="N",
         help="parallel workers; 0 = min(cpu_count, 8) (default: 0)",
     )
@@ -3803,7 +4199,19 @@ def build_parser() -> argparse.ArgumentParser:
     group = parser.add_argument_group("output and diagnostics")
     group.add_argument(
         "--merge", type=Path, default=None, metavar="FILE",
-        help="also concatenate every produced PDF into FILE",
+        help="also concatenate every produced PDF into FILE, with a bookmark "
+             "outline built from the drawing names and folder structure "
+             "(see --merge-bookmarks)",
+    )
+    group.add_argument(
+        "--merge-bookmarks", default="tree", choices=BOOKMARK_MODES,
+        help="outline style for --merge. 'tree' (default) nests each drawing "
+             "under its source folders, so the merged document navigates the "
+             "same way the archive does; 'flat' gives one entry per drawing "
+             "titled with its full relative path, which suits a shallow tree "
+             "or a reader who searches titles rather than expanding folders; "
+             "'none' writes no outline. A drawing that produced several "
+             "layout PDFs gets one child entry per layout in either mode",
     )
     group.add_argument(
         "--no-manifest", action="store_true",
@@ -3937,6 +4345,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 2
     if args.accore_lang:
         AcCoreConsoleBackend.language = args.accore_lang
+    if args.acad_pc3:
+        AcadComBackend.pc3 = args.acad_pc3
+        _LOG.info("acad-com plotter configuration: %s", args.acad_pc3)
 
     backend_cls = chain[0]
     if len(chain) > 1:
@@ -3987,7 +4398,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # -- report ------------------------------------------------------------
     stats = summarise(rows)
     if args.merge and not args.dry_run:
-        merge_pdfs(rows, args.merge.expanduser().resolve())
+        merge_pdfs(rows, args.merge.expanduser().resolve(),
+                   in_root=in_root, bookmarks=args.merge_bookmarks)
 
     if not args.no_manifest and not args.dry_run:
         csv_path, json_path = write_manifest(

@@ -1,0 +1,50 @@
+# mamba environment for dwg2pdf (engine) + dwg2pdf_gui (Qt GUI)
+#
+#   mamba env create -f environment-dwg2pdf.yml
+#   mamba activate dwg2pdf
+#   python dwg2pdf_gui.py
+#
+# This covers everything except a DWG decoder. On a machine with AutoCAD you
+# need no decoder at all — the accoreconsole backend is found automatically.
+# Without AutoCAD, the bundled LibreDWG in vendor/ is used; see README §4.
+name: dwg2pdf
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  # --- optional DWG decoder, for machines without AutoCAD -----------------
+  # conda-forge ships libredwg 0.11.3876 (uploaded 2020-11-17), six years
+  # behind the 0.14 this tool was verified against and bundled in vendor/.
+  # Usable as a fallback; build_libredwg.sh builds current LibreDWG on Linux.
+  # - libredwg
+  - pip:
+      - ezdxf>=1.4           # DXF parsing + the drawing/export add-on
+      - pymupdf>=1.24        # PDF backend, --merge, and image pages
+      - qtpy>=2.4            # Qt abstraction layer (GUI)
+      - PySide6>=6.6         # the Qt binding qtpy targets here
+      - psutil               # optional: enables --report-memory
+
+      # --- image conversion (--images) -----------------------------------
+      - pillow>=10           # required for --images; the only image decoder
+                             # that renders .emf/.wmf, via the Windows GDI
+
+      # OPTIONAL BUT STRONGLY RECOMMENDED IF YOU CONVERT LARGE SCANS.
+      # libvips is demand-driven: it streams an image through a pipeline
+      # instead of materialising every intermediate. Measured here on a
+      # 244 MP bilevel drawing scan:
+      #
+      #     Pillow   603 MB peak, 1.39 s
+      #     pyvips    76 MB peak, 0.65 s
+      #
+      # multiplied by --workers, that is 2.4 GB against 300 MB for a
+      # four-worker run. pyvips-binary carries the native library, so
+      # nothing else has to be installed on Windows. Without these two,
+      # everything still works through Pillow.
+      - pyvips>=2.2
+      - pyvips-binary
+
+      # pywin32 is NOT required for accoreconsole, which is driven as a
+      # subprocess. It IS required for the acad-com backend (the full
+      # AutoCAD over COM, window hidden), which is Windows-only:
+      # - pywin32

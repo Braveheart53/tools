@@ -49,6 +49,10 @@ the big batch, GUI for everything else.
 | **Image conversion** *(new)* | `--images`, one "Also convert image files" checkbox in the GUI. JPEG, PNG, TIFF, BMP, GIF, WebP, JPEG 2000, AVIF, ICO, Netpbm, Targa, PCX, EPS and Windows metafiles. Multi-page TIFF becomes a multi-page PDF; transparency flattens onto white; page size comes from the DPI tag. §6 |
 | **⚠️ Image PDFs were 120× and 240× too large** *(fixed)* | Encoding every frame as PNG turned a 26 KiB JPEG into a 3.1 MiB page; and `Document.save()` writes streams **uncompressed by default**, turning a 2.3 KiB PNG into a 1409.7 KiB page. Both produce a perfectly valid PDF that is merely enormous. The mixed test set went from **17.6 MiB to 164 KiB**. §6.2 |
 | **Per-page bookmarks** | A single document with several pages — a multi-page TIFF, or an AutoCAD export of all layouts — now gets one child bookmark per page. Every converted file, drawing or image, carries a bookmark named after its source file. §5.2 |
+| **⚠️ Our own quotes were inside the plotter's name** *(fixed)* | The stock plotter was never missing. `DWG To PDF.pc3` sits in the directory the AutoCAD profile names, and the console still said `<"DWG To PDF.pc3"> not found.` — **quotes inside the brackets**, i.e. inside the name it searched for. The quoting added in 0.3.18 to survive the script's space-is-Enter rule is what made the device unresolvable; the same message proves the space rule does not apply at that prompt. Quoting is now a calibration variant, bare form first. §9.23 |
+| **⚠️ accoreconsole exited 0 having plotted nothing** *(fixed)* | **850 of 1876 drawings, 3.1 hours, and the error blamed the drawings.** `-PLOT` is answered *blind*, one scripted line per prompt. The stock plot device could not be resolved by name in the core console, so the prompt **repeated** — and every later answer was off by one until the tail spilled onto the command line. AutoCAD exited **0** with no PDF, so the return-code check never tripped. The device answer is now **measured on the first drawing** rather than assumed, the `?` device listing supplies the candidates, and the console transcript is finally *read*. §9.20 |
+| **⚠️ A hidden AutoCAD refused every drawing** *(fixed)* | Same run: `acad-com` failed on all 850 with `Invalid execution context` — AutoCAD's own words for "not in a state to accept that call" — on `Documents.Open`, the **first** call after `Visible = False`. A hidden application is not an automation state every release accepts, and retrying cannot fix it. New `--acad-window auto` (default) shows the window **minimised** on the first refusal and retries, once per run. §9.21 |
+| **⚠️ Every AutoCAD option ignored in parallel** *(fixed)* | `--acad-pc3`, `--accore-lang`, `--accore-script` and `--accore-command` were class attributes set in `main()`. Under *spawn* each worker re-imports the module and never runs `main()`, so all of them were silently ignored for the whole parallel pass — including the one escape hatch the failing drawings needed. Settings now travel with the job. §9.22 |
 | **⚠️ AutoCAD was never quit** *(fixed)* | An "AutoCAD Error Aborting — FATAL ERROR: Unhandled Access Violation" dialog at the end of a run that had **completely succeeded**. There was no `Quit`, no `CoUninitialize`, no `atexit` anywhere: a hidden AutoCAD was started and abandoned, so the interpreter tore down the COM apartment underneath a still-running application. Also left an invisible AutoCAD holding a licence seat after every run. §9.16 |
 | **⚠️ accoreconsole diagnostics destroyed** *(fixed)* | The console writes **UTF-16LE**; it was decoded with the locale encoding, so every character arrived followed by a NUL and collapsing whitespace turned them into spaces. That is why a real failure was reported as `Console tail: d`, then `Console: R` — one character, from a stream that was mostly NUL. §9.17 |
 | **`--strategy no-autocad`** *(new)* | Never touch AutoCAD at all — no licence seat, no GUI application, no modal dialogs, no PDF viewer. Even `no-autocad-first` keeps AutoCAD in the chain; there was no way to say "not at all". §5.3 |
@@ -768,7 +772,7 @@ streaming page-by-page. `--report-memory` logs RSS every ten files.
 
 ---
 
-## 9. Nineteen defects found by testing — six of them silent
+## 9. Twenty-three defects found by testing — ten of them silent
 
 This is the section worth reading. Every one of these produced a *plausible
 looking* result, and six produced a wrong PDF with **no error anywhere**.
@@ -1110,6 +1114,19 @@ A viewer holding a PDF open can also lock it, which on Windows is enough to
 make the *next* write to that path fail — so this is worth doing before a long
 run, not after.
 
+**Since 0.4.0 the run no longer depends on you having done it.** `acad-com`
+plots each sheet into a `.dwg2pdf_plot` scratch folder inside the output
+directory and **renames** it onto the deliverable path. The viewer therefore
+opens the scratch file, and a viewer still holding a previous PDF open cannot
+block today's write. The scratch folder is *inside* the output directory so
+that the rename is a same-volume operation rather than a copy of a D-size
+sheet across drives; the rename is retried, and a genuine sharing violation
+now reports the viewer rather than blaming the drawing.
+
+To be clear about what this is *not* a fix for: a viewer lock cannot produce
+`Invalid execution context` (§9.21). That error arrives on `Documents.Open`,
+before any PDF exists. The viewer is a real problem and a different one.
+
 ### 9.16 ⚠️ AutoCAD was never quit *(fixed)*
 
 Reported as this, at the end of a run:
@@ -1264,6 +1281,161 @@ downsamples first, in the native mode, and leaves greyscale as greyscale.
 | Downsample first, keep greyscale | 603 MB |
 | With libvips | **76 MB** |
 
+### 9.20 ⚠️ accoreconsole desynchronised its own answer sequence and exited 0 *(fixed)*
+
+**850 of 1876 drawings, 3.1 hours, and the message blamed the drawings.** The
+run reported `115 converted, 911 skipped, 850 failed` and every one of the 850
+carried three errors, one per engine. The accoreconsole one read:
+
+```
+RuntimeError: accoreconsole wrote no PDF (rc=0)
+```
+
+True, and useless. The console transcript inside it said what had actually
+happened:
+
+```
+Command: -PLOT  Detailed plot configuration? [Yes/No] <No>: Y
+Enter a layout name or [?] <Model>:
+Enter an output device name or [?] <Adobe PDF>: "DWG To PDF.pc3"
+<"DWG To PDF.pc3"> not found.
+Enter an output device name or [?] <Adobe PDF>:
+Enter paper size or [?] <Letter>: L
+Command: N  Unknown command "N".  Press F1 for help.
+```
+
+`-PLOT` is answered **blind**: one scripted line per prompt, with nothing
+reading the replies. The device was rejected, so the prompt **repeated** — and
+from that point every answer was off by one. The paper-size line was eaten as
+the second device answer (accepting the `<Adobe PDF>` default), the orientation
+`L` was offered as a paper size, `-PLOT` gave up, and the rest of the script
+fell through onto the command line as garbage. accoreconsole then exited **0
+having plotted nothing**, so the return-code check never tripped.
+
+Note what this means: the plotter that AutoCAD's own GUI uses on these very
+sheets every day was not resolvable *by name* in the core console. The
+plotter search path comes from the AutoCAD profile (`PrinterConfigDir`) and the
+core console does not always read the same one.
+
+Three fixes, because any one of them alone would leave the same class of
+failure possible:
+
+| Fix | What it does |
+|---|---|
+| **Measure, don't assume** | On the first drawing of the run, each candidate device answer is tried until a PDF *actually appears*; the winner is cached for the rest of the run. The attempt that works **is** that drawing's conversion, so a successful calibration costs nothing. |
+| **Ask AutoCAD what it can see** | `?` is a valid answer to the device prompt: it lists the devices the console really has. That list supplies the candidates and, on failure, appears in the error message. Full paths to `.pc3` files found on disk are tried too — a path resolves when a name does not. |
+| **Read the transcript** | `not found`, `Can not use None device for plotting` and `Unknown command` are now detected and reported, with the rejected answer, the devices the console could see, and the flag to pass. |
+
+And failing every candidate on three drawings stops the backend for the run
+rather than relaunching AutoCAD for the remaining eight hundred.
+
+```
+--no-accore-calibrate     # skip the measurement (only with --acad-pc3)
+--acad-pc3 "<name or full path to a .pc3>"
+```
+
+### 9.21 ⚠️ A hidden AutoCAD refused automation on every drawing *(fixed)*
+
+In the same run, `acad-com` failed identically on all 850:
+
+```
+com_error: (-2147352567, 'Exception occurred.',
+            (0, 'AutoCAD', 'Invalid execution context',
+             'C:\\Program Files\\Autodesk\\AutoCAD 2025\\HELP\\OLE_ERR.CHM',
+             -2145386296, -2145386296), None)
+```
+
+`Invalid execution context` is AutoCAD's own wording for *"I am not in a state
+to accept that call."* It arrived on `Documents.Open` — the **first**
+automation call after `Application.Visible = False` — on a licensed AutoCAD
+2025 that plots these drawings by hand without complaint. A hidden application
+is not an automation state every release accepts.
+
+Worse, §9.14's busy-retry made it slower rather than better: the error is
+matched as "busy", so every drawing waited through six retries to reach the
+same refusal. Retrying cannot help — AutoCAD is not busy, it is unwilling — so
+the recovery now changes the application's *state* instead.
+
+| `--acad-window` | Behaviour |
+|---|---|
+| `auto` *(default)* | Start hidden, exactly as before. On the **first** `Invalid execution context`, show the window **minimised** and retry that drawing. Once per run, not once per sheet. |
+| `hidden` | Never show it; accept the failures. |
+| `visible` | Start visible and minimised from the outset. |
+
+Minimised, because hiding the window was never about the operator not seeing
+AutoCAD — it was about a thousand sheets not flashing a window a thousand
+times.
+
+Start-up also now waits for `AcadState.IsQuiescent` (up to 120 s) **before**
+touching the window, which is the other, transient cause of the same error: a
+cold AutoCAD 2025 takes tens of seconds to become willing to talk, and talking
+to it early looks identical.
+
+### 9.22 ⚠️ Every AutoCAD option was ignored by the parallel pass *(fixed)*
+
+`--acad-pc3`, `--accore-lang`, `--accore-script` and `--accore-command` were
+applied by assigning to a backend **class attribute** in `main()`. On Windows
+the worker pool uses the `spawn` start method, so every worker **re-imports the
+module** and gets the class defaults — `main()` never ran there.
+
+So every one of those flags was silently ignored for the whole of pass 1,
+which is every drawing that did not fall through to the serial retry. The
+escape hatch for §9.15 and §9.20 did not reach the workers that needed it.
+
+A `backend_settings()` snapshot — plain built-ins, so it pickles — now travels
+with each job and is re-applied by `_convert_task()` in whatever process picks
+it up. The GUI passes the same snapshot.
+
+### 9.23 ⚠️ The plotter was never missing — our own quotes were inside its name *(fixed)*
+
+§9.20 shipped with the wrong diagnosis. The theory was that the core
+console reads a different AutoCAD profile from the GUI, and so a different
+`PrinterConfigDir`, and therefore could not see the stock plotter at all.
+Diagnostics from the machine that failed disproved it in two lines:
+
+```
+C:\Users\<user>\AppData\Roaming\Autodesk\AutoCAD 2025\R25.0\enu\Plotters\DWG To PDF.pc3
+
+HKCU\...\R25.0\ACAD-8101:409\Profiles\<<AutoCAD 2025 - English Unnamed Profile>>\General
+    PrinterConfigDir  REG_SZ  ...\AutoCAD 2025\R25.0\enu\plotters;%RoamableRootFolder%Plotters
+```
+
+The file is present, in the directory the profile names. Nothing was
+missing. Read the rejection one character at a time instead:
+
+```
+Enter an output device name or [?] <Adobe PDF>: "DWG To PDF.pc3"
+<"DWG To PDF.pc3"> not found.
+```
+
+AutoCAD echoes a rejected value inside `< >`, and **the double quotes are
+inside the brackets**. The name it searched for began with a quote
+character. The device prompt does not strip quotes — quoting is a LISP and
+shell convention, not something a core-console character prompt honours —
+so the quoting added in 0.3.18 to survive the script's space-is-Enter rule
+(§9.13) is exactly what made the stock plotter unresolvable. Two correct
+fixes, applied in sequence, cancelled each other out.
+
+That same message settles which form to use, and it is not a coin toss:
+the whole quoted string arrived at the prompt as **one** value. Had a
+space been Enter at this prompt, the brackets would have held `"DWG`
+instead. So this prompt reads to end of line, the space rule does not
+apply to it, and the quotes were contamination rather than protection.
+
+| Change | |
+|---|---|
+| `_answer_forms()` | Every candidate expands into the quotings that could work — **bare first**, then quoted, and for a full path its 8.3 **short name**, which has no spaces and so needs no quoting at all. Calibration tries them in order. |
+| Uncalibrated default | The bare name, not the quoted one. `--no-accore-calibrate` no longer hard-codes the form that is known to fail. |
+| `--acad-pc3` | Expanded the same way. The operator's *name* is still never second-guessed — only our quoting of it. |
+| `_stock_pc3_paths()` | Searches one level deeper: the release ships a second copy of the stock plotters in `Plotters\AutoCAD 2025 - English PC3 Files\`, which is where the profile's `%RoamableRootFolder%Plotters` entry resolves. |
+
+**And a retraction**, because §9.20 leaned on it: the `<Adobe PDF>` in that
+prompt is *not* evidence about the search path. The default offered at the
+device prompt is the plot configuration stored in the drawing's own layout
+— so `<Adobe PDF>` says those sheets were last saved with an Acrobat
+printer selected, and `<None>` says the layout has no device assigned.
+Both are facts about the drawings, not about the profile.
+
 ---
 
 ## 10. Regression suite
@@ -1309,12 +1481,29 @@ Qt, so it runs in CI with no display:
 | **threaded parallel conversion of 8 drawings through the worker** | 1 ✅ 8/8 |
 | progress bar, PDFs on disk, manifest, mirrored structure, 7z, thread cleanup | 6 ✅ |
 
-**AutoCAD backends — 28 of 28 passing** (`python test_autocad.py`). Runs
+**AutoCAD backends — 86 of 86 passing** (`python test_autocad.py`). Runs
 anywhere: it exercises the parts of the AutoCAD path that are pure Python —
-the generated `.scr`, the COM busy predicate, the Application liveness probe,
-the shutdown, and the UTF-16 console decoder. Plotting still needs Windows,
-but every defect in §9.13, §9.14, §9.16 and §9.17 lives in logic that can be
-tested without it.
+the generated `.scr`, the plot-device calibration, the console fault
+detection, the COM busy and context predicates, the window-state escalation,
+the viewer-proof rename, the settings snapshot, the Application liveness
+probe, the shutdown, and the UTF-16 console decoder. Plotting still needs
+Windows, but every defect in §9.13, §9.14, §9.16, §9.17, §9.20, §9.21 and
+§9.22 lives in logic that can be tested without it.
+
+| Group | Checks |
+|---|---|
+| generated `.scr`: `-PLOT`, quoting, plot style, orientation | 10 ✅ |
+| console fault detection, real desync transcript vs a clean plot | 5 ✅ |
+| device candidates: order, uniqueness, quoting, `--acad-pc3` alone | 8 ✅ |
+| quoting variants: bare-first, quoted fallback, 8.3 short path | 8 ✅ |
+| `?` device listing parsed out of a core-console transcript | 4 ✅ |
+| calibration finds the working device, caches it, stops looking | 4 ✅ |
+| calibration gives up after N drawings, with an actionable message | 5 ✅ |
+| context error recognised; window shown once per run; `hidden` honoured | 7 ✅ |
+| `--acad-window` modes, and a restart after escalation | 4 ✅ |
+| viewer-proof rename, and a locked destination blames the viewer | 4 ✅ |
+| settings snapshot survives `spawn`; unknown keys ignored | 6 ✅ |
+| COM busy predicate, liveness, shutdown, UTF-16 console | 21 ✅ |
 
 **Images — 15 of 15 passing** (`python test_images.py`). Discovery is opt-in,
 every advertised suffix is recognised, a multi-page TIFF keeps all its frames,
@@ -1396,4 +1585,10 @@ drawings, before committing to a whole archive.
 | [13] | Autodesk Community, "AcCoreConsole gives 'command not found' error in a script that runs in AutoCAD." https://forums.autodesk.com/t5/visual-lisp-autolisp-and-general/accoreconsole-gives-quot-command-not-found-quot-error-in-a/td-p/8899897 |
 | [14] | libvips, "libvips: A fast image processing library with low memory needs." https://www.libvips.org/ |
 | [15] | Pillow, "Image.MAX_IMAGE_PIXELS / decompression bomb protection," Pillow documentation. https://pillow.readthedocs.io/en/stable/reference/Image.html |
-| [10] | LibreDWG project, source repository (v0.14.8593 built and used here). https://github.com/LibreDWG/libredwg |
+| [16] | LibreDWG project, source repository (v0.14.8593 built and used here). https://github.com/LibreDWG/libredwg |
+| [17] | Autodesk, Inc., "PDF plotted in AutoCAD does not open automatically in viewer," Autodesk Support. States that the behaviour is a **custom property of the `.pc3`** ("Show result in the viewer" / "Open in PDF viewer when done"), reached through Plotter Manager → Custom Properties — not a system variable. https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/PDF-does-not-open-automatically-in-viewer.html |
+| [18] | Autodesk Community, "Plot using 'DWG To PDF.pc3' and NOT open in viewer." Same conclusion, from users doing exactly this in batch. https://forums.autodesk.com/t5/autocad-forum/plot-using-quot-dwg-to-pdf-pc3-quot-and-not-open-in-viewer/td-p/5088148 |
+| [19] | K. Walmsley, "Handling COM calls rejected by AutoCAD from an external .NET application," *Through the Interface*, 2010. The documented pattern for COM calls AutoCAD declines (`IMessageFilter`, retry-on-rejection) — which is what `_is_busy`/`_retry` implement, and why a refusal that is *not* transient needs a different remedy. https://keanw.com/2010/02/handling-com-calls-rejected-by-autocad-from-an-external-net-application.html |
+| [20] | Autodesk, Inc., "Other Application Execution Context Considerations," *ObjectARX Reference Guide*. https://help.autodesk.com/view/OARX/2022/ENU/?guid=GUID-4558026D-4858-45C8-BC0F-6C323577BD45 |
+| [22] | Microsoft Corp., "GetShortPathNameW function," *Win32 API (fileapi.h)*. Returns the input unchanged where 8.3 name creation is disabled, which is why the short-path candidate is optional. https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getshortpathnamew |
+| [21] | Autodesk, Inc., "Plotter Configuration Editor," *AutoCAD Customization Guide*. Where the `.pc3` custom properties live. https://help.autodesk.com/cloudhelp/2022/ENU/AutoCAD-Core/files/GUID-C8997B02-271B-47DE-95EF-B260A5E112D8.htm |

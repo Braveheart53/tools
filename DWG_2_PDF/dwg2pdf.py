@@ -71,6 +71,162 @@ Revision history
 ----------------
 Semantic versioning, newest first: External.Internal.Working.
 
+0.4.1
+    **The plotter was never missing -- the quotes were part of its
+    name.**  0.4.0 shipped with the working theory that accoreconsole
+    could not see ``DWG To PDF.pc3`` because the core console reads a
+    different AutoCAD profile, and so a different ``PrinterConfigDir``,
+    from the GUI.  Diagnostics from the failing machine disproved that::
+
+        C:\\Users\\<user>\\AppData\\Roaming\\Autodesk\\AutoCAD 2025\\R25.0\\enu\\Plotters\\DWG To PDF.pc3
+
+        HKCU\\...\\R25.0\\ACAD-8101:409\\Profiles\\<<AutoCAD 2025 - English Unnamed Profile>>\\General
+            PrinterConfigDir  REG_SZ  C:\\Users\\<user>\\AppData\\Roaming\\Autodesk\\AutoCAD 2025\\R25.0\\enu\\plotters;%RoamableRootFolder%Plotters
+
+    The file is present, in the directory the profile names.  Nothing
+    was missing.
+
+    What the transcript actually says, read one character at a time::
+
+        Enter an output device name or [?] <Adobe PDF>: "DWG To PDF.pc3"
+        <"DWG To PDF.pc3"> not found.
+
+    AutoCAD echoes the value it rejected inside ``< >``, and **the
+    double quotes are inside the brackets**.  The string it looked up
+    was ``"DWG To PDF.pc3"`` *including the quote characters*.  The
+    device prompt does not strip quotes -- quoting is a LISP and shell
+    convention, not something a core-console character prompt honours --
+    so the quoting added in 0.3.18 to survive the script's
+    space-is-Enter rule (Section 9.13) is itself what made the stock
+    plotter unresolvable.  Two correct fixes, applied in sequence, cancel
+    each other out.
+
+    Which form a given prompt accepts cannot be settled by reading the
+    documentation, so it is no longer guessed.
+    :meth:`AcCoreConsoleBackend._answer_forms` expands every candidate
+    into the quoting variants that could work -- quoted, bare, and for a
+    full path its 8.3 **short name**, which contains no spaces and so
+    needs no quoting at all -- and calibration tries them until a PDF
+    appears.  A ``--acad-pc3`` value is expanded the same way: the
+    operator's *name* is still not second-guessed, only our quoting of
+    it.
+
+    Also: :meth:`AcCoreConsoleBackend._stock_pc3_paths` now searches one
+    level deeper, because the release ships a second copy of the stock
+    plotters in ``Plotters/AutoCAD 2025 - English PC3 Files/`` and the
+    profile's ``%RoamableRootFolder%Plotters`` entry resolves there.
+
+    And a retraction, since it was in the 0.4.0 notes: the ``<Adobe
+    PDF>`` in that prompt is **not** evidence about the search path.  The
+    default offered at the device prompt is the plot configuration stored
+    in the drawing's own layout, so ``<Adobe PDF>`` says those sheets
+    were last saved with an Acrobat printer selected and ``<None>`` says
+    the layout has no device assigned.  Both are facts about the
+    drawings, not about the profile.
+
+0.4.0
+    **All three engines were failing, for three unrelated reasons.**  From
+    a 1876-drawing run of the GBT archive: 115 converted, 911 skipped, 850
+    failed in 11 213.9 s -- and every one of the 850 carried three error
+    messages, one per engine.  Minor version, not patch: the AutoCAD
+    window default and the plot-device answer are both behavioural.
+
+    1. **accoreconsole desynchronised its own answer sequence and exited
+       0.**  ``-PLOT`` is answered BLIND -- one line per prompt, no
+       reading of what comes back.  The device answer ``"DWG To PDF.pc3"``
+       was rejected, so the prompt REPEATED; the next line of the script
+       (the paper size) was eaten as the device answer, and every answer
+       after that was off by one until the tail spilled onto the command
+       line.  From the transcript::
+
+           Enter an output device name or [?] <Adobe PDF>: "DWG To PDF.pc3"
+           <"DWG To PDF.pc3"> not found.
+           Enter an output device name or [?] <Adobe PDF>:
+           Enter paper size or [?] <Letter>: L
+           Command: N  Unknown command "N".  Press F1 for help.
+
+       accoreconsole then exited **rc=0 having plotted nothing**, so the
+       return-code check never tripped and the failure was reported as
+       "accoreconsole wrote no PDF (rc=0)" -- true, and useless: it read
+       as though the drawings were at fault.  The console had been saying
+       otherwise all along; nothing was reading it.
+
+       Three fixes, because one is not enough.  The plot device is now
+       **measured, not assumed**: on the first drawing of the run each
+       candidate answer is tried until a PDF actually appears, and the
+       winner is cached (:meth:`AcCoreConsoleBackend._calibrate`).  The
+       candidates come from asking ``-PLOT`` itself, whose ``?`` answer
+       lists the devices it can really see, then from full paths to
+       ``.pc3`` files on disk -- a path resolves when a *name* does not,
+       which is exactly this machine's failure, since the AutoCAD GUI
+       plots these sheets with that plotter every day.  The attempt that
+       works IS that drawing's conversion, so calibration costs nothing
+       once it succeeds.  The transcript is now **read**
+       (:meth:`AcCoreConsoleBackend._faults`): "not found", "Can not use
+       None device for plotting" and "Unknown command" are reported as
+       what they are, with the device that was rejected, the devices the
+       console could see, and what to pass to fix it.  And failing every
+       candidate on three drawings stops the backend for the run instead
+       of relaunching AutoCAD for the remaining eight hundred.
+
+    2. **acad-com was refused on every drawing because its window was
+       hidden.**  Every sheet failed identically with ``Invalid execution
+       context`` -- AutoCAD's own words for "not in a state to accept that
+       call" (``OLE_ERR.CHM``, HRESULT ``0x80020009``
+       ``DISP_E_EXCEPTION``) -- on ``Documents.Open``, the FIRST automation
+       call after ``Visible = False``, on a licensed AutoCAD 2025 that
+       plots those same drawings by hand without complaint.  A hidden
+       application is not an automation state every release accepts, and
+       0.3.15's busy-retry made it worse rather than better: the error is
+       matched as "busy", so each drawing waited through six retries to
+       reach the same refusal.  Retrying cannot fix it -- AutoCAD is not
+       busy, it is unwilling.
+
+       So the recovery changes the application's state instead.  New
+       ``--acad-window {auto,hidden,visible}``: ``auto`` (default) starts
+       AutoCAD hidden exactly as before and, on the first context refusal,
+       shows the window **minimised** and retries the drawing -- once per
+       run, not once per sheet.  ``hidden`` keeps the old behaviour and
+       accepts the failures; ``visible`` starts minimised from the outset.
+       Minimised, because the point of hiding was never that the operator
+       must not see AutoCAD -- it was that a thousand sheets must not flash
+       a window a thousand times.  Startup also now waits for
+       ``AcadState.IsQuiescent`` (up to 120 s) BEFORE touching the window,
+       which is the other, transient cause of the same error on a cold
+       start.
+
+    3. **Per-run backend settings never reached the workers.**
+       ``--acad-pc3``, ``--accore-lang``, ``--accore-script`` and
+       ``--accore-command`` were applied by assigning to a backend CLASS
+       ATTRIBUTE in :func:`main`.  On Windows the pool uses the 'spawn'
+       start method, so every worker re-imports this module and gets the
+       class *defaults* -- ``main`` never ran there.  Every one of those
+       flags was silently ignored for the whole of pass 1, which is every
+       drawing that did not fall through to the serial retry.  A
+       :func:`backend_settings` snapshot now travels with each job and is
+       applied by :func:`_convert_task`.
+
+    Also, on the viewer question: AutoCAD handing every finished PDF to
+    the default viewer is governed by **"Open in PDF viewer when done", a
+    custom property OF THE .pc3** -- not a system variable, so no
+    ``SETVAR`` and no COM property can switch it off; ``--acad-pc3``
+    pointed at a copy with that box cleared remains the only supported
+    cure, and acad-com now says so once per run.  What has changed is that
+    the run no longer depends on it: each sheet is plotted into a
+    ``.dwg2pdf_plot`` scratch folder inside the output directory and
+    **renamed** into place, so the viewer opens the scratch file and a
+    viewer still holding a previous PDF open cannot block the deliverable.
+    The rename is same-volume (hence inside the output directory, not in
+    the system temp) and is retried, and a genuine sharing violation now
+    reports the viewer rather than the drawing.
+
+    To be clear about what this was NOT: a viewer lock cannot produce
+    "Invalid execution context".  The error arrived on ``Documents.Open``,
+    before any PDF existed, on the first drawing of the run; a lock shows
+    up as a Windows sharing violation on the write, which is a different
+    message at a different moment.  The viewer was a real problem worth
+    fixing, and a different one.
+
 0.3.18
     Four defects from a 92-file archive run, two of them long-standing and
     hidden behind the mangled console output that 0.3.16 finally decoded.
@@ -470,7 +626,7 @@ from typing import Any, Callable, Iterable, Iterator, Optional, Sequence
 __author__ = "William W. Wallace"
 __email__ = "naval.antennas@gmail.com"
 __phone__ = "(304) 456-2216"
-__revision__ = "0.3.18"
+__revision__ = "0.4.1"
 __all__ = [
     "PageSpec",
     "ConversionResult",
@@ -3100,9 +3256,59 @@ class AcCoreConsoleBackend(Backend):
     #: into ``-PLOT``'s own prompt.
     MONO_CTB = "monochrome.ctb"
 
-    #: Plotter configuration answered into ``-PLOT``.  Shared with
+    #: Stock plotter configuration answered into ``-PLOT``.  Shared with
     #: :class:`AcadComBackend`; ``--acad-pc3`` overrides both.
     PC3 = "DWG To PDF.pc3"
+
+    #: Explicit device override from ``--acad-pc3``.  When set, calibration
+    #: is skipped and this answer is used verbatim -- an operator who names
+    #: a device is telling us they already know which one works.
+    pc3: Optional[str] = None
+
+    #: Calibrate the plot-device answer on the first drawing of the run.
+    #: Disable with ``--no-accore-calibrate``.
+    CALIBRATE: bool = True
+
+    #: Give up calibrating after this many drawings have failed every
+    #: candidate.  One broken drawing must not condemn the backend; eight
+    #: hundred of them failing the same way must not be retried for hours.
+    CALIBRATION_GIVE_UP_AFTER: int = 3
+
+    #: Calibration state.  Per worker PROCESS, not per run: on Windows the
+    #: pool uses 'spawn', so each worker re-imports this module and
+    #: calibrates itself once.  See :func:`apply_backend_settings`.
+    _device: Optional[str] = None              # winning answer, quoted
+    _device_list: Optional[list[str]] = None   # what ``?`` reported
+    _calibration_error: Optional[str] = None   # set once we have given up
+    _calibration_failures: int = 0
+
+    #: Console fragments that mean the script and the prompts have come
+    #: apart.  ``-PLOT`` is a BLIND answer sequence: one rejected answer
+    #: makes the prompt repeat, the next answer is eaten by the prompt that
+    #: was meant for the one before it, and every answer after that is off
+    #: by one.  The tail then spills onto the command line as garbage.  The
+    #: console said so plainly -- nothing was reading it.
+    #:
+    #: This is the whole of the 0.3.18 failure, from a real transcript::
+    #:
+    #:     Enter an output device name or [?] <Adobe PDF>: "DWG To PDF.pc3"
+    #:     <"DWG To PDF.pc3"> not found.
+    #:     Enter an output device name or [?] <Adobe PDF>:
+    #:     Enter paper size or [?] <Letter>: L
+    #:     Command: N  Unknown command "N".  Press F1 for help.
+    #:
+    #: accoreconsole then exited **rc=0 having plotted nothing**, so the
+    #: return-code check never tripped and 850 drawings failed with a
+    #: message that blamed the drawings.
+    _TRANSCRIPT_FAULTS = (
+        "not found.",
+        "can not use none device",
+        "cannot use none device",
+        "unknown command",
+        "invalid option keyword",
+        "point or option keyword required",
+        "invalid paper size",
+    )
 
     #: ``plot`` (default) or ``exportpdf``, from ``--accore-command``.
     #: EXPORTPDF is not a core command and does not work here; see
@@ -3158,8 +3364,334 @@ class AcCoreConsoleBackend(Backend):
             )
         return "accoreconsole (not found)"
 
+    # -- plot-device resolution -------------------------------------------
     @classmethod
-    def _script_text(cls, target: Path, spec: PageSpec) -> str:
+    def _faults(cls, console: str) -> list[str]:
+        """Return the console lines that show the prompt sequence broke.
+
+        Parameters
+        ----------
+        console : str
+            Already-decoded console transcript (:func:`_decode_console`).
+
+        Returns
+        -------
+        list of str
+            Matching lines, de-duplicated, in the order they appeared.
+            Empty when the transcript looks clean.
+        """
+        seen: set[str] = set()
+        hits: list[str] = []
+        for raw in console.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            low = line.lower()
+            if any(token in low for token in cls._TRANSCRIPT_FAULTS):
+                if low not in seen:
+                    seen.add(low)
+                    hits.append(line)
+        return hits
+
+    @staticmethod
+    def _stock_pc3_paths(name: str) -> list[Path]:
+        """Find *name* in the per-user AutoCAD ``Plotters`` directories.
+
+        The point of this is the failure mode actually observed: the device
+        ``DWG To PDF.pc3`` exists on the machine and the AutoCAD GUI plots
+        with it happily, but accoreconsole answered ``<"DWG To PDF.pc3"> not
+        found.`` -- it could not resolve the *name*, because the plotter
+        search path comes from the AutoCAD profile and the core console does
+        not always read the same one.  A **full path** to the .pc3 file
+        sidesteps the search entirely, which is why it is a calibration
+        candidate.
+
+        Returns
+        -------
+        list of pathlib.Path
+            Existing files, newest release first, de-duplicated.
+        """
+        roots: list[Path] = []
+        for var in ("APPDATA", "LOCALAPPDATA", "PROGRAMDATA"):
+            base = os.environ.get(var)
+            if base:
+                roots.append(Path(base) / "Autodesk")
+
+        found: list[Path] = []
+        for root in roots:
+            if not root.is_dir():
+                continue
+            try:
+                # .../Autodesk/AutoCAD 2025/R25.0/enu/Plotters/<name>
+                found += sorted(root.glob("*/R*/*/Plotters/" + name),
+                                reverse=True)
+                # One level deeper: the release also drops a copy into
+                # "Plotters/AutoCAD 2025 - English PC3 Files/", which is
+                # where the profile's %RoamableRootFolder%Plotters entry
+                # resolves.
+                found += sorted(root.glob("*/R*/*/Plotters/*/" + name),
+                                reverse=True)
+                found += sorted(root.glob("*/*/R*/*/Plotters/" + name),
+                                reverse=True)
+            except OSError:          # a redirected AppData can refuse
+                continue
+
+        out: list[Path] = []
+        seen: set[str] = set()
+        for path in found:
+            key = str(path).lower()
+            if key not in seen and path.is_file():
+                seen.add(key)
+                out.append(path)
+        return out
+
+    @classmethod
+    def _run_console(
+        cls, exe: Path, source: Path, script_text: str, timeout: float
+    ) -> tuple[int, str]:
+        """Run one accoreconsole invocation, returning ``(rc, console)``.
+
+        The transcript is decoded here rather than at the call sites: the
+        console reports itself ``(UNICODE)`` and writes UTF-16LE, which
+        ``subprocess(text=True)`` mangles into NUL-separated characters
+        (Section 9.17).  Every caller wants the readable form.
+        """
+        with tempfile.TemporaryDirectory(prefix="dwg2pdf_scr_") as tmp:
+            script = Path(tmp) / "export.scr"
+            script.write_text(script_text, encoding="ascii", errors="replace")
+            args = [exe, "/i", str(source), "/s", str(script)]
+            if cls.language:
+                args += ["/l", cls.language]
+            proc = _run(args, timeout=timeout)
+        console = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+        return proc.returncode, _decode_console(console)
+
+    @classmethod
+    def _probe_devices(
+        cls, exe: Path, sample: Path, timeout: float
+    ) -> list[str]:
+        """Ask ``-PLOT`` itself which output devices it can see.
+
+        ``?`` is a documented answer to the device prompt: AutoCAD prints
+        the list and asks again.  Running it once per process turns "the
+        device was not found" from a guess into a fact, and gives the
+        failure message something useful to say.
+
+        The list is parsed by pulling every ``*.pc3`` token out of the
+        transcript, which is deliberately crude.  Prompt text, echoed
+        answers and listing rows all share lines in a core-console
+        transcript (``Command: -PLOT Detailed plot configuration? ... : Y``),
+        so a line-oriented parser would be more fragile, not less.  System
+        printers such as ``Adobe PDF`` are intentionally *not* collected:
+        they cannot write a file to a path we choose.
+
+        Returns
+        -------
+        list of str
+            Device names ending in ``.pc3``, de-duplicated.  Cached on the
+            class after the first call.
+        """
+        if cls._device_list is not None:
+            return cls._device_list
+
+        script = "\n".join([
+            "FILEDIA", "0", "CMDDIA", "0",
+            "-PLOT",
+            "Y",            # detailed plot configuration
+            "",             # layout: the current one
+            "?",            # list the devices, then re-prompt
+            "",
+        ])
+        try:
+            _, console = cls._run_console(exe, sample, script, timeout)
+        except Exception as exc:                       # noqa: BLE001
+            _LOG.debug("plot-device probe failed: %s", exc)
+            cls._device_list = []
+            return cls._device_list
+
+        _LOG.debug("plot-device probe transcript:\n%s", console)
+        names: list[str] = []
+        seen: set[str] = set()
+        for match in re.finditer(r"[A-Za-z0-9][A-Za-z0-9 ()_\-.&+]*\.pc3",
+                                 console):
+            name = match.group(0).strip()
+            if name.lower() not in seen:
+                seen.add(name.lower())
+                names.append(name)
+        cls._device_list = names
+        _LOG.info("accoreconsole can see %d .pc3 device(s)%s",
+                  len(names),
+                  (": " + ", ".join(names)) if names else "")
+        return names
+
+    @staticmethod
+    def _short_path(path: Path) -> Optional[str]:
+        """The 8.3 short form of *path*, or ``None``.
+
+        Worth having because a short path contains no spaces, which makes
+        it the one answer that is immune to both halves of the problem:
+        the script's space-is-Enter rule has nothing to act on, so no
+        quoting is needed, so there are no quote characters to be
+        swallowed into the device name.
+
+        ``GetShortPathNameW`` is called through :mod:`ctypes` rather than
+        ``win32api`` so that this works without pywin32, and returns
+        ``None`` everywhere except Windows -- and on Windows volumes with
+        8.3 name creation disabled, where the call succeeds but hands
+        back the long path unchanged.
+        """
+        if os.name != "nt":
+            return None
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            get_short = ctypes.windll.kernel32.GetShortPathNameW
+            get_short.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR,
+                                  wintypes.DWORD]
+            get_short.restype = wintypes.DWORD
+
+            need = get_short(str(path), None, 0)
+            if not need:
+                return None
+            buf = ctypes.create_unicode_buffer(need)
+            if not get_short(str(path), buf, need):
+                return None
+        except Exception:                                  # noqa: BLE001
+            return None
+
+        short = buf.value
+        # No 8.3 alias on this volume: the call is documented to return
+        # the input unchanged, which is not a new candidate.
+        if not short or short == str(path) or " " in short:
+            return None
+        return short
+
+    @classmethod
+    def _answer_forms(cls, value: str, is_path: bool = False) -> list[str]:
+        """Every quoting of *value* that might answer the device prompt.
+
+        This exists because the two obvious fixes are in direct
+        opposition and the documentation does not say which wins.
+
+        A space in an AutoCAD script is Enter (Section 9.13), so
+        ``DWG To PDF.pc3`` unquoted looks like it should answer this
+        prompt with ``DWG`` and feed ``To`` and ``PDF.pc3`` to the next
+        two.  That is why 0.3.18 quoted it.  But the console's own
+        transcript is unambiguous about what happened next::
+
+            <"DWG To PDF.pc3"> not found.
+
+        AutoCAD echoes a rejected value inside ``< >``, and the quotes
+        are *inside* the brackets -- it searched for a device whose name
+        begins with a quote character.  Character prompts in the core
+        console do not strip quotes.
+
+        Both readings are defensible and only one can be true of any
+        given prompt, so both are offered and calibration decides.  Order
+        matters only in that a cheap certainty goes first: a short path
+        has no spaces at all, so neither rule can spoil it.
+
+        Parameters
+        ----------
+        value : str
+            A device name or a full path to a ``.pc3``.
+        is_path : bool, optional
+            Whether *value* is a filesystem path, in which case its 8.3
+            short form is also worth trying.
+
+        Returns
+        -------
+        list of str
+            Answers exactly as they should be written into the ``.scr``,
+            de-duplicated, order preserved.
+        """
+        forms: list[str] = []
+        if is_path:
+            short = cls._short_path(Path(value))
+            if short:
+                forms.append(short)          # no spaces: no quoting at all
+        if " " in value:
+            # Bare FIRST, and not as a coin toss.  The rejection message
+            # ``<"DWG To PDF.pc3"> not found.`` proves the whole quoted
+            # string reached the prompt as ONE value -- had a space been
+            # Enter at this prompt, the answer would have been ``"DWG``
+            # and the brackets would show that instead.  So this prompt
+            # reads to end of line, the space rule does not apply here,
+            # and the quotes were pure contamination.
+            forms += [value, '"%s"' % value]
+        else:
+            # Nothing for the space rule to act on; quoting could only
+            # ever hurt, so the bare form leads.
+            forms += [value, '"%s"' % value]
+
+        out: list[str] = []
+        seen: set[str] = set()
+        for form in forms:
+            if form.lower() not in seen:
+                seen.add(form.lower())
+                out.append(form)
+        return out
+
+    @classmethod
+    def _device_candidates(
+        cls, exe: Path, sample: Path, timeout: float
+    ) -> list[str]:
+        """Ordered answers to try at the device prompt, quoting included.
+
+        Each candidate *name* is expanded by :meth:`_answer_forms` into
+        the quotings that could work, because the machine that failed
+        proved our quoting was the defect rather than the cure: the
+        plotter was present and named in the profile, and the console
+        still reported ``<"DWG To PDF.pc3"> not found.`` -- quotes inside
+        the brackets, i.e. inside the name it searched for.
+
+        Order, best first:
+
+        1. ``--acad-pc3``, alone.  An explicit answer is not a candidate
+           to be second-guessed -- if the *name* is wrong the operator
+           needs to see it fail, not watch something else quietly
+           succeed.  Its quoting, however, is ours, so that is still
+           tried both ways.
+        2. PDF-capable devices ``?`` actually reported, ``DWG To PDF``
+           first.
+        3. The stock name, in case the probe could not be parsed.
+        4. Full paths to ``.pc3`` files found on disk, short form first.
+           A path sidesteps name resolution, and its 8.3 form sidesteps
+           the space rule as well.
+        """
+        answers: list[str] = []
+
+        if cls.pc3:
+            looks_like_path = (os.sep in cls.pc3) or (os.altsep or "") in cls.pc3
+            return cls._answer_forms(cls.pc3, is_path=looks_like_path)
+
+        probed = cls._probe_devices(exe, sample, timeout)
+        stock = cls.PC3.lower()
+        ranked = (
+            [d for d in probed if stock in d.lower()]
+            + [d for d in probed
+               if "pdf" in d.lower() and stock not in d.lower()]
+        )
+        for device in ranked:
+            answers += cls._answer_forms(device)
+        answers += cls._answer_forms(cls.PC3)
+        for name in (cls.PC3, "AutoCAD PDF (General Documentation).pc3"):
+            for path in cls._stock_pc3_paths(name):
+                answers += cls._answer_forms(str(path), is_path=True)
+
+        out: list[str] = []
+        seen: set[str] = set()
+        for answer in answers:
+            if answer.lower() not in seen:
+                seen.add(answer.lower())
+                out.append(answer)
+        return out
+
+    @classmethod
+    def _script_text(
+        cls, target: Path, spec: PageSpec, device: Optional[str] = None
+    ) -> str:
         """Build the ``.scr`` contents for one drawing.
 
         .. warning::
@@ -3253,7 +3785,13 @@ class AcCoreConsoleBackend(Backend):
             # "PDF.pc3" to the next two prompts, shifting the whole
             # sequence.  Exactly the defect of section 9.7, one prompt
             # earlier.
-            '"%s"' % cls.PC3,           # output device
+            # The calibrated answer when there is one, else the stock
+            # name.  ``device`` is what calibration passes in.
+            # The uncalibrated fallback is now the BARE name, not the
+            # quoted one.  0.4.0 quoted it here, and the machine that
+            # failed reported <"DWG To PDF.pc3"> not found -- the quotes
+            # were inside the name it searched for.  See _answer_forms.
+            device or cls._device or (cls.pc3 or cls.PC3),
             "",                         # paper size: blank = device default
             orientation,                # portrait / landscape
             "N",                        # plot upside down?
@@ -3274,6 +3812,113 @@ class AcCoreConsoleBackend(Backend):
         ]
         return "\n".join(lines)
 
+    # -- conversion --------------------------------------------------------
+    def _attempt(
+        self, exe: Path, source: Path, target: Path, spec: PageSpec,
+        device: Optional[str] = None,
+    ) -> str:
+        """Run one plot attempt.  Returns the decoded console transcript.
+
+        Does not raise on failure and does not check the return code:
+        accoreconsole exits **0 having plotted nothing** when the prompt
+        sequence desynchronises, so the only honest test of success is
+        whether the PDF is on disk.  The caller looks.
+        """
+        script_text = self._script_text(target, spec, device=device)
+        _LOG.debug("accoreconsole script for %s was:\n%s",
+                   source.name, script_text)
+        rc, console = self._run_console(exe, source, script_text,
+                                        self.timeout)
+        _LOG.debug("accoreconsole (rc=%d) console output:\n%s", rc, console)
+        return console
+
+    def _failure_message(
+        self, device: Optional[str], console: str, extra: str = ""
+    ) -> str:
+        """Build a failure message that says what actually went wrong.
+
+        The 0.3.18 message -- "accoreconsole wrote no PDF (rc=0)" plus a
+        console excerpt -- was true and useless: it read as though the
+        drawing were at fault when the console plainly said the plotter was
+        not found.  This one names the rejected answer, quotes the console
+        lines that show the desync, lists the devices the console could see,
+        and says what to do about it.
+        """
+        parts = [f"accoreconsole wrote no PDF (plot device answer: "
+                 f"{device or '(default)'})."]
+        faults = self._faults(console)
+        if faults:
+            parts.append("Console faults: " + " | ".join(faults[:4]))
+        if self._device_list:
+            parts.append("Devices accoreconsole could see: "
+                         + ", ".join(self._device_list))
+        elif self._device_list is not None:
+            parts.append("accoreconsole reported no .pc3 devices at all: "
+                         "its plotter search path (the AutoCAD profile's "
+                         "PrinterConfigDir) is not resolving")
+        if extra:
+            parts.append(extra)
+        parts.append("Fix: --acad-pc3 with a device name accoreconsole can "
+                     "resolve, or the FULL PATH of a .pc3 file")
+        parts.append("Console: " + _console_excerpt(console))
+        return " ".join(parts)
+
+    def _calibrate(
+        self, exe: Path, source: Path, target: Path, spec: PageSpec
+    ) -> tuple[list[Path], int]:
+        """Find a plot-device answer that actually produces a PDF.
+
+        ``-PLOT`` is answered blind, so a rejected device answer does not
+        fail -- it makes the prompt repeat, shifts every later answer by
+        one, and exits 0 with nothing plotted.  Guessing the answer once and
+        hard-coding it is what cost a 3.1-hour run and 850 drawings.
+
+        So the answer is measured instead of assumed, on the first drawing
+        of the run, by trying each candidate until a PDF appears.  The
+        attempt that works IS this drawing's conversion -- nothing is
+        wasted -- and the winner is cached on the class for every drawing
+        after it.
+
+        One broken drawing must not condemn the backend, so failing every
+        candidate is counted rather than fatal;
+        :attr:`CALIBRATION_GIVE_UP_AFTER` drawings failing the same way
+        stops the run wasting hours on a machine where no candidate works.
+        """
+        cls = type(self)
+        candidates = self._device_candidates(exe, source, self.timeout)
+        _LOG.info("calibrating the accoreconsole plot device on %s "
+                  "(%d candidate(s))", source.name, len(candidates))
+
+        last_console = ""
+        for device in candidates:
+            last_console = self._attempt(exe, source, target, spec, device)
+            if target.is_file():
+                cls._device = device
+                _LOG.info("accoreconsole plot device: %s (calibrated on %s)",
+                          device, source.name)
+                return [target], 0
+            _LOG.info("plot device %s did not produce a PDF; trying the next",
+                      device)
+
+        cls._calibration_failures += 1
+        message = self._failure_message(
+            None, last_console,
+            extra=("Tried: " + ", ".join(candidates)
+                   + f" (calibration attempt "
+                     f"{cls._calibration_failures} of "
+                     f"{cls.CALIBRATION_GIVE_UP_AFTER})"),
+        )
+        if cls._calibration_failures >= cls.CALIBRATION_GIVE_UP_AFTER:
+            # Fail every later drawing instantly with this message rather
+            # than relaunching AutoCAD a few thousand more times.
+            cls._calibration_error = (
+                "accoreconsole cannot plot on this machine: no plot device "
+                "produced a PDF on any of "
+                f"{cls.CALIBRATION_GIVE_UP_AFTER} drawings. " + message
+            )
+            _LOG.error("%s", cls._calibration_error)
+        raise RuntimeError(message)
+
     def _convert_impl(
         self, source: Path, out_dir: Path, spec: PageSpec
     ) -> tuple[list[Path], int]:
@@ -3282,35 +3927,44 @@ class AcCoreConsoleBackend(Backend):
             raise RuntimeError("accoreconsole not found")
 
         target = out_dir / f"{source.stem}.pdf"
-        script_text = self.script_override or self._script_text(target, spec)
+
+        # A user-supplied template is used verbatim -- no calibration, no
+        # second-guessing.  It is the caller's job to quote its paths.
         if self.script_override:
-            # A user-supplied template: substitute the output path.  It is
-            # the caller's job to quote it if their template needs it.
-            script_text = script_text.replace("{output}", str(target))
+            script_text = self.script_override.replace("{output}",
+                                                       str(target))
+            _LOG.debug("accoreconsole script (from --accore-script):\n%s",
+                       script_text)
+            rc, console = self._run_console(exe, source, script_text,
+                                            self.timeout)
+            if target.is_file():
+                return [target], 0
+            _LOG.debug("accoreconsole (rc=%d) console output:\n%s",
+                       rc, console)
+            raise RuntimeError(self._failure_message(
+                "(from --accore-script)", console))
 
-        with tempfile.TemporaryDirectory(prefix="dwg2pdf_scr_") as tmp:
-            script = Path(tmp) / "export.scr"
-            script.write_text(script_text, encoding="ascii", errors="replace")
-            args = [exe, "/i", str(source), "/s", str(script)]
-            if self.language:
-                # /l with a language pack the machine does not have is a
-                # documented cause of "Unable to Process Configuration
-                # File", so it is omitted unless explicitly requested.
-                args += ["/l", self.language]
-            proc = _run(args, timeout=self.timeout)
+        if self._calibration_error:
+            # Already proved unusable on this machine; do not spend another
+            # AutoCAD launch to prove it again.
+            raise RuntimeError(self._calibration_error)
 
-        if not target.is_file():
-            # Report the WHOLE console, not a tail.  A truncated tail once
-            # reduced a real failure to the single character "d", which said
-            # nothing about the cause (an unquoted path with spaces).
-            console = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
-            _LOG.debug("accoreconsole script was:\n%s", script_text)
-            _LOG.debug("accoreconsole console output:\n%s",
-                       _decode_console(console))
-            raise RuntimeError(
-                f"accoreconsole wrote no PDF (rc={proc.returncode}). "
-                f"Console: {_console_excerpt(console)}"
-            )
+        if self.CALIBRATE and self._device is None:
+            return self._calibrate(exe, source, target, spec)
+
+        console = self._attempt(exe, source, target, spec)
+        if target.is_file():
+            faults = self._faults(console)
+            if faults:
+                # A PDF appeared but the console complained: worth knowing,
+                # because it usually means a fallback device was used and
+                # the sheet may not look like the draughtsman's plot.
+                _LOG.warning("%s plotted, but the console complained: %s",
+                             source.name, " | ".join(faults[:3]))
+            return [target], 0
+        raise RuntimeError(self._failure_message(
+            self._device or (self.pc3 or self.PC3), console))
+
         return [target], 0
 
 
@@ -3413,6 +4067,29 @@ class AcadComBackend(Backend):
         "the message filter",
     )
 
+    #: How the window is handled.  ``auto`` (default) starts AutoCAD
+    #: hidden and shows it -- minimised -- only if it refuses automation
+    #: while hidden; ``hidden`` never shows it, and accepts the failures;
+    #: ``visible`` starts it visible and minimised from the outset.  From
+    #: ``--acad-window``.
+    #:
+    #: This exists because of a whole-run failure: every drawing failed
+    #: with ``Invalid execution context`` on ``Documents.Open``, the FIRST
+    #: automation call after the window was hidden, on a licensed AutoCAD
+    #: 2025 that plots those same drawings by hand without complaint.  A
+    #: hidden application is not a supported automation state in every
+    #: release, and "Invalid execution context" is precisely AutoCAD saying
+    #: "not in a state to accept that call" (AutoCAD's own OLE_ERR.CHM,
+    #: reported as HRESULT 0x80020009 DISP_E_EXCEPTION).  Retrying a hidden
+    #: application cannot fix it -- it is not busy, it is unwilling -- so
+    #: the recovery is to show the window, not to wait longer.
+    window_mode: str = "auto"
+
+    #: Set once the run has given up on the hidden path.
+    _visible_escalated = False
+    #: The "your PDFs are opening in a viewer" note is worth saying once.
+    _viewer_hint_logged = False
+
     #: Cached per worker process: starting AutoCAD costs many seconds, so it
     #: is started once and reused for every drawing that worker handles.
     _app = None
@@ -3453,7 +4130,11 @@ class AcadComBackend(Backend):
         except ImportError:
             return "AutoCAD via COM (needs: pip install pywin32)"
         if cls.available():
-            return "full AutoCAD via COM, window hidden (serial)"
+            return ("full AutoCAD via COM, window %s (serial)"
+                    % {"auto": "hidden unless it refuses automation",
+                       "hidden": "hidden",
+                       "visible": "visible, minimised"}.get(
+                           cls.window_mode, cls.window_mode))
         return "AutoCAD via COM (AutoCAD.Application not registered)"
 
     # -- COM plumbing ------------------------------------------------------
@@ -3479,6 +4160,19 @@ class AcadComBackend(Backend):
         return code in cls._BUSY_HRESULTS
 
     @classmethod
+    def _is_context_error(cls, exc: Exception) -> bool:
+        """Is this AutoCAD refusing the call because of its own state?
+
+        ``Invalid execution context`` arrives as a generic
+        ``DISP_E_EXCEPTION`` whose *description* carries the meaning, so the
+        test is on the text.  :meth:`_is_busy` matches it too and retries
+        first, which is right for the transient case (AutoCAD still
+        starting up); this predicate is what decides to stop waiting and
+        change the application's state instead.
+        """
+        return "invalid execution context" in str(exc).lower()
+
+    @classmethod
     def _retry(cls, fn, tries: int = 6, base: float = 0.5):
         """Call *fn*, retrying while AutoCAD reports itself busy.
 
@@ -3499,7 +4193,7 @@ class AcadComBackend(Backend):
         raise last  # type: ignore[misc]
 
     @classmethod
-    def _wait_quiescent(cls, app, timeout: float = 30.0) -> None:
+    def _wait_quiescent(cls, app, timeout: float = 30.0) -> bool:
         """Block until AutoCAD is idle, or give up quietly.
 
         ``AcadState.IsQuiescent`` is Autodesk's own "is it safe to talk to
@@ -3507,15 +4201,26 @@ class AcadComBackend(Backend):
         an intermittent "Invalid execution context" into a wait.  Some
         states never report quiescent, so a timeout proceeds anyway rather
         than failing -- the call may well still succeed.
+
+        Returns
+        -------
+        bool
+            ``True`` if AutoCAD actually reported itself quiescent.
+            ``False`` means the wait timed out, which is worth knowing: an
+            application that never once answers this question is usually
+            the one about to refuse the next call.
         """
         end = time.time() + timeout
         while time.time() < end:
             try:
                 if app.GetAcadState().IsQuiescent:
-                    return
+                    return True
             except Exception:  # noqa: BLE001 - refusal is itself an answer
                 pass
             time.sleep(0.2)
+        _LOG.debug("AutoCAD never reported itself quiescent in %.0f s",
+                   timeout)
+        return False
 
     @classmethod
     def _get_app(cls):
@@ -3538,11 +4243,13 @@ class AcadComBackend(Backend):
         except Exception:  # noqa: BLE001 - nothing running, start our own
             cls._app = win32.DispatchEx("AutoCAD.Application")
             cls._app_was_running = False
-            try:
-                cls._app.Visible = False
-                _LOG.info("started AutoCAD with the window hidden")
-            except Exception as exc:  # noqa: BLE001
-                _LOG.warning("could not hide the AutoCAD window: %s", exc)
+            # A cold AutoCAD 2025 takes tens of seconds to become willing to
+            # talk, and talking to it early is the OTHER cause of "Invalid
+            # execution context".  Wait for Autodesk's own readiness flag
+            # BEFORE touching the window, and allow a cold start to take as
+            # long as a cold start takes.
+            cls._wait_quiescent(cls._app, timeout=120.0)
+            cls._set_window(cls._app)
 
         # Register the shutdown exactly once per process, and only after an
         # Application actually exists.  Without this the interpreter exits
@@ -3551,6 +4258,79 @@ class AcadComBackend(Backend):
             atexit.register(cls.shutdown)
             cls._atexit_registered = True
         return cls._app
+
+    @classmethod
+    def _set_window(cls, app) -> None:
+        """Apply :attr:`window_mode` to a freshly started AutoCAD.
+
+        "Visible" here means visible and **minimised** -- on the taskbar,
+        not in the way.  The point of the hidden window was never that the
+        operator must not see AutoCAD; it was that a batch of a thousand
+        sheets must not flash a window a thousand times.  Minimised gets
+        that and keeps the application in a state it will accept automation
+        in.
+        """
+        hide = cls.window_mode == "hidden" or (
+            cls.window_mode == "auto" and not cls._visible_escalated)
+        try:
+            if hide:
+                app.Visible = False
+                _LOG.info("started AutoCAD with the window hidden")
+            else:
+                app.Visible = True
+                try:
+                    app.WindowState = 2          # acMin
+                except Exception:  # noqa: BLE001 - not every release has it
+                    pass
+                _LOG.info("started AutoCAD visible and minimised")
+        except Exception as exc:  # noqa: BLE001
+            _LOG.warning("could not set the AutoCAD window state: %s", exc)
+
+    @classmethod
+    def _escalate_visibility(cls) -> bool:
+        """Show the window after AutoCAD refused automation while hidden.
+
+        Returns
+        -------
+        bool
+            ``True`` if something changed and the caller should retry.
+            ``False`` when there is nothing left to try -- ``--acad-window
+            hidden`` was asked for explicitly, or this already happened.
+        """
+        if cls.window_mode == "hidden" or cls._visible_escalated:
+            return False
+        cls._visible_escalated = True
+        _LOG.warning(
+            "AutoCAD refused the call with 'Invalid execution context' "
+            "while its window was hidden -- a hidden application is not a "
+            "state every release accepts automation in. Showing the window "
+            "(minimised) and retrying. Use --acad-window visible to start "
+            "this way, or --acad-window hidden to keep it hidden and accept "
+            "the failures."
+        )
+        app = cls._app
+        if app is not None:
+            try:
+                app.Visible = True
+                try:
+                    app.WindowState = 2          # acMin
+                except Exception:  # noqa: BLE001
+                    pass
+                cls._wait_quiescent(app, timeout=60.0)
+                return True
+            except Exception as exc:  # noqa: BLE001
+                _LOG.debug("could not show the hidden AutoCAD (%s); "
+                           "restarting it instead", exc)
+        # It would not even accept Visible = True: start a fresh one, which
+        # _set_window will now bring up visible because the flag is set.
+        cls._app = None
+        cls._app_was_running = False
+        try:
+            cls._get_app()
+            return True
+        except Exception as exc:  # noqa: BLE001
+            _LOG.warning("could not restart AutoCAD visible: %s", exc)
+            return False
 
     @classmethod
     def shutdown(cls) -> None:
@@ -3675,10 +4455,90 @@ class AcadComBackend(Backend):
             except Exception:  # noqa: BLE001 - not every release has each
                 pass
 
+    # -- output handling ---------------------------------------------------
+    @staticmethod
+    def _move_into_place(plotted: Path, target: Path) -> None:
+        """Rename the plotted PDF onto the deliverable path.
+
+        AutoCAD's PDF driver can hand every finished PDF to the default
+        viewer.  That behaviour is **"Open in PDF viewer when done", a
+        CUSTOM PROPERTY OF THE .pc3** [PC3-VIEW]_ -- not a system variable,
+        so no ``SETVAR`` and no COM property can switch it off; the only
+        supported cure is a .pc3 whose box is clear (``--acad-pc3``).
+
+        What this method does is make the run immune to it anyway.  The plot
+        lands in a scratch folder, so the viewer opens *that* file; the
+        deliverable is produced by a rename the viewer knows nothing about,
+        and a viewer still holding yesterday's PDF open cannot block
+        today's.  Only the final rename can collide, and it is retried.
+
+        .. [PC3-VIEW] Autodesk, "PDF plotted in AutoCAD does not open
+           automatically in viewer": the behaviour is the .pc3's custom
+           property ("Show result in the viewer" / "Open in PDF viewer
+           when done"), reached through Plotter Manager -> Custom
+           Properties.
+           https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/PDF-does-not-open-automatically-in-viewer.html
+        """
+        last: Optional[OSError] = None
+        for attempt in range(10):
+            try:
+                os.replace(plotted, target)
+                return
+            except OSError as exc:
+                last = exc
+                time.sleep(0.5 * (attempt + 1))
+        raise RuntimeError(
+            f"plotted the sheet but could not move it to {target.name}: "
+            f"{last}. A PDF viewer is probably holding the existing file "
+            f"open -- close it, or plot with a .pc3 whose 'Open in PDF "
+            f"viewer when done' custom property is cleared (--acad-pc3)."
+        )
+
+    def _viewer_hint(self, pc3: str, scratch: Path) -> None:
+        """Say once, per process, how to stop the viewer opening."""
+        cls = type(self)
+        if cls._viewer_hint_logged:
+            return
+        cls._viewer_hint_logged = True
+        if self.pc3:                     # they already pointed us somewhere
+            return
+        _LOG.info(
+            "acad-com plots through %s. If AutoCAD opens every finished PDF "
+            "in a viewer, that is the .pc3's 'Open in PDF viewer when done' "
+            "custom property -- no system variable can switch it off. "
+            "Plotter Manager -> double-click %s -> Custom Properties -> "
+            "clear that box -> Save As a copy, then rerun with "
+            "--acad-pc3 \"<copy>.pc3\". Meanwhile each sheet is plotted "
+            "into %s and renamed into place, so a viewer holding a file "
+            "open cannot break the run.",
+            pc3, pc3, scratch.name,
+        )
+
     # -- conversion --------------------------------------------------------
     def _convert_impl(
         self, source: Path, out_dir: Path, spec: PageSpec
     ) -> tuple[list[Path], int]:
+        """Plot one drawing, showing the window if AutoCAD insists.
+
+        The retry is deliberately narrow: only ``Invalid execution
+        context``, and only until the window has been shown once.  Anything
+        else -- a corrupt drawing, a missing plotter, a crash -- fails here
+        and gets reported, because retrying those just spends a licence
+        seat and thirty seconds to reach the same answer.
+        """
+        try:
+            return self._plot_once(source, out_dir, spec)
+        except Exception as exc:  # noqa: BLE001
+            if not self._is_context_error(exc):
+                raise
+            if not self._escalate_visibility():
+                raise
+            return self._plot_once(source, out_dir, spec)
+
+    def _plot_once(
+        self, source: Path, out_dir: Path, spec: PageSpec
+    ) -> tuple[list[Path], int]:
+        """One open-plot-close cycle.  Raises on anything that goes wrong."""
         app = self._get_app()
         if not self._app_is_alive():
             # Checked BEFORE each drawing, not only after a failure: the
@@ -3688,13 +4548,29 @@ class AcadComBackend(Backend):
         pc3 = self.pc3 or self.PC3
         target = out_dir / f"{source.stem}.pdf"
 
+        # Plot to a scratch folder INSIDE the output directory, then rename.
+        # Inside, so the rename is a same-volume operation rather than a
+        # copy of a D-size sheet across drives; and see _move_into_place for
+        # why it is not plotted straight onto the deliverable.
+        scratch = out_dir / ".dwg2pdf_plot"
+        scratch.mkdir(parents=True, exist_ok=True)
+        self._viewer_hint(pc3, scratch)
+        plotted = scratch / f"{source.stem}.pdf"
+        try:
+            plotted.unlink()
+        except OSError:
+            pass
+
         self._wait_quiescent(app)
         try:
             doc = self._retry(lambda: app.Documents.Open(str(source), True))
         except Exception:  # noqa: BLE001
             # One more chance, on a fresh application.  A drawing that kills
             # AutoCAD on open will fail again here and be reported honestly;
-            # a drawing that merely arrived after a crash now succeeds.
+            # a drawing that merely arrived after a crash now succeeds.  A
+            # context error is NOT handled here: _convert_impl deals with
+            # that by changing the window state, which restarting alone
+            # would not.
             if self._app_is_alive():
                 raise
             app = self._restart_app()
@@ -3750,13 +4626,13 @@ class AcadComBackend(Backend):
                     _LOG.debug("layout override skipped: %s", exc)
 
             self._wait_quiescent(app)
-            self._retry(lambda: doc.Plot.PlotToFile(str(target), pc3))
+            self._retry(lambda: doc.Plot.PlotToFile(str(plotted), pc3))
 
             # PlotToFile is synchronous only because BACKGROUNDPLOT is 0.
             # The file can still lag the call on a network share, so give it
             # a bounded chance to appear rather than trusting either.
             for _ in range(40):
-                if target.is_file() and target.stat().st_size > 1024:
+                if plotted.is_file() and plotted.stat().st_size > 1024:
                     break
                 time.sleep(0.25)
         finally:
@@ -3765,10 +4641,17 @@ class AcadComBackend(Backend):
             except Exception:  # noqa: BLE001
                 pass
 
-        if not (target.is_file() and target.stat().st_size > 1024):
+        if not (plotted.is_file() and plotted.stat().st_size > 1024):
             raise RuntimeError(
                 "AutoCAD (COM) produced no usable PDF for this drawing"
             )
+        self._move_into_place(plotted, target)
+        try:
+            scratch.rmdir()          # empty again unless a plot is in flight
+        except OSError:
+            pass
+        return [target], 0
+
         return [target], 0
 
 
@@ -3935,6 +4818,60 @@ BACKEND_CLASSES: tuple[type[Backend], ...] = (
 )
 
 BACKENDS_BY_NAME: dict[str, type[Backend]] = {c.name: c for c in BACKEND_CLASSES}
+
+#: Per-run backend settings that must survive the process boundary.
+#:
+#: **This closes a silent defect.**  Options like ``--acad-pc3`` were
+#: applied by assigning to a backend CLASS ATTRIBUTE in :func:`main`.  On
+#: Windows the worker pool uses the 'spawn' start method, so every worker
+#: re-imports this module and gets the class *defaults* -- ``main`` never
+#: ran there.  Every one of these flags was therefore ignored by pass 1,
+#: which is every drawing that did not need the serial retry.  The settings
+#: now travel with the job.
+BACKEND_SETTING_KEYS: dict[str, tuple[str, ...]] = {
+    "accoreconsole": ("PC3", "pc3", "language", "script_override",
+                      "command", "CALIBRATE"),
+    "acad-com": ("PC3", "pc3", "window_mode"),
+}
+
+
+def backend_settings() -> dict[str, dict[str, Any]]:
+    """Snapshot the settable backend class attributes.
+
+    Returns
+    -------
+    dict
+        ``{backend name: {attribute: value}}``, containing only plain
+        built-in types, so it pickles across the process boundary.
+    """
+    snapshot: dict[str, dict[str, Any]] = {}
+    for name, keys in BACKEND_SETTING_KEYS.items():
+        cls = BACKENDS_BY_NAME.get(name)
+        if cls is None:
+            continue
+        snapshot[name] = {key: getattr(cls, key) for key in keys
+                          if hasattr(cls, key)}
+    return snapshot
+
+
+def apply_backend_settings(settings: Optional[dict[str, dict[str, Any]]]
+                           ) -> None:
+    """Re-apply a :func:`backend_settings` snapshot in this process.
+
+    Called at the top of :func:`_convert_task`, which is the one place every
+    worker goes through.  Unknown names and attributes are ignored rather
+    than raised on, so an older GUI passing a smaller dict still works.
+    """
+    if not settings:
+        return
+    for name, values in settings.items():
+        cls = BACKENDS_BY_NAME.get(name)
+        if cls is None:
+            continue
+        allowed = BACKEND_SETTING_KEYS.get(name, ())
+        for key, value in values.items():
+            if key in allowed:
+                setattr(cls, key, value)
 
 #: Backends that drive a real AutoCAD.  The strategies treat these as one
 #: group: "AutoCAD first" means either of them, best first.
@@ -4306,6 +5243,7 @@ def _convert_task(
     spec_dict: dict[str, Any],
     timeout: float,
     skip_existing: bool,
+    settings: Optional[dict[str, dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     """Convert one file, trying each backend in turn until one succeeds.
 
@@ -4341,12 +5279,18 @@ def _convert_task(
     skip_existing : bool
         Return ``"skipped"`` without work if the expected PDF already exists
         and is no older than the source.
+    settings : dict, optional
+        :func:`backend_settings` snapshot.  Required for anything set from
+        the command line to reach a *worker*: the pool re-imports this
+        module and would otherwise use the class defaults.
 
     Returns
     -------
     dict
         :meth:`ConversionResult.as_row` output.
     """
+    apply_backend_settings(settings)
+
     source = Path(source_str)
     out_dir = Path(out_dir_str)
     spec = PageSpec(**spec_dict)
@@ -4644,6 +5588,8 @@ def run_batch(
         return rows
 
     spec_dict = dataclasses.asdict(spec)
+    # Captured HERE, in the parent, after main() has applied the CLI flags.
+    settings = backend_settings()
     rows: list[dict[str, Any]] = []
     done = 0
 
@@ -4654,7 +5600,7 @@ def run_batch(
         for source_str, out_dir_str in jobs:
             row = _convert_task(
                 source_str, out_dir_str, chain_names, spec_dict, timeout,
-                skip_existing,
+                skip_existing, settings,
             )
             rows.append(row)
             done += 1
@@ -4696,6 +5642,7 @@ def run_batch(
                     spec_dict,
                     timeout,
                     skip_existing,
+                    settings,
                 ): source_str
                 for source_str, out_dir_str in jobs
             }
@@ -4739,7 +5686,7 @@ def run_batch(
                 out_dir = plan_output(source, in_root, out_root, flat)
                 new_row = _convert_task(
                     str(source), str(out_dir), chain_names, spec_dict,
-                    timeout, skip_existing,
+                    timeout, skip_existing, settings,
                 )
                 by_source[row["source"]] = new_row
                 _log_row(new_row, index, len(retry))
@@ -5311,6 +6258,25 @@ def build_parser() -> argparse.ArgumentParser:
              "testable if a future release adds it",
     )
     group.add_argument(
+        "--acad-window", default="auto",
+        choices=("auto", "hidden", "visible"),
+        help="how the acad-com backend handles AutoCAD's window. 'auto' "
+             "(default) starts it hidden and shows it MINIMISED only if "
+             "AutoCAD refuses automation with 'Invalid execution context' "
+             "-- which a hidden AutoCAD 2025 did for every drawing of a "
+             "1876-sheet run. 'hidden' never shows it and accepts those "
+             "failures; 'visible' starts it visible and minimised",
+    )
+    group.add_argument(
+        "--no-accore-calibrate", dest="accore_calibrate",
+        action="store_false", default=True,
+        help="do not measure the accoreconsole plot-device answer on the "
+             "first drawing. Calibration exists because -PLOT is answered "
+             "BLIND: a device it cannot resolve makes it re-prompt, shifts "
+             "every later answer by one, and exit 0 having plotted "
+             "nothing. Turn this off only with --acad-pc3",
+    )
+    group.add_argument(
         "--acad-pc3", default=None, metavar="NAME",
         help="plotter configuration for the acad-com backend (default: "
              "'DWG To PDF.pc3'). THIS IS HOW YOU STOP AUTOCAD OPENING EACH "
@@ -5497,10 +6463,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.accore_lang:
         AcCoreConsoleBackend.language = args.accore_lang
     AcCoreConsoleBackend.command = args.accore_command
+    AcCoreConsoleBackend.CALIBRATE = args.accore_calibrate
+    AcadComBackend.window_mode = args.acad_window
     if args.acad_pc3:
-        AcCoreConsoleBackend.PC3 = args.acad_pc3
+        # Set the OVERRIDE on both, not the stock default: PC3 stays the
+        # documented stock name so a failure message can still say what was
+        # tried and what the stock name is.
+        AcCoreConsoleBackend.pc3 = args.acad_pc3
         AcadComBackend.pc3 = args.acad_pc3
-        _LOG.info("acad-com plotter configuration: %s", args.acad_pc3)
+        _LOG.info("AutoCAD plotter configuration: %s", args.acad_pc3)
 
     backend_cls = chain[0]
     if len(chain) > 1:

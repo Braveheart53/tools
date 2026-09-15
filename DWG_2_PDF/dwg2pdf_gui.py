@@ -63,6 +63,21 @@ Semantic versioning: External Release.Internal Release.Working version
 #              re-run separately.
 #              Companion to engine 0.3.16, which fixes AutoCAD never being
 #              quit (the "AutoCAD Error Aborting" dialog at the end of a
+# 0.2.15       In step with engine 0.4.0.  NEW "AutoCAD window" choice
+#              (auto / hidden / visible) on the Engine tab, wired to
+#              --acad-window: a hidden AutoCAD 2025 refused automation
+#              with "Invalid execution context" on every drawing of a
+#              1876-sheet run, and 'auto' shows the window minimised on
+#              the first refusal rather than failing the run.  NEW
+#              "Measure the plot device" checkbox (--no-accore-calibrate
+#              when cleared).  The ".pc3" field now reaches BOTH AutoCAD
+#              backends, not just acad-com -- accoreconsole is the one
+#              that could not resolve the stock plotter name.  And every
+#              run now passes engine.backend_settings() into the worker
+#              processes: previously these options were class attributes
+#              that a spawned worker never saw, so they were silently
+#              ignored for the whole parallel pass.
+#
 #              successful run) and repairs the mangled accoreconsole
 #              console output.
 # %%%% 0.2.11: AutoCAD plotter-configuration field.
@@ -274,7 +289,7 @@ import dwg2pdf as engine   # noqa: E402
 __author__ = "William W. Wallace"
 __email__ = "naval.antennas@gmail.com"
 __phone__ = "(304) 456-2216"
-__revision__ = "0.2.14"
+__revision__ = "0.2.15"
 
 #: Percent of logical cores used by the "Automatic (by CPU cores)" mode.
 DEFAULT_CORE_PERCENT = 75
@@ -650,6 +665,7 @@ class ConversionWorker(QtCore.QObject):
             row = engine._convert_task(
                 src, out_dir, chain_names, spec_dict,
                 opts["timeout"], opts["skip_existing"],
+                engine.backend_settings(),
             )
             rows.append(row)
             self.progress.emit(index, total, row)
@@ -701,10 +717,16 @@ class ConversionWorker(QtCore.QObject):
                 )
 
         with ProcessPoolExecutor(**pool_kwargs) as pool:
+            # Captured HERE, in the parent: a spawned worker re-imports
+            # the engine and would otherwise use the class defaults, which
+            # is how every AutoCAD option was silently ignored before
+            # 0.2.15.
+            settings = engine.backend_settings()
             futures = {
                 pool.submit(
                     engine._convert_task, src, out_dir, chain_names,
                     spec_dict, opts["timeout"], opts["skip_existing"],
+                    settings,
                 ): src
                 for src, out_dir in jobs
             }
@@ -766,6 +788,7 @@ class ConversionWorker(QtCore.QObject):
             new_row = engine._convert_task(
                 str(source), str(out_dir), chain_names, spec_dict,
                 opts["timeout"], opts["skip_existing"],
+                engine.backend_settings(),
             )
             by_source[row["source"]] = new_row
             self.progress.emit(total, total, new_row)
@@ -1234,6 +1257,53 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.pc3_edit.textChanged.connect(self._update_command)
         f.addRow("AutoCAD plotter (.pc3)", self.pc3_edit)
+
+        # --acad-window.  A hidden AutoCAD is not an automation state every
+        # release accepts: AutoCAD 2025 refused every drawing of a
+        # 1876-sheet run with "Invalid execution context" on the first call
+        # after the window was hidden.
+        self.acadwin_combo = QtWidgets.QComboBox()
+        for label, value in (
+            ("Hidden, show it only if AutoCAD refuses", "auto"),
+            ("Always hidden (accept the failures)", "hidden"),
+            ("Visible, minimised", "visible"),
+        ):
+            self.acadwin_combo.addItem(label, value)
+        self.acadwin_combo.setToolTip(
+            "How the full-AutoCAD (acad-com) backend handles the window.\n"
+            "\n"
+            "A hidden AutoCAD refuses automation in some releases with\n"
+            "'Invalid execution context' -- AutoCAD's own words for 'not\n"
+            "in a state to accept that call'. Retrying cannot fix it, so\n"
+            "the default shows the window MINIMISED on the first refusal\n"
+            "and retries that drawing, once per run.\n"
+            "\n"
+            "Minimised, not in your way: hiding it was only ever about\n"
+            "not flashing a window once per sheet."
+        )
+        self.acadwin_combo.currentIndexChanged.connect(self._update_command)
+        f.addRow("AutoCAD window", self.acadwin_combo)
+
+        # --no-accore-calibrate (inverted: the checkbox is the ON state).
+        self.calib_cb = QtWidgets.QCheckBox(
+            "Measure the plot device on the first drawing")
+        self.calib_cb.setChecked(True)
+        self.calib_cb.setToolTip(
+            "accoreconsole's -PLOT is answered BLIND -- one scripted line\n"
+            "per prompt, with nothing reading the replies. A plot device\n"
+            "it cannot resolve makes the prompt REPEAT, so every later\n"
+            "answer is off by one and AutoCAD exits 0 having plotted\n"
+            "nothing. That failed 850 drawings in one run.\n"
+            "\n"
+            "With this on, the device answer is tried against the first\n"
+            "drawing until a PDF actually appears, and the winner is used\n"
+            "for the rest of the run. The successful attempt IS that\n"
+            "drawing's conversion, so it costs nothing.\n"
+            "\n"
+            "Clear it only if you have named a .pc3 above."
+        )
+        self.calib_cb.toggled.connect(self._update_command)
+        f.addRow("", self.calib_cb)
         lay.addWidget(gb)
 
         gb2 = QtWidgets.QGroupBox("Engines detected on this machine")
@@ -1252,12 +1322,16 @@ class MainWindow(QtWidgets.QMainWindow):
             "<b>Two ways to use AutoCAD.</b> <tt>accoreconsole</tt> is "
             "AutoCAD's headless core console - no window, and it "
             "parallelises. <tt>acad-com</tt> drives the <i>full</i> AutoCAD "
-            "application over COM with <tt>Application.Visible = False</tt>, "
-            "so you get real plot styles, page setups, xrefs and SHX fonts "
-            "with no window; it is serial, and it needs "
-            "<tt>pip install pywin32</tt>. If AutoCAD is already running it "
-            "attaches to that instance and leaves your window visible rather "
-            "than hiding a session you are working in. "
+            "application over COM, so you get real plot styles, page "
+            "setups, xrefs and SHX fonts; it is serial, and it needs "
+            "<tt>pip install pywin32</tt>. It starts AutoCAD hidden, but a "
+            "hidden AutoCAD refuses automation in some releases with "
+            "<i>Invalid execution context</i> - so <b>AutoCAD window</b> "
+            "above decides what happens then: by default the window is "
+            "shown <i>minimised</i> and the drawing retried, once per run. "
+            "If AutoCAD is already running it attaches to that instance and "
+            "leaves your window alone rather than hiding a session you are "
+            "working in. "
             "(<tt>acad.exe /b</tt> is not used: it has no headless mode.)"
         )
         acad_note.setWordWrap(True)
@@ -2088,6 +2162,10 @@ class MainWindow(QtWidgets.QMainWindow):
             parts += ["--accore-lang", self.acclang_edit.text().strip()]
         if self.pc3_edit.text().strip():
             parts += ["--acad-pc3", '"%s"' % self.pc3_edit.text().strip()]
+        if self.acadwin_combo.currentData() != "auto":
+            parts += ["--acad-window", self.acadwin_combo.currentData()]
+        if not self.calib_cb.isChecked():
+            parts += ["--no-accore-calibrate"]
 
         n = resolve_worker_count(self.par_combo.currentData(),
                                  self.core_pct_spin.value(),
@@ -2141,7 +2219,14 @@ class MainWindow(QtWidgets.QMainWindow):
             engine.AcCoreConsoleBackend.script_override = None
         engine.AcCoreConsoleBackend.language = (
             self.acclang_edit.text().strip() or None)
-        engine.AcadComBackend.pc3 = self.pc3_edit.text().strip() or None
+        # BOTH backends: accoreconsole is the one that could not resolve
+        # the stock plotter name, and until 0.2.15 this field never reached
+        # it at all.
+        pc3 = self.pc3_edit.text().strip() or None
+        engine.AcCoreConsoleBackend.pc3 = pc3
+        engine.AcadComBackend.pc3 = pc3
+        engine.AcCoreConsoleBackend.CALIBRATE = self.calib_cb.isChecked()
+        engine.AcadComBackend.window_mode = self.acadwin_combo.currentData()
 
         out_root = Path(out_text).expanduser().resolve()
         archive = None

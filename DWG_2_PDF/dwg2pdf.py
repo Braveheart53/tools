@@ -71,6 +71,66 @@ Revision history
 ----------------
 Semantic versioning, newest first: External.Internal.Working.
 
+0.4.2
+    **Confirmed on the machine, and three more defects the confirmation
+    exposed.**  ``accoreconsole`` was driven directly, outside this
+    engine, with three one-line scripts that answer nothing but the
+    device prompt::
+
+        bare  : Enter an output device name or [?] <Adobe PDF>: DWG To PDF.pc3
+                Enter paper size or [?] <ANSI A (11.00 x 8.50 Inches)>:
+
+        quoted: Enter an output device name or [?] <Adobe PDF>: "DWG To PDF.pc3"
+                Enter an output device name or [?] <Adobe PDF>:
+                Enter paper size or [?] <Letter>:
+
+    0.4.1 was right.  The bare name is accepted -- and the proof is
+    stronger than the prompt merely advancing: the paper-size default
+    changes to ``ANSI A``, which is *DWG To PDF's own* default paper,
+    where the quoted run is left on ``Letter``, which is Adobe PDF's.
+    The device really did change.  The quoted answer is rejected, the
+    prompt repeats, and the next script line is eaten answering it
+    again.
+
+    1. **A rejected device does not always say so.**  That transcript
+       contains no ``not found`` line anywhere -- the sole signal is the
+       device prompt appearing **twice**.  :meth:`_faults` matched on
+       message text and would have called this run clean.  It now counts
+       the prompt itself, which is the one signature the desync cannot
+       hide: a prompt answered successfully is never asked again.
+
+    2. **``?`` is not answerable in the core console.**  It printed no
+       listing at all; the prompt simply repeated.  So
+       :meth:`_probe_devices` can never contribute on this machine, and
+       calling it first spent a whole timeout to learn nothing.  The
+       stock bare name is now candidate #1 and the probe is consulted
+       only if the cheap candidates have already failed.
+
+    3. **--timeout was multiplied by the candidate count.**  It is
+       documented as a *per-drawing* limit and was applied per
+       *attempt*, so a calibration with eleven candidates could sit for
+       55 minutes on one drawing, logging nothing between attempts --
+       indistinguishable from a hang, and that is exactly how it was
+       first reported.  Calibration now divides the drawing's budget
+       across its attempts (with a floor, so no attempt is too short to
+       succeed) and logs each attempt as it starts.
+
+    Also new:
+
+    * ``--exclude GLOB`` (repeatable), which prunes whole directories.
+      The GBT tree contains ``ROSE_GBT\\Achive\\RoseGBT\\`` -- a full
+      duplicate of the live tree -- so the 1876-drawing run was
+      converting a large share of the set twice, which inflated both the
+      drawing count and the 3.1 hours, and means some of the 850
+      failures were the same drawing failing twice.
+    * A **system-printer warning**.  ``Adobe PDF``, ``Microsoft Print to
+      PDF`` and any other Windows printer take their output path from a
+      modal save dialog, not from ``-PLOT``, and a modal dialog blocks a
+      headless console until somebody clicks it.  Both probe runs that
+      fell through to the ``<Adobe PDF>`` default did exactly that.  Such
+      a device is now refused as a calibration candidate and, if named
+      explicitly by ``--acad-pc3``, warned about once.
+
 0.4.1
     **The plotter was never missing -- the quotes were part of its
     name.**  0.4.0 shipped with the working theory that accoreconsole
@@ -608,6 +668,7 @@ import json
 import logging
 import os
 import platform
+import fnmatch
 import re
 import shutil
 import subprocess
@@ -626,7 +687,7 @@ from typing import Any, Callable, Iterable, Iterator, Optional, Sequence
 __author__ = "William W. Wallace"
 __email__ = "naval.antennas@gmail.com"
 __phone__ = "(304) 456-2216"
-__revision__ = "0.4.1"
+__revision__ = "0.4.2"
 __all__ = [
     "PageSpec",
     "ConversionResult",
@@ -966,6 +1027,18 @@ def _run(
     cwd : pathlib.Path, optional
         Working directory for the child.
 
+    Notes
+    -----
+    **stdin is DEVNULL, not inherited** (0.4.2).  accoreconsole does not
+    stop when its ``/s`` script runs out: if the script is short of the
+    prompts ``-PLOT`` asks -- which is exactly what a desynchronised
+    answer sequence produces -- it falls back to reading the CONSOLE and
+    waits there.  With an inherited stdin that wait lasts the whole
+    ``timeout``, per drawing, for no reason the log can explain; it was
+    first noticed because a hand-run probe script needed Enter pressed
+    several times to advance.  DEVNULL makes that read return EOF
+    immediately, so a short script fails fast instead of stalling.
+
     Returns
     -------
     subprocess.CompletedProcess
@@ -974,6 +1047,7 @@ def _run(
     _LOG.debug("exec: %s", " ".join(str(a) for a in args))
     return subprocess.run(
         [str(a) for a in args],
+        stdin=subprocess.DEVNULL,       # see Notes -- never inherit
         capture_output=True,
         text=True,
         errors="replace",
@@ -3273,6 +3347,11 @@ class AcCoreConsoleBackend(Backend):
     #: candidate.  One broken drawing must not condemn the backend; eight
     #: hundred of them failing the same way must not be retried for hours.
     CALIBRATION_GIVE_UP_AFTER: int = 3
+    #: Floor for one calibration attempt, in seconds.  The per-drawing
+    #: --timeout is divided across the candidates (0.4.2), but an attempt
+    #: short enough to time out mid-plot would fail every candidate and
+    #: report "no device works" on a machine where one does.
+    CALIBRATION_MIN_ATTEMPT: float = 60.0
 
     #: Calibration state.  Per worker PROCESS, not per run: on Windows the
     #: pool uses 'spawn', so each worker re-imports this module and
@@ -3300,6 +3379,14 @@ class AcCoreConsoleBackend(Backend):
     #: accoreconsole then exited **rc=0 having plotted nothing**, so the
     #: return-code check never tripped and 850 drawings failed with a
     #: message that blamed the drawings.
+    #: The device prompt, as the core console writes it.  Counted rather
+    #: than matched: a prompt that was answered successfully is never
+    #: asked again, so seeing it twice IS the desync, and it is the only
+    #: signature that cannot be suppressed.  The transcript that finally
+    #: confirmed the quoting defect carried no "not found" line at all --
+    #: only the repeat -- so text matching alone would have passed it.
+    _DEVICE_PROMPT = "enter an output device name"
+
     _TRANSCRIPT_FAULTS = (
         "not found.",
         "can not use none device",
@@ -3382,16 +3469,54 @@ class AcCoreConsoleBackend(Backend):
         """
         seen: set[str] = set()
         hits: list[str] = []
+        prompts = 0
         for raw in console.splitlines():
             line = raw.strip()
             if not line:
                 continue
             low = line.lower()
+            if cls._DEVICE_PROMPT in low:
+                prompts += 1
             if any(token in low for token in cls._TRANSCRIPT_FAULTS):
                 if low not in seen:
                     seen.add(low)
                     hits.append(line)
+
+        # A second device prompt means the first answer was refused,
+        # whether or not AutoCAD bothered to say so.
+        if prompts > 1:
+            hits.insert(0, (
+                "the output device prompt was asked %d times, so the "
+                "device answer was refused and every later answer is "
+                "shifted by one" % prompts))
         return hits
+
+    #: Windows system printers.  These plot through the Windows print
+    #: path and take their output *path* from a modal save dialog rather
+    #: than from -PLOT's "write the plot to a file" answer -- and a modal
+    #: dialog blocks a headless console until a human clicks it.  Both
+    #: probe runs that fell through to the <Adobe PDF> default raised one.
+    #:
+    #: So this is not a ranking preference, it is an exclusion: a system
+    #: printer cannot be a calibration candidate at all.  Note that "DWG
+    #: To PDF.pc3" is NOT one of these -- it is Autodesk's own PDF
+    #: driver, has nothing to do with Adobe, and writes to the path the
+    #: script gives it.
+    _SYSTEM_PRINTERS = (
+        "adobe pdf",
+        "microsoft print to pdf",
+        "microsoft xps document writer",
+        "onenote",
+        "default windows system printer",
+        "fax",
+        "send to onenote",
+    )
+
+    @classmethod
+    def _is_system_printer(cls, device: str) -> bool:
+        """Whether *device* is a Windows printer rather than a plot driver."""
+        low = device.strip().strip('"').lower()
+        return any(token in low for token in cls._SYSTEM_PRINTERS)
 
     @staticmethod
     def _stock_pc3_paths(name: str) -> list[Path]:
@@ -3664,8 +3789,42 @@ class AcCoreConsoleBackend(Backend):
 
         if cls.pc3:
             looks_like_path = (os.sep in cls.pc3) or (os.altsep or "") in cls.pc3
+            if cls._is_system_printer(cls.pc3):
+                _LOG.warning(
+                    "--acad-pc3 %r is a Windows system printer, not a plot "
+                    "driver: it takes its output path from a modal save "
+                    "dialog, which will block this headless run until "
+                    "somebody clicks it. Use DWG To PDF.pc3 (Autodesk's own "
+                    "PDF driver -- nothing to do with Adobe) or one of the "
+                    "AutoCAD PDF (*).pc3 presets instead.", cls.pc3)
             return cls._answer_forms(cls.pc3, is_path=looks_like_path)
 
+        # The STOCK BARE NAME FIRST, and the probe last.
+        #
+        # Measured on the failing machine: bare "DWG To PDF.pc3" IS
+        # accepted, and the corroboration is stronger than the prompt
+        # merely advancing -- the paper-size default moves to ANSI A,
+        # which is that device's own default paper, where the rejected
+        # quoted run is left on Letter, which is Adobe PDF's.
+        #
+        # The `?` probe, by contrast, produced no listing in that
+        # transcript -- but that observation is NOT conclusive: the
+        # capture was filtered, so a listing could have been dropped
+        # before it was read.  Either way the ordering is right, because
+        # the probe is the expensive candidate (a whole console launch to
+        # learn something the stock name may render moot) and the stock
+        # name is the cheap one that is known to work.
+        answers += cls._answer_forms(cls.PC3)
+
+        # Then paths, which sidestep name resolution entirely.
+        for name in (cls.PC3, "AutoCAD PDF (General Documentation).pc3"):
+            for path in cls._stock_pc3_paths(name):
+                answers += cls._answer_forms(str(path), is_path=True)
+
+        # Only now ask AutoCAD what it can see; on a console where `?`
+        # does work, this is what finds a renamed or site-specific
+        # plotter.  System printers are excluded outright -- they cannot
+        # write to a path we choose.
         probed = cls._probe_devices(exe, sample, timeout)
         stock = cls.PC3.lower()
         ranked = (
@@ -3674,11 +3833,9 @@ class AcCoreConsoleBackend(Backend):
                if "pdf" in d.lower() and stock not in d.lower()]
         )
         for device in ranked:
+            if cls._is_system_printer(device):
+                continue
             answers += cls._answer_forms(device)
-        answers += cls._answer_forms(cls.PC3)
-        for name in (cls.PC3, "AutoCAD PDF (General Documentation).pc3"):
-            for path in cls._stock_pc3_paths(name):
-                answers += cls._answer_forms(str(path), is_path=True)
 
         out: list[str] = []
         seen: set[str] = set()
@@ -3886,19 +4043,43 @@ class AcCoreConsoleBackend(Backend):
         """
         cls = type(self)
         candidates = self._device_candidates(exe, source, self.timeout)
+
+        # --timeout is documented as a PER-DRAWING limit, and until 0.4.2
+        # it was applied per ATTEMPT -- so calibrating eleven candidates
+        # could sit on one drawing for eleven times the budget, logging
+        # nothing in between.  That is indistinguishable from a hang, and
+        # it is how the problem was first reported.  Divide the budget,
+        # but keep a floor: an attempt too short to finish a plot would
+        # fail every candidate and teach us nothing.
+        budget = self.timeout
+        if candidates:
+            budget = max(self.timeout / len(candidates),
+                         min(self.timeout, cls.CALIBRATION_MIN_ATTEMPT))
         _LOG.info("calibrating the accoreconsole plot device on %s "
-                  "(%d candidate(s))", source.name, len(candidates))
+                  "(%d candidate(s), %.0fs each)",
+                  source.name, len(candidates), budget)
 
         last_console = ""
-        for device in candidates:
-            last_console = self._attempt(exe, source, target, spec, device)
-            if target.is_file():
-                cls._device = device
-                _LOG.info("accoreconsole plot device: %s (calibrated on %s)",
-                          device, source.name)
-                return [target], 0
-            _LOG.info("plot device %s did not produce a PDF; trying the next",
-                      device)
+        saved_timeout = self.timeout
+        try:
+            self.timeout = budget
+            for n, device in enumerate(candidates, 1):
+                # Logged BEFORE the attempt: an attempt that hangs must
+                # still say which device it hung on.
+                _LOG.info("plot device attempt %d/%d: %s",
+                          n, len(candidates), device)
+                last_console = self._attempt(exe, source, target, spec,
+                                             device)
+                if target.is_file():
+                    cls._device = device
+                    self.timeout = saved_timeout
+                    _LOG.info("accoreconsole plot device: %s "
+                              "(calibrated on %s)", device, source.name)
+                    return [target], 0
+                for fault in cls._faults(last_console):
+                    _LOG.info("  %s", fault)
+        finally:
+            self.timeout = saved_timeout
 
         cls._calibration_failures += 1
         message = self._failure_message(
@@ -5129,6 +5310,7 @@ def discover_inputs(
     pattern: Optional[str] = None,
     regex: Optional[str] = None,
     include_images: bool = False,
+    exclude: Optional[Sequence[str]] = None,
 ) -> list[Path]:
     """Collect the drawings to convert.
 
@@ -5147,6 +5329,17 @@ def discover_inputs(
         rather than something to discover after the fact.
     pattern : str, optional
         Extra glob applied to the file *name*, e.g. ``"ASSY-*"``.
+    exclude : sequence of str, optional
+        Case-insensitive globs matched against the whole path AND against
+        every directory name in it, so ``"Achive"`` prunes a directory of
+        that name at any depth and ``"*/Achive/*"`` prunes it as a path.
+
+        This exists because of a real archive: the GBT tree carries
+        ``ROSE_GBT/Achive/RoseGBT/`` -- a full duplicate of the live tree,
+        misspelling included -- so a recursive run converted a large share
+        of the set **twice**.  That inflated the drawing count, roughly
+        doubled a 3.1-hour run, and made some failures appear twice in the
+        report as if they were two different drawings.
     regex : str, optional
         Case-insensitive regular expression matched against the path relative
         to its root.  This is what ``--preset`` and ``--filter`` use; on an
@@ -5169,13 +5362,36 @@ def discover_inputs(
         suffixes |= set(IMAGE_SUFFIXES)
     found: set[Path] = set()
     rx = re.compile(regex, re.I) if regex else None
+    # Lower-cased once: Windows paths are case-insensitive in practice and
+    # an operator typing --exclude Achive should not have to match the
+    # folder's capitalisation to prune it.
+    cuts = [g.lower() for g in (exclude or ())]
+
+    def _excluded(path: Path) -> bool:
+        """Whether *path* is pruned by any --exclude glob.
+
+        Matched two ways deliberately: against the full path, so a glob
+        like ``*/Achive/*`` works, and against each individual directory
+        name, so the bare name ``Achive`` works too.  Requiring the
+        operator to know which form the tool wants is how an exclude gets
+        silently ignored on a three-hour run.
+        """
+        if not cuts:
+            return False
+        whole = str(path).lower().replace("\\", "/")
+        parts = [part.lower() for part in path.parts[:-1]]
+        return any(
+            fnmatch.fnmatch(whole, cut)
+            or any(fnmatch.fnmatch(part, cut) for part in parts)
+            for cut in cuts
+        )
 
     for root in roots:
         root = root.expanduser().resolve()
         if root.is_file():
             if root.suffix.lower() in suffixes and (
                 rx is None or rx.search(root.name)
-            ):
+            ) and not _excluded(root):
                 found.add(root)
             continue
         if not root.is_dir():
@@ -5193,6 +5409,8 @@ def discover_inputs(
             if path.name.lower().endswith((".bak", ".sv$", ".dwl")):
                 continue
             if pattern and not path.match(pattern):
+                continue
+            if _excluded(path):
                 continue
             if rx is not None and not rx.search(str(path.relative_to(root))):
                 continue
@@ -6126,6 +6344,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="extra filename glob, e.g. 'ASSY-*.dwg'",
     )
     group.add_argument(
+        "--exclude", action="append", default=None, metavar="GLOB",
+        help="prune paths matching GLOB; repeatable. Matched against the "
+             "whole path AND against each directory name, so both "
+             "--exclude Achive and --exclude '*/Achive/*' work. Use it "
+             "for duplicate archive trees: converting one twice doubles "
+             "the run and reports each failure twice",
+    )
+    group.add_argument(
         "--filter", default=None, metavar="REGEX",
         help="case-insensitive regular expression matched against each "
              "drawing's path relative to the root",
@@ -6417,7 +6643,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         pattern=args.pattern,
         regex=regex,
         include_images=args.images,
+        exclude=args.exclude,
     )
+    if args.exclude:
+        _LOG.info("excluding %s", ", ".join(repr(g) for g in args.exclude))
     ImageBackend.lossless_images = args.image_lossless
     if args.image_max_dpi > 0:
         ImageBackend.MAX_OUTPUT_DPI = args.image_max_dpi

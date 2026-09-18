@@ -63,6 +63,17 @@ Semantic versioning: External Release.Internal Release.Working version
 #              re-run separately.
 #              Companion to engine 0.3.16, which fixes AutoCAD never being
 #              quit (the "AutoCAD Error Aborting" dialog at the end of a
+# 0.2.16       In step with engine 0.4.2.  The ".pc3" field now REJECTS
+#              Windows system printers (Adobe PDF, Microsoft Print to
+#              PDF) with an inline warning: they take their output path
+#              from a modal save dialog, which blocks a headless run
+#              until somebody clicks it.  DWG To PDF.pc3 is Autodesk's
+#              own PDF driver -- not Adobe -- and is the default.  NEW
+#              "Exclude" field wired to --exclude, for duplicate archive
+#              trees: the GBT set carries ROSE_GBT\Achive\RoseGBT\, a
+#              full copy of the live tree, so a recursive run converted
+#              much of it twice.
+#
 # 0.2.15       In step with engine 0.4.0.  NEW "AutoCAD window" choice
 #              (auto / hidden / visible) on the Engine tab, wired to
 #              --acad-window: a hidden AutoCAD 2025 refused automation
@@ -289,7 +300,7 @@ import dwg2pdf as engine   # noqa: E402
 __author__ = "William W. Wallace"
 __email__ = "naval.antennas@gmail.com"
 __phone__ = "(304) 456-2216"
-__revision__ = "0.2.15"
+__revision__ = "0.2.16"
 
 #: Percent of logical cores used by the "Automatic (by CPU cores)" mode.
 DEFAULT_CORE_PERCENT = 75
@@ -1258,6 +1269,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pc3_edit.textChanged.connect(self._update_command)
         f.addRow("AutoCAD plotter (.pc3)", self.pc3_edit)
 
+        # System printers cannot be driven headlessly at all -- warn in
+        # place rather than letting a 1800-sheet run discover it.
+        self.pc3_warn = QtWidgets.QLabel("")
+        self.pc3_warn.setWordWrap(True)
+        self.pc3_warn.setStyleSheet("color: #b45309;")
+        self.pc3_warn.hide()
+        f.addRow("", self.pc3_warn)
+
+        self.exclude_edit = QtWidgets.QLineEdit()
+        self.exclude_edit.setPlaceholderText("Achive; */Backup/*")
+        self.exclude_edit.setToolTip(
+            "Semicolon-separated globs; matching paths are skipped.\n"
+            "\n"
+            "Matched against the whole path AND against each folder\n"
+            "name, so 'Achive' and '*/Achive/*' both work.\n"
+            "\n"
+            "Use it for duplicate archive trees. The GBT set carries\n"
+            "ROSE_GBT\\Achive\\RoseGBT\\ -- a full copy of the live\n"
+            "tree -- so a recursive run converted much of the set twice,\n"
+            "which doubled a 3.1-hour run and reported each failure\n"
+            "twice as if it were two drawings."
+        )
+        self.exclude_edit.textChanged.connect(self._update_command)
+        f.addRow("Exclude", self.exclude_edit)
+
         # --acad-window.  A hidden AutoCAD is not an automation state every
         # release accepts: AutoCAD 2025 refused every drawing of a
         # 1876-sheet run with "Invalid execution context" on the first call
@@ -1941,6 +1977,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 pattern=self.pattern_edit.text().strip() or None,
                 regex=self._active_regex(),
                 include_images=self.images_cb.isChecked(),
+                exclude=self._excludes() or None,
             )
         except Exception as exc:  # noqa: BLE001
             self.found_label.setText("scan failed: %s" % exc)
@@ -2080,10 +2117,40 @@ class MainWindow(QtWidgets.QMainWindow):
             background=self.bg_combo.currentData(),
         )
 
+    def _excludes(self) -> list:
+        """The --exclude globs, split from the Exclude field.
+
+        Semicolons rather than spaces: a real exclusion is a path, and
+        Windows paths are full of spaces ("*/GBT Panel Assembly/*").
+        """
+        raw = self.exclude_edit.text()
+        return [part.strip() for part in raw.split(";") if part.strip()]
+
+    def _check_pc3(self) -> None:
+        """Warn in place if the named plotter cannot run headlessly.
+
+        A Windows system printer takes its output path from a modal save
+        dialog, so it blocks a headless console until a human clicks it.
+        Better to say so while the field is being typed than to let an
+        1800-sheet run discover it.
+        """
+        name = self.pc3_edit.text().strip()
+        if name and engine.AcCoreConsoleBackend._is_system_printer(name):
+            self.pc3_warn.setText(
+                "%s is a Windows printer, not a plot driver: it asks a "
+                "human where to save each sheet, which will stall this "
+                "run. Use DWG To PDF.pc3 -- that is Autodesk's own PDF "
+                "driver, nothing to do with Adobe -- or leave this blank."
+                % name)
+            self.pc3_warn.show()
+        else:
+            self.pc3_warn.hide()
+
     def _update_command(self) -> None:
         """Show the command line equivalent to the current settings."""
         if not hasattr(self, "command_view"):
             return
+        self._check_pc3()
         spec = self._spec()
         roots = self._input_paths()
         parts = ["python dwg2pdf.py"]
@@ -2162,6 +2229,8 @@ class MainWindow(QtWidgets.QMainWindow):
             parts += ["--accore-lang", self.acclang_edit.text().strip()]
         if self.pc3_edit.text().strip():
             parts += ["--acad-pc3", '"%s"' % self.pc3_edit.text().strip()]
+        for glob in self._excludes():
+            parts += ["--exclude", '"%s"' % glob]
         if self.acadwin_combo.currentData() != "auto":
             parts += ["--acad-window", self.acadwin_combo.currentData()]
         if not self.calib_cb.isChecked():

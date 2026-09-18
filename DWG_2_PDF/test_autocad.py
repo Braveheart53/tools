@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Engine-side checks for the AutoCAD backends (dwg2pdf 0.4.1).
+"""Engine-side checks for the AutoCAD backends (dwg2pdf 0.4.2).
 
 These run anywhere -- they exercise the parts of the AutoCAD path that are
 pure Python: the generated ``.scr`` text, the plot-device calibration, the
@@ -14,6 +14,19 @@ Fixed in 0.3.15:
   * ``--monochrome`` was silently ignored by both AutoCAD backends;
   * one AutoCAD crash failed every remaining drawing in the run;
   * two unambiguous "busy" HRESULTs were treated as fatal.
+
+Fixed in 0.4.2, after driving accoreconsole directly on the failing
+machine confirmed the 0.4.1 diagnosis:
+
+  * a rejected device does not always print "not found" -- the only
+    signal can be the device prompt being asked twice;
+  * ``?`` at the device prompt lists nothing in the core console, so the
+    probe must not be the FIRST candidate and cost a whole timeout;
+  * ``--timeout`` was applied per calibration ATTEMPT, not per drawing,
+    so eleven candidates meant eleven times the budget, silently;
+  * Windows system printers (Adobe PDF, Microsoft Print to PDF) take
+    their output path from a modal save dialog and cannot be used
+    headlessly at all.
 
 Fixed in 0.4.1:
 
@@ -663,7 +676,192 @@ def test_settings_propagation() -> None:
         (accore.pc3, accore.CALIBRATE, com.pc3, com.window_mode) = saved
 
 
-# %% Runner
+
+
+# %% 0.4.2: what the direct accoreconsole probe taught
+def test_prompt_repeat_fault() -> None:
+    """A repeated device prompt is the desync, even with no error text.
+
+    This is the transcript that confirmed 0.4.1 on the real machine.  Note
+    what it does NOT contain: any "not found" line.  Text matching alone
+    called this run clean, which is why _faults() now counts the prompt --
+    a prompt that was answered successfully is never asked again.
+    """
+    backend = engine.AcCoreConsoleBackend
+
+    refused = (
+        "Detailed plot configuration? [Yes/No] <No>: Y\r\n"
+        "Enter a layout name or [?] <Model>:\r\n"
+        'Enter an output device name or [?] <Adobe PDF>: "DWG To PDF.pc3"\r\n'
+        "Enter an output device name or [?] <Adobe PDF>:\r\n"
+        "Enter paper size or [?] <Letter>:\r\n"
+    )
+    accepted = (
+        "Detailed plot configuration? [Yes/No] <No>: Y\r\n"
+        "Enter a layout name or [?] <Model>:\r\n"
+        "Enter an output device name or [?] <Adobe PDF>: DWG To PDF.pc3\r\n"
+        "Enter paper size or [?] <ANSI A (11.00 x 8.50 Inches)>:\r\n"
+    )
+
+    faults = backend._faults(refused)
+    chk("a repeated device prompt is reported as a fault", bool(faults))
+    chk("the fault says the answer was refused",
+        any("refused" in f for f in faults))
+    chk("it counts the prompts", any("2 times" in f for f in faults))
+    # The accepted transcript is the control: same drawing, same script,
+    # two characters of difference, and the paper-size default moves to
+    # ANSI A -- DWG To PDF's OWN paper, where the refused run is left on
+    # Letter, which is Adobe PDF's.  The device really did change.
+    chk("the accepted transcript is clean", backend._faults(accepted) == [])
+    chk("only the quoting differs between them",
+        '"DWG To PDF.pc3"' in refused and '"DWG To PDF.pc3"' not in accepted)
+    chk("the accepted run asks for the device exactly once",
+        accepted.lower().count(backend._DEVICE_PROMPT) == 1)
+
+
+def test_system_printers() -> None:
+    """A Windows printer cannot be a headless plot device."""
+    backend = engine.AcCoreConsoleBackend
+    for name in ("Adobe PDF", "Microsoft Print to PDF",
+                 "Microsoft XPS Document Writer",
+                 "Default Windows System Printer.pc3"):
+        chk("%s is recognised as a system printer" % name,
+            backend._is_system_printer(name))
+    # DWG To PDF is Autodesk's OWN PDF driver -- no Adobe involved, and it
+    # writes to the path the script gives it.  Excluding it would remove
+    # the one device that has been PROVEN to work on the target machine.
+    for name in ("DWG To PDF.pc3", "AutoCAD PDF (High Quality Print).pc3"):
+        chk("%s is NOT a system printer" % name,
+            not backend._is_system_printer(name))
+
+    saved = (backend.pc3, backend._device_list)
+    try:
+        backend.pc3 = None
+        backend._device_list = ["Adobe PDF", "Microsoft Print to PDF",
+                                "NRAO PDF Plot.pc3"]
+        cands = backend._device_candidates(Path("x"), Path("y"), 1.0)
+        chk("no system printer reaches the candidate list",
+            not any(backend._is_system_printer(c) for c in cands))
+        chk("a real probed PDF plotter still does",
+            any("NRAO PDF Plot.pc3" in c for c in cands))
+        # `?` lists nothing in the core console on the target machine, so
+        # the probe must not be what the first attempt waits for.
+        chk("the stock bare name leads, ahead of the probe",
+            cands[0] == "DWG To PDF.pc3")
+    finally:
+        backend.pc3, backend._device_list = saved
+
+
+def test_calibration_timeout_budget() -> None:
+    """--timeout is per DRAWING; calibration must divide it, not multiply.
+
+    Applied per attempt, eleven candidates meant eleven times the stated
+    budget with nothing logged in between -- reported, understandably, as
+    a hang.
+    """
+    backend = engine.AcCoreConsoleBackend
+    saved = (backend.pc3, backend._device_list, backend._device,
+             backend._calibration_failures, backend._attempt)
+    seen = []
+    try:
+        backend.pc3 = None
+        backend._device = None
+        backend._device_list = []
+        backend._calibration_failures = 0
+
+        def fake_attempt(self, exe, source, target, spec, device=None):
+            seen.append(self.timeout)
+            return "Enter an output device name or [?] <None>:"
+
+        backend._attempt = fake_attempt
+        inst = backend(timeout=300.0)
+        try:
+            inst._calibrate(Path("acc.exe"), Path("a.dwg"),
+                            Path("/nonexistent/a.pdf"),
+                            engine.PageSpec(paper="AUTO"))
+        except RuntimeError:
+            pass
+
+        chk("more than one candidate was attempted", len(seen) > 1)
+        chk("no attempt got the whole per-drawing budget",
+            all(t < 300.0 for t in seen))
+        chk("no attempt is shorter than the floor",
+            all(t >= min(300.0, backend.CALIBRATION_MIN_ATTEMPT)
+                for t in seen))
+        chk("the floor is long enough to finish a real plot",
+            backend.CALIBRATION_MIN_ATTEMPT >= 30.0)
+        chk("the per-drawing timeout is restored afterwards",
+            inst.timeout == 300.0)
+    finally:
+        (backend.pc3, backend._device_list, backend._device,
+         backend._calibration_failures, backend._attempt) = saved
+
+
+def test_stdin_is_devnull() -> None:
+    """A short script must not leave accoreconsole reading the console.
+
+    accoreconsole does not stop when its /s script runs out: it falls
+    back to reading stdin and waits.  A desynchronised answer sequence
+    IS a short script, so with an inherited stdin every such drawing
+    burned the whole --timeout waiting for a keypress nobody was there
+    to make.  Noticed only because a hand-run probe needed Enter pressed
+    several times to advance.
+    """
+    import inspect
+    import subprocess as sp
+
+    src = inspect.getsource(engine._run)
+    chk("_run passes stdin explicitly", "stdin=" in src)
+    chk("_run uses DEVNULL, not inherited stdin",
+        "subprocess.DEVNULL" in src or "sp.DEVNULL" in src)
+
+    # And prove it end to end: a child that reads stdin must see EOF at
+    # once rather than blocking until the timeout.
+    proc = engine._run(
+        [__import__("sys").executable, "-c",
+         "import sys; sys.stdout.write(repr(sys.stdin.read()))"],
+        timeout=10.0,
+    )
+    chk("a child reading stdin gets EOF immediately",
+        proc.returncode == 0 and proc.stdout.strip() == "''")
+    chk("DEVNULL is what subprocess was given", sp.DEVNULL == -3)
+
+
+def test_exclude() -> None:
+    """--exclude must prune a duplicate archive tree, by name or by path.
+
+    The GBT tree really does carry ``ROSE_GBT/Achive/RoseGBT/`` as a full
+    duplicate of the live tree, misspelling included, so a recursive run
+    converted much of the set twice -- doubling a 3.1-hour run and
+    reporting each failure twice as if it were two drawings.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="dwg2pdf_x_") as tmp:
+        root = Path(tmp)
+        live = root / "Live" / "121729 - Weldment"
+        arch = root / "Achive" / "RoseGBT" / "Live" / "121729 - Weldment"
+        for folder in (live, arch):
+            folder.mkdir(parents=True)
+            (folder / "121729_01_A.dwg").write_bytes(b"not a real drawing")
+
+        chk("both copies are found without --exclude",
+            len(engine.discover_inputs([root])) == 2)
+        chk("a bare directory name prunes it",
+            len(engine.discover_inputs([root], exclude=["Achive"])) == 1)
+        chk("a path glob prunes it too",
+            len(engine.discover_inputs([root], exclude=["*/achive/*"])) == 1)
+        chk("matching is case-insensitive",
+            len(engine.discover_inputs([root], exclude=["ACHIVE"])) == 1)
+        chk("a non-matching glob prunes nothing",
+            len(engine.discover_inputs([root], exclude=["Nope"])) == 2)
+        chk("the surviving copy is the live one",
+            "Achive" not in str(
+                engine.discover_inputs([root], exclude=["Achive"])[0]))
+
+
+
+# %% Entry point
 def run_test() -> int:
     """Run every check and report."""
     print("AUTOCAD BACKEND CHECKS (engine %s)" % engine.__revision__)
@@ -671,6 +869,11 @@ def run_test() -> int:
     test_faults()
     test_device_candidates()
     test_answer_forms()
+    test_prompt_repeat_fault()
+    test_system_printers()
+    test_calibration_timeout_budget()
+    test_stdin_is_devnull()
+    test_exclude()
     test_device_probe()
     test_calibration()
     test_calibration_gives_up()

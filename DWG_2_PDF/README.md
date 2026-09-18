@@ -772,7 +772,7 @@ streaming page-by-page. `--report-memory` logs RSS every ten files.
 
 ---
 
-## 9. Twenty-three defects found by testing — ten of them silent
+## 9. Twenty-eight defects found by testing — fourteen of them silent
 
 This is the section worth reading. Every one of these produced a *plausible
 looking* result, and six produced a wrong PDF with **no error anywhere**.
@@ -1436,6 +1436,140 @@ device prompt is the plot configuration stored in the drawing's own layout
 printer selected, and `<None>` says the layout has no device assigned.
 Both are facts about the drawings, not about the profile.
 
+### 9.24 ⚠️ A refused plot device does not always say so *(fixed)*
+
+The quoting diagnosis of §9.23 was confirmed by driving `accoreconsole`
+directly, outside this engine, with three scripts that answer nothing but
+the device prompt:
+
+```
+bare  : Enter an output device name or [?] <Adobe PDF>: DWG To PDF.pc3
+        Enter paper size or [?] <ANSI A (11.00 x 8.50 Inches)>:
+
+quoted: Enter an output device name or [?] <Adobe PDF>: "DWG To PDF.pc3"
+        Enter an output device name or [?] <Adobe PDF>:
+        Enter paper size or [?] <Letter>:
+```
+
+The bare name is accepted, and the proof is stronger than the prompt
+merely advancing: the paper-size default becomes **ANSI A**, which is *DWG
+To PDF's own* default paper, where the quoted run is left on **Letter**,
+which is Adobe PDF's. The device genuinely changed.
+
+But look at what the refused transcript does **not** contain: any
+`not found` line. §9.20's `_faults()` matched on message text, so it would
+have called that run clean and reported "wrote no PDF" all over again.
+
+The fix is to count the prompt rather than read the apology. **A prompt
+that was answered successfully is never asked again**, so a second
+`Enter an output device name` *is* the desync — the one signature it
+cannot suppress.
+
+### 9.25 ⚠️ The `?` device probe was the *first* candidate *(fixed)*
+
+The same probe showed no listing after `?` — the prompt simply repeated.
+**That observation is not conclusive**, and the section title has been
+corrected accordingly: the capture was filtered through `Select-String`,
+so a listing could have been discarded before anyone read it.
+
+The ordering defect stands on its own regardless. `_probe_devices()` is
+the *expensive* candidate — a whole console launch, costing a full
+`--timeout`, to learn something the stock name may render moot — and it
+was being tried first. The stock bare name is the cheap candidate and is
+now known to work, so it is candidate #1 and the probe is consulted only
+after the cheap ones have failed.
+
+### 9.26 ⚠️ `--timeout` was multiplied by the candidate count *(fixed)*
+
+`--timeout` is documented as a **per-drawing** limit. Calibration applied
+it per **attempt**, so a candidate list of eleven could sit on one drawing
+for eleven times the stated budget — with nothing logged between attempts.
+
+That is indistinguishable from a hang, and it is exactly how the problem
+was first reported: a probe run that produced one banner line and then
+appeared to stop. Calibration now divides the drawing's budget across its
+attempts, keeps a `CALIBRATION_MIN_ATTEMPT` floor so no attempt is too
+short to finish a plot, and logs each attempt **before** it starts — an
+attempt that hangs must still say which device it hung on.
+
+### 9.27 ⚠️ Windows system printers cannot plot headlessly *(fixed)*
+
+Both probe runs that fell through to the `<Adobe PDF>` default produced a
+**modal save dialog**, which blocks a headless console until somebody
+clicks it.
+
+That is not an Adobe quirk. `Adobe PDF`, `Microsoft Print to PDF` and the
+rest are Windows **system printers**: they plot through the Windows print
+path and take their output *path* from that dialog, not from `-PLOT`'s
+"write the plot to a file" answer. There is nothing to configure — a
+device that asks a human where to save cannot be driven by a script.
+
+So a system printer is now **excluded** as a calibration candidate, and
+naming one via `--acad-pc3` warns once.
+
+Worth stating plainly, because the prompt's `<Adobe PDF>` default invites
+the confusion: **`DWG To PDF.pc3` is not Adobe.** It is Autodesk's own
+built-in PDF driver, it writes to the path the script gives it, and it is
+the device this project has now proven works. If a different rendering
+profile is wanted, the four `AutoCAD PDF (*).pc3` presets are also
+Autodesk's own.
+
+| Device | Type | Output path | Headless? |
+|---|---|---|---|
+| `DWG To PDF.pc3` | Autodesk PDF driver | from the script | ✅ **use this** |
+| `AutoCAD PDF (General Documentation).pc3` | Autodesk PDF driver | from the script | ✅ |
+| `AutoCAD PDF (High Quality Print).pc3` | Autodesk PDF driver | from the script | ✅ |
+| `Adobe PDF` | Windows system printer | modal save dialog | ❌ blocks |
+| `Microsoft Print to PDF` | Windows system printer | modal save dialog | ❌ blocks |
+
+### 9.28 ⚠️ A duplicate archive tree was converted twice *(fixed)*
+
+Not an AutoCAD defect, but it doubled the run that exposed all the others.
+The GBT tree carries `ROSE_GBT\Achive\RoseGBT\` — a full duplicate of the
+live tree, misspelling included — so a recursive run converted a large
+share of the set **twice**. That inflated the drawing count from 1762 to
+1876, consumed a good part of the 3.1 hours, and made some failures appear
+twice in the report as if they were two different drawings.
+
+New `--exclude GLOB`, repeatable, matched against the whole path **and**
+against each directory name, so both forms work:
+
+```
+--exclude Achive
+--exclude "*/Achive/*"
+```
+
+Matched both ways on purpose: requiring the operator to guess which form
+the tool wants is how an exclude gets silently ignored on a three-hour run.
+
+### 9.29 ⚠️ A short script left accoreconsole waiting on the keyboard *(fixed)*
+
+Found by an operator's aside: the hand-run probe scripts needed **Enter
+pressed several times** to advance.
+
+That is not a quirk of hand-running them. `accoreconsole` does not stop
+when its `/s` script runs out — if the script is short of the prompts
+`-PLOT` asks, it falls back to reading **stdin** and waits there. And a
+desynchronised answer sequence (§9.20) *is* a short script: every answer
+shifts by one, so the script runs out before the prompts do.
+
+With `stdin` inherited, that wait lasted the entire `--timeout`, per
+drawing, for no reason anything in the log could explain. Combined with
+§9.26 multiplying the timeout by the candidate count, this is most of
+where 3.1 hours went.
+
+`_run()` now passes `stdin=subprocess.DEVNULL`, so the read returns EOF
+immediately and a short script fails fast instead of stalling. It also
+means the failure is honest: the transcript ends where the script ended,
+rather than wherever a passer-by stopped pressing Enter.
+
+A useful consequence for diagnosis: a probe script must now be run with
+its input closed, or it is not measuring the same thing the engine does.
+
+```powershell
+& $Acc /i "$Lab\probe.dwg" /s "$Lab\bare.scr" < NUL
+```
+
 ---
 
 ## 10. Regression suite
@@ -1481,7 +1615,7 @@ Qt, so it runs in CI with no display:
 | **threaded parallel conversion of 8 drawings through the worker** | 1 ✅ 8/8 |
 | progress bar, PDFs on disk, manifest, mirrored structure, 7z, thread cleanup | 6 ✅ |
 
-**AutoCAD backends — 86 of 86 passing** (`python test_autocad.py`). Runs
+**AutoCAD backends — 116 of 116 passing** (`python test_autocad.py`). Runs
 anywhere: it exercises the parts of the AutoCAD path that are pure Python —
 the generated `.scr`, the plot-device calibration, the console fault
 detection, the COM busy and context predicates, the window-state escalation,
@@ -1496,6 +1630,11 @@ Windows, but every defect in §9.13, §9.14, §9.16, §9.17, §9.20, §9.21 and
 | console fault detection, real desync transcript vs a clean plot | 5 ✅ |
 | device candidates: order, uniqueness, quoting, `--acad-pc3` alone | 8 ✅ |
 | quoting variants: bare-first, quoted fallback, 8.3 short path | 8 ✅ |
+| a repeated device prompt is the desync, with no error text at all | 6 ✅ |
+| system printers excluded; `DWG To PDF` is not one of them | 9 ✅ |
+| calibration divides the per-drawing timeout instead of multiplying it | 5 ✅ |
+| `--exclude` prunes a duplicate archive tree, by name or by path | 6 ✅ |
+| a short script gets EOF on stdin, not a wait for a keypress | 4 ✅ |
 | `?` device listing parsed out of a core-console transcript | 4 ✅ |
 | calibration finds the working device, caches it, stops looking | 4 ✅ |
 | calibration gives up after N drawings, with an actionable message | 5 ✅ |

@@ -772,7 +772,7 @@ streaming page-by-page. `--report-memory` logs RSS every ten files.
 
 ---
 
-## 9. Twenty-eight defects found by testing — fourteen of them silent
+## 9. Thirty-six defects found by testing — eighteen of them silent
 
 This is the section worth reading. Every one of these produced a *plausible
 looking* result, and six produced a wrong PDF with **no error anywhere**.
@@ -1570,6 +1570,244 @@ its input closed, or it is not measuring the same thing the engine does.
 & $Acc /i "$Lab\probe.dwg" /s "$Lab\bare.scr" < NUL
 ```
 
+### 9.30 ⚠️ The old-decoder warning misdirected its own reader *(fixed)*
+
+A live run of the GBT set opened with this, four times:
+
+```
+using LibreDWG 0.11.3876 from ...\envs\py3p12\Library\bin\dwg2dxf.EXE --
+this is an old decoder (conda-forge ships 0.11 from 2020). The copy
+bundled in vendor/ is newer ... Remove the old one from PATH, or let the
+bundled copy be found first.
+```
+
+Two defects, neither of which touched a conversion, and both of which
+cost more than silence would have — because a warning is trusted.
+
+**It claimed the bundled copy was newer without checking it existed.**
+`_find_tool()` already prefers the bundled decoder over PATH for
+`dwg2dxf` (`_PREFER_BUNDLED`), so falling through to a conda-forge 0.11
+*proves* `vendor/` was not beside the module. The advice — reorder PATH —
+was advice about a file that was not on disk, and it sent the operator
+hunting a precedence problem that did not exist.
+
+`decoder_warning()` now reports what it actually found, because the two
+situations need opposite actions:
+
+| On disk | What it says |
+|---|---|
+| `vendor/` missing | names the directory it looked in, and that **PATH order is irrelevant while there is no better copy to prefer** — restore `vendor/` |
+| `vendor/` present but something else won | says so as an **anomaly**, since `_find_tool()` should have prevented it, and points at the binary and its `libredwg.dll` |
+
+**It printed once per worker.** The warn-once flag is a class attribute,
+and under `spawn` every worker re-imports the module and gets its own —
+so four workers meant four copies of a paragraph. Exactly the mechanism
+of §9.22, in a place where it only made noise. `check_decoder()` is now
+called once by `run_batch()` in the **parent**, and the in-worker notice
+drops to `DEBUG`.
+
+Why the version gap matters at all, for the record:
+
+| | Found on PATH | Bundled in `vendor/` |
+|---|---|---|
+| Version | 0.11.3876 | 0.14.8593 |
+| Uploaded | Nov 2020 | built for this project |
+| Source | conda-forge | `build_libredwg.sh` |
+
+The pass-1 failures in the field run were `Invalid obj->size`,
+`check_CRC mismatch`, `Invalid EED size` and `Invalid tag` — object-size,
+CRC and EED decode faults, which is the class of defect fixed in the four
+years between those builds. Every one of them falls through to the slow
+serial `acad-com` pass, so an out-of-date decoder is not a cosmetic
+problem: it buys AutoCAD time for drawings a current decoder handles in
+pass 1.
+
+### 9.31 ⚠️ A healthy run was reported as hung, and the log was why *(fixed)*
+
+1762 drawings, converting at one to three seconds a sheet, nothing
+failing — and between two consecutive progress lines the screen carried
+this:
+
+```
+Found non-unique entity handle #A1, data validation is required.
+... fifty-three times ...
+Found ENDBLK without a preceding BLOCK, ignoring content.
+... fifty-four times ...
+```
+
+Those are **ezdxf's** messages, not this engine's. Its recover pass
+reports every DXF structure irregularity it repairs, one line each, and a
+drawing with a repeated block reference yields dozens. Under `-v` the
+root logger is at DEBUG, so library loggers propagate into it unfiltered.
+
+Nothing was wrong except that the progress was invisible. **A progress
+display that cannot be read is not a progress display**, and the operator
+was right to conclude it had stopped.
+
+| Change | |
+|---|---|
+| Library loggers capped | `ezdxf`, `PIL`, `matplotlib`, `fontTools`, `comtypes`, `pyvips` held at WARNING on the console. `--verbose-libs` restores the firehose |
+| Repeats collapsed | `_DedupFilter` emits one `(the previous message repeated N more times)` line, carrying the level and logger of the message it counts — not grafted onto the next message, which would label it with an unrelated level |
+| Detail preserved | `--log-file` gets everything, at DEBUG, undeduplicated |
+
+Two details that were wrong on the first attempt and are worth recording.
+
+**The cap belongs on the handler, not the logger.** `logging.getLogger("ezdxf").setLevel(...)`
+stops the record at source, so it never reaches *any* handler — including
+the `--log-file` that exists precisely to keep it. The console wants
+quiet and the file wants everything; those are handler decisions.
+
+**Order matters.** Handler filters run in the order added and the first
+`False` drops the record, so dedup-before-cap counted library messages
+the cap then hid, and the console showed `(the previous message repeated
+52 more times)` for a message nobody ever saw — worse than the noise,
+because it is unattributable. Cap first, then dedup.
+
+### 9.32 ⚠️ The GUI reimplemented the orchestrator, and missed a fix *(fixed)*
+
+The GUI has always **imported** this engine rather than shelling out to
+it. But it reimplemented the batch *orchestration*: its own serial loop,
+its own process pool, its own pass-2 retry — about **104 lines**
+duplicating `run_batch()`.
+
+There was one reason. `run_batch()` already took a `progress` callback,
+but nothing could stop it, and a GUI needs a Cancel button. So the GUI
+wrote its own loop around `_convert_task()`, and from then on every fix
+to `run_batch()` had to be made twice or it silently did not reach the
+GUI.
+
+**One silently did not.** `check_decoder()` (§9.30) is called by
+`run_batch()`, so a GUI operator was never told that pass 1 was running
+on a decoder from 2020 — which is exactly the failure that cost a field
+run. The GUI was the blind spot, and duplication was the mechanism.
+
+So `run_batch()` gained the one thing it lacked:
+
+```python
+should_cancel: Optional[Callable[[], bool]] = None
+```
+
+Consulted **before** each drawing (Cancel should not start one more) and
+**between passes** (cancelling in pass 1 then sitting through a serial
+AutoCAD retry is not what Cancel means). Drawings already in flight are
+allowed to finish: killing a worker mid-plot can leave a half-written PDF
+where a deliverable should be, and the wait is one drawing, not the run.
+A cancelled run still returns its completed rows, so it still reports and
+still merges.
+
+`_run_serial()`, `_run_parallel()` and `_serial_retry()` are **deleted**.
+The GUI calls `run_batch()` with `progress=` and `should_cancel=`, on the
+identical code path to the CLI — so the next engine fix cannot miss it.
+`test_gui.py` enforces that with `check_engine_fix_coverage()`, which
+asserts the duplicates stay gone and that every 0.4.x fix is reachable.
+
+Worth stating as the general rule, since it took two releases to learn:
+**anything `run_batch()` does is a thing the GUI must not do for itself.**
+
+### 9.33 ⚠️ The plot device was never the problem — a prompt was missing *(fixed)*
+
+§9.23 said the quotes were the bug. They were *a* bug. Read the
+calibration transcript one line further:
+
+```
+Enter an output device name or [?] <...>: DWG To PDF.pc3
+Enter paper size or [?] <ANSI A (11.00 x 8.50 Inches)>:
+Enter paper units [Inches/Millimeters] <Inches>: L
+Command: N  Unknown command "N".
+```
+
+**Attempt 1 was accepted, on every drawing.** The paper default moved to
+`ANSI A` — DWG To PDF's own. What failed is the *next* prompt:
+`Enter paper units`, which this engine's answer list did not know
+existed. The orientation answer `L` fed it, every answer after shifted by
+one, and calibration then discarded the device that worked and ground
+through nineteen more.
+
+And the prompt set is **not fixed**. A hand-run probe on the same machine
+showed no paper-units prompt at all, and no plot-area, plot-scale or
+plot-offset prompts either. It varies with the device, the drawing and
+the layout.
+
+That is the real lesson, and it invalidates the whole approach rather
+than one entry in it: **a static answer list cannot be correct for a
+variable prompt sequence.** Every previous fix to that list — §9.7,
+§9.13, §9.20, §9.23 — was another guess at an order that has no single
+right answer.
+
+So answers are now bound to **questions**, not positions.
+`_plot_interactive()` drives accoreconsole through a pipe, reads each
+prompt and replies with the answer for *that* prompt from
+`_PROMPT_ANSWERS`. An unrecognised prompt gets a bare Enter — accept the
+default — and a DEBUG line, rather than being fed an answer meant for a
+different question. `--accore-mode script` keeps the old path for
+comparison.
+
+Driving stdin is not a new trick, incidentally: §9.29 established that
+accoreconsole reads it when the script runs out. This just uses that path
+on purpose.
+
+### 9.34 ⚠️ acad-com hijacked the operator's AutoCAD, then killed it *(fixed)*
+
+```
+FATAL ERROR: Unhandled Access Violation Reading 0x05aa Exception at 1606FE6Dh
+```
+
+after one sheet of 956. Two causes:
+
+`GetActiveObject` attached to a **running** instance whenever there was
+one — so the batch plotted through the session the operator was working
+in, and the crash dialog landed in their face. Attaching is now opt-in
+(`--acad-attach`); a private instance is always started otherwise.
+
+And an automation session accumulates state until it faults outright, so
+the COM Application is now **recycled every N drawings**
+(`--acad-recycle-after`, default 50). Pre-emptively, because the fault
+is an access violation rather than a reported error — waiting for the
+symptom means losing the sheet that hits it. Not every drawing: that
+would spend 30–60 s of AutoCAD start-up per sheet.
+
+### 9.35 ⚠️ The scratch rename turned a viewer lock into a viewer dialog *(fixed)*
+
+§9.15 made the run immune to a viewer holding a PDF open: plot into
+`.dwg2pdf_plot`, then rename onto the deliverable. It worked. It also
+handed the viewer the **scratch** path, which the rename had already
+moved:
+
+```
+Cannot open the document ... \.dwg2pdf_plot\<sheet>.pdf
+Error [Operating system]: The system cannot find the path specified.
+```
+
+Once per sheet. Modal. In a 956-sheet serial run — strictly worse than
+the lock it prevented, because a lock fails one sheet and a modal dialog
+stops everything until someone clicks it.
+
+So the plot goes **straight to the deliverable**, with the destination
+removed first (`_clear_destination`, retried — that is the only moment a
+lock can bite). The scratch path survives as the fallback for when the
+destination cannot be freed, where a dialog beats a failure.
+
+Worth noting as a pattern: this is the second fix in this section that
+traded one failure mode for a worse one (§9.23 was the first). Immunity
+to X is not the same as correctness, and the check is always "what does
+the *other* party see now?"
+
+### 9.36 ⚠️ `--layouts` defaulted to `model` *(fixed)*
+
+```
+nothing to render for --layouts 'model': Model (empty)
+```
+
+A large share of the field run's 956 pass-1 failures. Those sheets have
+their content in **paper space**, and the default sent every one of them
+through to the AutoCAD passes — the slow serial ones — for no reason at
+all.
+
+`model` was a sensible default for a single drawing and never a sensible
+one for a drawing set. The default is now `auto`, which renders paper
+space when model space is empty. `--layouts model` still selects the old
+behaviour.
+
 ---
 
 ## 10. Regression suite
@@ -1615,7 +1853,7 @@ Qt, so it runs in CI with no display:
 | **threaded parallel conversion of 8 drawings through the worker** | 1 ✅ 8/8 |
 | progress bar, PDFs on disk, manifest, mirrored structure, 7z, thread cleanup | 6 ✅ |
 
-**AutoCAD backends — 116 of 116 passing** (`python test_autocad.py`). Runs
+**AutoCAD backends — 173 of 173 passing** (`python test_autocad.py`). Runs
 anywhere: it exercises the parts of the AutoCAD path that are pure Python —
 the generated `.scr`, the plot-device calibration, the console fault
 detection, the COM busy and context predicates, the window-state escalation,
@@ -1635,6 +1873,13 @@ Windows, but every defect in §9.13, §9.14, §9.16, §9.17, §9.20, §9.21 and
 | calibration divides the per-drawing timeout instead of multiplying it | 5 ✅ |
 | `--exclude` prunes a duplicate archive tree, by name or by path | 6 ✅ |
 | a short script gets EOF on stdin, not a wait for a keypress | 4 ✅ |
+| the decoder warning describes what is on disk, once, from the parent | 11 ✅ |
+| `run_batch` is cancellable on both paths without losing completed work | 10 ✅ |
+| library log noise is capped and collapsed; `--log-file` keeps it all | 11 ✅ |
+| answers bound to prompts, not positions; unknown prompt takes default | 10 ✅ |
+| never attaches to the operator's AutoCAD; COM session recycled | 7 ✅ |
+| plots straight to the deliverable; scratch only when it is locked | 7 ✅ |
+| `--layouts` defaults to `auto`, so paper-space sheets convert | 3 ✅ |
 | `?` device listing parsed out of a core-console transcript | 4 ✅ |
 | calibration finds the working device, caches it, stops looking | 4 ✅ |
 | calibration gives up after N drawings, with an actionable message | 5 ✅ |

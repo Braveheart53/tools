@@ -71,6 +71,189 @@ Revision history
 ----------------
 Semantic versioning, newest first: External.Internal.Working.
 
+0.5.0
+    **A complete 1762-drawing run, and four more defects -- one of which
+    means the plot device was never the problem at all.**  Major version
+    because the ``-PLOT`` answer strategy and the acad-com output path
+    both change behaviour.
+
+    1. **The device answer was ACCEPTED on attempt 1, every time.**  Read
+       the calibration transcript one line further than 0.4.1 did::
+
+           Enter an output device name or [?] <...>: DWG To PDF.pc3
+           Enter paper size or [?] <ANSI A (11.00 x 8.50 Inches)>:
+           Enter paper units [Inches/Millimeters] <Inches>: L
+           Command: N  Unknown command "N".
+
+       The bare name worked -- the paper default moved to **ANSI A**,
+       which is DWG To PDF's own.  What failed is the NEXT prompt:
+       ``Enter paper units``, which this engine's answer list did not
+       know existed.  The orientation answer ``L`` fed it, every answer
+       after shifted by one, and calibration then discarded the device
+       that worked and ground through nineteen more.
+
+       Worse, the prompt SET IS NOT FIXED.  A hand-run probe on the same
+       machine showed no paper-units prompt at all, and no plot-area,
+       plot-scale or plot-offset prompts either.  It varies with the
+       device, the drawing and the layout.  **A static answer list
+       cannot be correct for a variable prompt sequence**, which makes
+       every "fix" to that list another guess.
+
+       So the answers are now **matched to the prompts**.
+       :meth:`AcCoreConsoleBackend._plot_interactive` drives
+       accoreconsole through a pipe, reads each prompt as it arrives and
+       replies with the answer for *that* prompt, from
+       :data:`_PROMPT_ANSWERS`.  An unrecognised prompt gets a bare
+       Enter (accept the default) and is logged, rather than being
+       answered with something meant for a different question.  The
+       ``.scr`` path remains as ``--accore-mode script`` for comparison.
+
+    2. **acad-com attached to the operator's own AutoCAD and then killed
+       it.**  ``FATAL ERROR: Unhandled Access Violation Reading 0x05aa``
+       after one sheet.  Two causes, both fixed:
+
+       * ``GetActiveObject`` grabbed the interactive session, so 956
+         sheets were plotted through the window the operator was using.
+         Now a **private instance** is always started
+         (``--acad-attach`` opts back in).
+       * an automation session accumulates state and eventually faults,
+         so the COM Application is now **recycled every N drawings**
+         (``--acad-recycle-after``, default 50).  Not every drawing --
+         that would spend 30-60 s of start-up per sheet -- but often
+         enough that a fault costs one restart rather than the run.
+
+    3. **The scratch rename turned a viewer lock into a viewer DIALOG.**
+       0.4.0 plots into ``.dwg2pdf_plot`` and renames, so a viewer
+       holding an old PDF cannot block the write.  But the viewer is
+       handed the *scratch* path and the rename moves the file first, so
+       it reports::
+
+           Cannot open the document ... \.dwg2pdf_plot\<sheet>.pdf
+           Error [Operating system]: The system cannot find the path specified.
+
+       Once per sheet, modal, in a serial run -- strictly worse than the
+       lock it prevented.  So the plot now goes **straight to the
+       deliverable**, with the destination removed first (which is the
+       only moment a lock could bite, and it is retried).  The scratch
+       path is kept as the fallback for when the destination cannot be
+       removed, where a dialog beats a failure.
+
+    4. **``--layouts`` defaulted to ``model``.**  Every paper-space-only
+       sheet failed pass 1 with ``nothing to render for --layouts
+       'model': Model (empty)`` and fell through to the AutoCAD passes
+       for no reason -- a large share of the 956.  The default is now
+       ``auto``, which renders paper space when model space is empty.
+
+0.4.5
+    **One orchestrator, not two.**  The GUI has always imported this
+    module rather than shelling out to it, but it reimplemented the batch
+    *orchestration*: its own serial loop, its own process pool, its own
+    pass-2 retry -- roughly 104 lines duplicating :func:`run_batch`.
+
+    There was one reason for it.  ``run_batch`` already accepted a
+    ``progress`` callback, but nothing could stop it, and a GUI needs a
+    Cancel button.  So the GUI wrote its own loop around
+    :func:`_convert_task`, and from then on every fix to ``run_batch``
+    had to be made twice or it silently did not reach the GUI.
+
+    One silently did not.  :func:`check_decoder` -- the out-of-date
+    LibreDWG warning added in 0.4.3 -- is called by ``run_batch``, so a
+    GUI operator was never told that pass 1 was running on a decoder from
+    2020.  That is precisely the failure that cost a field run, and the
+    GUI was the blind spot.
+
+    So ``run_batch`` gains the missing hook:
+
+        should_cancel : callable, optional
+            Consulted before each drawing and between passes.  Returning
+            True stops the run and returns the rows completed so far, so
+            a cancelled run still reports and still merges.
+
+    Checked BEFORE each drawing rather than after, so Cancel does not
+    start one more conversion, and between passes, so cancelling during
+    pass 1 does not then sit through a serial pass-2 retry.  In-flight
+    drawings are allowed to finish: killing a worker mid-plot can leave a
+    half-written PDF where a deliverable should be, and the wait is one
+    drawing, not the run.
+
+    The GUI now calls ``run_batch`` and its duplicate loop is gone
+    (GUI 0.2.19).  Nothing here is a behaviour change for the CLI --
+    ``should_cancel`` defaults to None and an absent hook is not
+    consulted.
+
+0.4.4
+    **A healthy run was reported as hung, and the log was why.**  1762
+    drawings, converting at one to three seconds a sheet with nothing
+    failing -- and between consecutive progress lines the screen carried
+    this, over and over::
+
+        Found non-unique entity handle #A1, data validation is required.
+        Found non-unique entity handle #A1, data validation is required.
+        ... fifty-three times ...
+        Found ENDBLK without a preceding BLOCK, ignoring content.
+        ... fifty-four times ...
+
+    Those are **ezdxf's** messages, not this engine's: its recover pass
+    reports every DXF structure irregularity it repairs, one line each,
+    and a drawing with a repeated block reference yields dozens.  With
+    ``-v`` the root logger is at DEBUG, so third-party loggers propagate
+    into it unfiltered.  Nothing was wrong except that the progress was
+    invisible -- and a progress display that cannot be read is not a
+    progress display.  The operator was right to think it had stopped.
+
+    Three changes, in increasing order of how much they matter:
+
+    1. **Third-party loggers are capped**, at WARNING by default and at
+        INFO under ``-v``, so ``ezdxf``, ``PIL``, ``matplotlib`` and
+        friends can no longer out-shout the run.  ``--verbose-libs``
+        restores the old firehose for when the question really is what
+        ezdxf did to a particular drawing.
+    2. **Repeats are collapsed.**  :class:`_DedupFilter` suppresses an
+        identical consecutive message and emits one ``(last message
+        repeated N times)`` line when the record changes, so fifty-three
+        copies of one sentence cost two lines rather than fifty-three.
+        Applied to the handler, so it works on every logger.
+    3. **Diagnostics are not discarded, only quietened.**  The
+        suppressed lines still reach a ``--log-file`` at full verbosity
+        when one is given, because the whole point of the field run is
+        being able to go back and read what happened.
+
+    On the run itself, which is the good news: the ``121722_*`` family
+    that failed under 0.3.18 with ``Invalid obj->size`` now converts
+    without AutoCAD.  That is the 0.14 decoder of 0.4.3 doing its job.
+
+0.4.3
+    **The old-decoder warning was itself misleading, twice.**  A live run
+    of the GBT set opened with four identical paragraphs::
+
+        using LibreDWG 0.11.3876 from ...\\envs\\py3p12\\Library\\bin\\dwg2dxf.EXE
+        -- this is an old decoder (conda-forge ships 0.11 from 2020). The
+        copy bundled in vendor/ is newer ... Remove the old one from PATH,
+        or let the bundled copy be found first.
+
+    1. **It claimed the bundled copy was newer without checking it
+       existed.**  :func:`_find_tool` already prefers the bundled decoder
+       over PATH for ``dwg2dxf`` (:data:`_PREFER_BUNDLED`), so falling
+       through to a conda-forge 0.11 *proves* ``vendor/`` was not beside
+       this module.  The advice -- reorder PATH -- was therefore advice
+       about a file that was not on disk, and the operator went looking
+       for a precedence problem that did not exist.
+
+       The warning now reports what it actually found: whether a bundled
+       decoder is present, where it looked if not, and the one action
+       that will help in each case.
+
+    2. **It printed once per worker.**  The warn-once flag is a class
+       attribute, and under Windows *spawn* every worker re-imports this
+       module and gets its own -- so four workers meant four copies of a
+       paragraph.  Exactly the mechanism of 0.4.0's settings defect
+       (section 9.22), in a place where it only made noise.
+       :func:`check_decoder` is now called once by :func:`run_batch` in
+       the parent, and the in-worker warning drops to DEBUG.
+
+    Neither defect touched conversion.  Both mattered anyway: a warning
+    that misdirects costs more than no warning, because it is trusted.
+
 0.4.2
     **Confirmed on the machine, and three more defects the confirmation
     exposed.**  ``accoreconsole`` was driven directly, outside this
@@ -687,7 +870,7 @@ from typing import Any, Callable, Iterable, Iterator, Optional, Sequence
 __author__ = "William W. Wallace"
 __email__ = "naval.antennas@gmail.com"
 __phone__ = "(304) 456-2216"
-__revision__ = "0.4.2"
+__revision__ = "0.5.0"
 __all__ = [
     "PageSpec",
     "ConversionResult",
@@ -1057,6 +1240,28 @@ def _run(
     )
 
 
+def check_decoder() -> Optional[str]:
+    """Warn once, in this process, if the DWG decoder is too old.
+
+    Called by :func:`run_batch` in the PARENT.  Worker processes must not
+    do it: under Windows *spawn* each re-imports this module, so a
+    per-process warn-once flag yields one copy of the paragraph per
+    worker rather than one per run.
+
+    Returns
+    -------
+    str or None
+        The message emitted, for callers that want to show it in a GUI.
+    """
+    try:
+        message = LibreDwgEzdxfBackend.decoder_warning()
+    except Exception:                                      # noqa: BLE001
+        return None
+    if message:
+        _LOG.warning("%s", message)
+    return message
+
+
 def is_trueview(path: Path | str) -> bool:
     """True if this executable belongs to DWG TrueView rather than AutoCAD.
 
@@ -1352,7 +1557,12 @@ class PageSpec:
     outlier_factor: float = 20.0
     margin_mm: float = 5.0
     scale: float = 0.0
-    layouts: str = "model"
+    #: 0.5.0: "auto", not "model".  Every paper-space-only sheet used to
+    #: fail pass 1 with "nothing to render for --layouts 'model': Model
+    #: (empty)" and fall through to the AutoCAD passes for no reason --
+    #: a large share of the 956 failures on the field run.  "auto"
+    #: renders paper space when model space is empty.
+    layouts: str = "auto"
     monochrome: bool = True
     lineweight_scale: float = 1.0
     background: str = "white"
@@ -3088,6 +3298,73 @@ class LibreDwgEzdxfBackend(_DwgViaDxfBackend):
     MIN_VERSION = (0, 13)
 
     @classmethod
+    def bundled_decoder(cls) -> Optional[Path]:
+        """The bundled ``dwg2dxf`` for this platform, if it is on disk.
+
+        Separate from :meth:`_exe` on purpose.  ``_exe`` answers "what
+        will run", which is what conversion needs;  this answers "is the
+        good copy present", which is what the *advice* needs.  Conflating
+        them is how 0.4.2 came to tell an operator to reorder PATH in
+        favour of a file that did not exist.
+        """
+        for candidate in _DEFAULT_TOOL_PATHS.get("dwg2dxf", ()):
+            path = Path(candidate)
+            if path.is_absolute() or not _bundled_runs_here(candidate):
+                continue
+            path = _MODULE_DIR / path
+            if path.is_file():
+                return path
+        return None
+
+    @classmethod
+    def bundled_decoder_dir(cls) -> Path:
+        """Where a bundled decoder is expected, for the advice text."""
+        suffix = "win64" if os.name == "nt" else "linux-x64"
+        return _MODULE_DIR / "vendor" / ("libredwg-" + suffix)
+
+    @classmethod
+    def decoder_warning(cls) -> Optional[str]:
+        """The old-decoder warning, or ``None`` if there is nothing to say.
+
+        Built rather than hard-coded so that the remedy names the
+        situation actually on disk.  There are two, and they need
+        opposite actions:
+
+        * ``vendor/`` is missing -- nothing to prefer, so PATH ordering is
+          irrelevant and the fix is to restore the bundled binaries;
+        * ``vendor/`` is present but something else won -- which
+          :func:`_find_tool` should have prevented, so that is a real
+          anomaly worth reporting as one.
+        """
+        exe = cls._exe()
+        if exe is None:
+            return None
+        ver = cls.version()
+        if not ver or ver[:2] >= cls.MIN_VERSION:
+            return None
+
+        vtext = ".".join(str(v) for v in ver)
+        bundled = cls.bundled_decoder()
+        head = (
+            "using LibreDWG %s from %s -- this is an old decoder "
+            "(conda-forge ships 0.11, uploaded 2020). Object-size, CRC "
+            "and EED decode faults are the class of defect fixed since."
+            % (vtext, exe)
+        )
+        if bundled is None:
+            return head + (
+                " The bundled 0.14 decoder is NOT on disk: nothing was "
+                "found at %s. Restoring vendor/ is the fix -- PATH order "
+                "is irrelevant while there is no better copy to prefer."
+                % cls.bundled_decoder_dir()
+            )
+        return head + (
+            " A bundled copy DOES exist at %s and should have been "
+            "preferred automatically, so this is unexpected -- check that "
+            "it and its libredwg.dll are readable." % bundled
+        )
+
+    @classmethod
     def version(cls) -> Optional[tuple[int, ...]]:
         """Return the decoder's version as a tuple, or ``None``.
 
@@ -3160,18 +3437,15 @@ class LibreDwgEzdxfBackend(_DwgViaDxfBackend):
         exe = self._exe()
         if exe is None:
             raise RuntimeError("dwg2dxf not found")
+        # DEBUG, not WARNING: the parent says this once via
+        # check_decoder().  This flag is a class attribute, so under spawn
+        # each worker has its own and a warning here becomes one paragraph
+        # per worker -- four, on the run that exposed it.
         if not getattr(type(self), "_version_warned", False):
             type(self)._version_warned = True
-            ver = self.version()
-            if ver and ver[:2] < self.MIN_VERSION:
-                _LOG.warning(
-                    "using LibreDWG %s from %s -- this is an old decoder "
-                    "(conda-forge ships 0.11 from 2020). The copy bundled "
-                    "in vendor/ is newer and fixes decode defects such as "
-                    "dangling block references. Remove the old one from "
-                    "PATH, or let the bundled copy be found first.",
-                    ".".join(str(v) for v in ver), exe,
-                )
+            message = self.decoder_warning()
+            if message:
+                _LOG.debug("%s", message)
         target = work_dir / (source.stem + ".dxf")
         # -y overwrites without prompting.  No --as: see the warning above.
         proc = _run([exe, "-y", "-o", str(target), str(source)], timeout=self.timeout)
@@ -3347,6 +3621,12 @@ class AcCoreConsoleBackend(Backend):
     #: candidate.  One broken drawing must not condemn the backend; eight
     #: hundred of them failing the same way must not be retried for hours.
     CALIBRATION_GIVE_UP_AFTER: int = 3
+
+    #: "prompt" (default) answers the questions AutoCAD actually asks;
+    #: "script" writes the old fixed-order .scr.  The default changed in
+    #: 0.5.0 because the prompt sequence is not fixed -- see
+    #: :data:`_PROMPT_ANSWERS`.
+    mode: str = "prompt"
     #: Floor for one calibration attempt, in seconds.  The per-drawing
     #: --timeout is divided across the candidates (0.4.2), but an attempt
     #: short enough to time out mid-plot would fail every candidate and
@@ -3386,6 +3666,53 @@ class AcCoreConsoleBackend(Backend):
     #: confirmed the quoting defect carried no "not found" line at all --
     #: only the repeat -- so text matching alone would have passed it.
     _DEVICE_PROMPT = "enter an output device name"
+
+    #: ``-PLOT`` prompt fragment -> answer, matched case-insensitively
+    #: against whatever the console actually asks.
+    #:
+    #: This replaces a fixed list of answers, and the reason is the whole
+    #: of 0.5.0 defect 1.  The console asked::
+    #:
+    #:     Enter paper size or [?] <ANSI A (11.00 x 8.50 Inches)>:
+    #:     Enter paper units [Inches/Millimeters] <Inches>: L
+    #:
+    #: -- and "paper units" was a prompt the answer list did not know
+    #: existed, so the ORIENTATION answer fed it and everything after
+    #: shifted by one.  The device had been accepted; the run failed two
+    #: prompts later.  And the prompt set is not fixed: a hand-run probe
+    #: on the same machine showed no paper-units prompt and no
+    #: plot-area, plot-scale or plot-offset prompts at all.  It varies
+    #: with the device, the drawing and the layout.
+    #:
+    #: A static list cannot be right for a variable sequence, so nothing
+    #: is positional any more: each answer is bound to the QUESTION it
+    #: answers, and a prompt with no entry here gets a bare Enter --
+    #: accept the default -- and a DEBUG line, rather than being fed an
+    #: answer meant for a different question.
+    #:
+    #: Order matters only for overlapping fragments: "plot upside down"
+    #: must be tested before the looser "plot", so this is a tuple of
+    #: pairs rather than a dict.
+    _PROMPT_ANSWERS: tuple[tuple[str, str], ...] = (
+        ("detailed plot configuration", "Y"),
+        ("enter a layout name", ""),            # the current layout
+        ("enter an output device name", "@DEVICE@"),
+        ("enter paper size", ""),               # the device's default
+        ("enter paper units", ""),              # keep the device's units
+        ("enter drawing orientation", "@ORIENT@"),
+        ("plot upside down", "N"),
+        ("enter plot area", "E"),               # Extents
+        ("enter plot scale", "F"),              # Fit to paper
+        ("enter plot offset", "C"),             # Centred
+        ("plot with plot styles", "Y"),
+        ("enter plot style table name", "@STYLE@"),
+        ("plot with lineweights", "Y"),
+        ("enter shade plot setting", ""),
+        ("write the plot to a file", "Y"),
+        ("enter file name", "@TARGET@"),
+        ("save changes to page setup", "N"),
+        ("proceed with plot", "Y"),
+    )
 
     _TRANSCRIPT_FAULTS = (
         "not found.",
@@ -3590,6 +3917,136 @@ class AcCoreConsoleBackend(Backend):
             proc = _run(args, timeout=timeout)
         console = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
         return proc.returncode, _decode_console(console)
+
+    @classmethod
+    def _answer_for(cls, prompt: str) -> Optional[str]:
+        """The answer for *prompt*, or ``None`` if we do not recognise it.
+
+        ``None`` is a real answer in its own right: it means "press Enter
+        and take the default", which is almost always safe and is always
+        safer than replying with something meant for a different
+        question.  That distinction is 0.5.0's defect 1 in one line.
+        """
+        low = prompt.lower()
+        for fragment, answer in cls._PROMPT_ANSWERS:
+            if fragment in low:
+                return answer
+        return None
+
+    @classmethod
+    def _plot_interactive(
+        cls, exe: Path, source: Path, target: Path, spec: PageSpec,
+        device: str, timeout: float,
+    ) -> tuple[bool, str]:
+        """Plot one drawing by ANSWERING THE PROMPTS AutoCAD actually asks.
+
+        The ``.scr`` path (:meth:`_script_text`) writes a fixed list of
+        answers and hopes the prompt sequence matches it.  It does not:
+        ``-PLOT`` asks ``Enter paper units`` for some devices and not
+        others, and omits plot-area, plot-scale and plot-offset entirely
+        in some configurations.  One missing prompt shifts every later
+        answer by one and the run exits 0 with no PDF (Section 9.20).
+
+        So this reads the console and replies per prompt.  accoreconsole
+        falls back to stdin when its script runs out -- which is how the
+        whole thing was discovered (Section 9.29) -- so driving stdin
+        directly is simply using that path deliberately.
+
+        Returns
+        -------
+        (bool, str)
+            Whether the PDF appeared, and the transcript.
+        """
+        answers = {
+            "@DEVICE@": device,
+            "@ORIENT@": "L" if spec.landscape else "P",
+            "@STYLE@": ("monochrome.ctb" if spec.monochrome else "."),
+            "@TARGET@": str(target),
+        }
+
+        import subprocess as sp
+
+        proc = sp.Popen(
+            [str(exe), "/i", str(source)],
+            stdin=sp.PIPE, stdout=sp.PIPE, stderr=sp.STDOUT,
+            bufsize=0,
+        )
+        transcript: list[str] = []
+        deadline = time.monotonic() + timeout
+        pending = b""
+        started = False
+
+        def send(line: str) -> None:
+            try:
+                proc.stdin.write((line + "\r\n").encode("ascii", "replace"))
+                proc.stdin.flush()
+            except OSError:
+                pass
+
+        try:
+            while time.monotonic() < deadline and proc.poll() is None:
+                chunk = proc.stdout.read(1) if proc.stdout else b""
+                if not chunk:
+                    time.sleep(0.01)
+                    continue
+                pending += chunk
+                text_so_far = _decode_console(
+                    pending.decode("latin-1", "replace"))
+
+                # A prompt is recognised by its trailing ": " or ">: ",
+                # which is how the console signals it is waiting.
+                if not text_so_far.rstrip().endswith((":", ">")):
+                    continue
+                line = text_so_far.rsplit("\n", 1)[-1].strip()
+                pending = b""
+                if not line:
+                    continue
+                transcript.append(line)
+
+                if not started:
+                    # Nothing is answered until -PLOT has been issued:
+                    # the banner also ends in a colon.
+                    if line.lower().startswith("command"):
+                        started = True
+                        send("FILEDIA")
+                        send("0")
+                        send("CMDDIA")
+                        send("0")
+                        send("BACKGROUNDPLOT")
+                        send("0")
+                        send("-PLOT")
+                    continue
+
+                answer = cls._answer_for(line)
+                if answer is None:
+                    _LOG.debug("unrecognised -PLOT prompt, taking the "
+                               "default: %s", line)
+                    send("")
+                    continue
+                send(answers.get(answer, answer))
+                if "proceed with plot" in line.lower():
+                    break
+
+            # Give the plot itself time to land, then close stdin so the
+            # console exits rather than waiting for more input.
+            try:
+                proc.stdin.close()
+            except OSError:
+                pass
+            try:
+                rest = proc.communicate(
+                    timeout=max(5.0, deadline - time.monotonic()))[0] or b""
+            except sp.TimeoutExpired:
+                proc.kill()
+                rest = proc.communicate()[0] or b""
+            if rest:
+                transcript.append(
+                    _decode_console(rest.decode("latin-1", "replace")))
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+
+        return target.is_file(), "\n".join(transcript)
 
     @classmethod
     def _probe_devices(
@@ -3981,6 +4438,16 @@ class AcCoreConsoleBackend(Backend):
         sequence desynchronises, so the only honest test of success is
         whether the PDF is on disk.  The caller looks.
         """
+        if type(self).mode == "prompt":
+            # Answer the questions asked, not a remembered list of them.
+            _, console = self._plot_interactive(
+                exe, source, target, spec,
+                device or type(self)._device or (self.pc3 or self.PC3),
+                self.timeout,
+            )
+            _LOG.debug("accoreconsole (prompt mode) transcript:\n%s", console)
+            return console
+
         script_text = self._script_text(target, spec, device=device)
         _LOG.debug("accoreconsole script for %s was:\n%s",
                    source.name, script_text)
@@ -4275,6 +4742,16 @@ class AcadComBackend(Backend):
     #: is started once and reused for every drawing that worker handles.
     _app = None
     _app_was_running = False
+    #: --acad-attach.  False means always start a private instance.
+    attach: bool = False
+    #: --acad-recycle-after.  Quit and restart the COM Application every
+    #: N drawings.  An automation session accumulates state and
+    #: eventually faults outright (0x05aa access violation after one
+    #: sheet, on the field run); recycling makes that cost one restart
+    #: instead of the run.  Not every drawing -- that would spend 30-60 s
+    #: of start-up per sheet.
+    recycle_after: int = 50
+    _since_restart: int = 0
     #: Set once per process, so atexit.register is not stacked per drawing.
     _atexit_registered = False
 
@@ -4414,12 +4891,20 @@ class AcadComBackend(Backend):
 
         pythoncom.CoInitialize()
         try:
-            # Attach to a running instance if there is one.
+            # 0.5.0: only if the operator asked.  Attaching used to be
+            # the default, and on the field run it grabbed the session
+            # the operator was WORKING IN, plotted 956 sheets through it
+            # and then died with "FATAL ERROR: Unhandled Access
+            # Violation Reading 0x05aa" in their face.  A batch has no
+            # business in an interactive session.
+            if not cls.attach:
+                raise RuntimeError("not attaching by default (0.5.0)")
             cls._app = win32.GetActiveObject("AutoCAD.Application")
             cls._app_was_running = True
-            _LOG.info(
-                "attached to a running AutoCAD; leaving its window visible "
-                "(close AutoCAD first if you want the hidden path)"
+            _LOG.warning(
+                "--acad-attach: using the RUNNING AutoCAD. Its window stays "
+                "visible, and a batch fault will land in the session you "
+                "are working in."
             )
         except Exception:  # noqa: BLE001 - nothing running, start our own
             cls._app = win32.DispatchEx("AutoCAD.Application")
@@ -4638,6 +5123,29 @@ class AcadComBackend(Backend):
 
     # -- output handling ---------------------------------------------------
     @staticmethod
+    def _clear_destination(target: Path, attempts: int = 6) -> bool:
+        """Remove *target* so the plot can be written straight to it.
+
+        Returns True when the path is free -- which includes the common
+        case of it never having existed.  False means something is
+        holding it open, almost always a PDF viewer showing the previous
+        run's sheet, and the caller falls back to the scratch path.
+
+        Retried rather than attempted once: a viewer that is closing
+        releases the handle within a second or so, and waiting beats
+        producing a dialog per sheet for the rest of the run.
+        """
+        for attempt in range(attempts):
+            if not target.exists():
+                return True
+            try:
+                target.unlink()
+                return True
+            except OSError:
+                time.sleep(0.25 * (attempt + 1))
+        return not target.exists()
+
+    @staticmethod
     def _move_into_place(plotted: Path, target: Path) -> None:
         """Rename the plotted PDF onto the deliverable path.
 
@@ -4721,6 +5229,19 @@ class AcadComBackend(Backend):
     ) -> tuple[list[Path], int]:
         """One open-plot-close cycle.  Raises on anything that goes wrong."""
         app = self._get_app()
+        cls = type(self)
+        cls._since_restart += 1
+        if (cls.recycle_after > 0
+                and cls._since_restart > cls.recycle_after
+                and not cls._app_was_running):
+            # Pre-emptive, not reactive.  The field run's AutoCAD faulted
+            # outright (0x05aa access violation) rather than reporting an
+            # error, so waiting for a symptom means losing the sheet that
+            # hits it.
+            _LOG.info("recycling AutoCAD after %d drawing(s)",
+                      cls._since_restart - 1)
+            cls.shutdown()
+            cls._since_restart = 1
         if not self._app_is_alive():
             # Checked BEFORE each drawing, not only after a failure: the
             # crash usually happens as the previous document closes, so the
@@ -4729,18 +5250,36 @@ class AcadComBackend(Backend):
         pc3 = self.pc3 or self.PC3
         target = out_dir / f"{source.stem}.pdf"
 
-        # Plot to a scratch folder INSIDE the output directory, then rename.
-        # Inside, so the rename is a same-volume operation rather than a
-        # copy of a D-size sheet across drives; and see _move_into_place for
-        # why it is not plotted straight onto the deliverable.
-        scratch = out_dir / ".dwg2pdf_plot"
-        scratch.mkdir(parents=True, exist_ok=True)
-        self._viewer_hint(pc3, scratch)
-        plotted = scratch / f"{source.stem}.pdf"
-        try:
-            plotted.unlink()
-        except OSError:
-            pass
+        # 0.5.0 REVERSED 0.4.0 here.  Plotting into .dwg2pdf_plot and
+        # renaming did make the run immune to a viewer LOCK -- and then
+        # handed the viewer the scratch path, which the rename had
+        # already moved, so it reported once per sheet:
+        #
+        #     Cannot open the document ... \.dwg2pdf_plot\<sheet>.pdf
+        #     Error [Operating system]: The system cannot find the path
+        #     specified.
+        #
+        # A modal dialog per sheet in a 956-sheet serial run is strictly
+        # worse than the lock it prevented.  So the plot goes straight to
+        # the deliverable and the DESTINATION is removed first, which is
+        # the only moment a lock can bite and is retried.  The scratch
+        # path survives as the fallback for when it cannot be removed,
+        # where a dialog beats a failure.
+        plotted, scratch = target, None
+        if not self._clear_destination(target):
+            scratch = out_dir / ".dwg2pdf_plot"
+            scratch.mkdir(parents=True, exist_ok=True)
+            plotted = scratch / f"{source.stem}.pdf"
+            _LOG.warning(
+                "%s is locked (a PDF viewer is probably holding it); "
+                "plotting via %s instead, which may make the viewer "
+                "report a missing file once the rename happens",
+                target.name, scratch.name)
+            try:
+                plotted.unlink()
+            except OSError:
+                pass
+        self._viewer_hint(pc3, scratch or out_dir)
 
         self._wait_quiescent(app)
         try:
@@ -4826,7 +5365,8 @@ class AcadComBackend(Backend):
             raise RuntimeError(
                 "AutoCAD (COM) produced no usable PDF for this drawing"
             )
-        self._move_into_place(plotted, target)
+        if plotted != target:
+            self._move_into_place(plotted, target)
         try:
             scratch.rmdir()          # empty again unless a plot is in flight
         except OSError:
@@ -5011,8 +5551,8 @@ BACKENDS_BY_NAME: dict[str, type[Backend]] = {c.name: c for c in BACKEND_CLASSES
 #: now travel with the job.
 BACKEND_SETTING_KEYS: dict[str, tuple[str, ...]] = {
     "accoreconsole": ("PC3", "pc3", "language", "script_override",
-                      "command", "CALIBRATE"),
-    "acad-com": ("PC3", "pc3", "window_mode"),
+                      "command", "CALIBRATE", "mode"),
+    "acad-com": ("PC3", "pc3", "window_mode", "attach", "recycle_after"),
 }
 
 
@@ -5665,6 +6205,7 @@ def run_batch(
     dry_run: bool = False,
     report_memory: bool = False,
     progress: Optional[Callable[[int, int, dict[str, Any]], None]] = None,
+    should_cancel: Optional[Callable[[], bool]] = None,
 ) -> list[dict[str, Any]]:
     """Convert a whole drawing set.
 
@@ -5713,6 +6254,12 @@ def run_batch(
         List what would happen and touch nothing.
     report_memory : bool
         Log this process's RSS every ten completions.
+    should_cancel : callable, optional
+        Consulted before each drawing and between passes.  Returning True
+        stops the run and returns the rows completed so far, so a
+        cancelled run still reports and still merges.  Drawings already
+        in flight are allowed to finish -- killing a worker mid-plot can
+        leave a half-written PDF where a deliverable should be.
     progress : callable, optional
         Called as ``progress(done, total, row)`` after each file.
 
@@ -5750,6 +6297,12 @@ def run_batch(
     backend_cls = backend_chain[0]
     chain_names = [c.name for c in backend_chain]
     chain_parallel_safe = all(c.parallel_safe for c in backend_chain)
+
+    # Once, HERE, in the parent.  A spawned worker re-imports this module
+    # and so gets its own warn-once flag -- which is how a 4-worker run
+    # opened with four identical copies of the old-decoder paragraph.
+    if any(c is LibreDwgEzdxfBackend for c in backend_chain):
+        check_decoder()
 
     # -- decide worker count ------------------------------------------------
     # A chain that is not wholly parallel-safe is handled in two passes
@@ -5816,6 +6369,11 @@ def run_batch(
         # readable and makes Ctrl-C behave, which matters when a GUI backend
         # has gone wrong and you want to stop it.
         for source_str, out_dir_str in jobs:
+            # BEFORE the conversion, not after: Cancel should not start
+            # one more drawing.
+            if should_cancel and should_cancel():
+                _LOG.info("cancelled after %d of %d drawing(s)", done, total)
+                return rows
             row = _convert_task(
                 source_str, out_dir_str, chain_names, spec_dict, timeout,
                 skip_existing, settings,
@@ -5864,7 +6422,21 @@ def run_batch(
                 ): source_str
                 for source_str, out_dir_str in jobs
             }
+            cancelled = False
             for future in as_completed(futures):
+                # Cancel what has not STARTED; in-flight drawings are let
+                # finish.  Killing a worker mid-plot can leave a
+                # half-written PDF where a deliverable should be, and the
+                # wait is one drawing, not the run.
+                if not cancelled and should_cancel and should_cancel():
+                    cancelled = True
+                    pending = sum(1 for f in futures if f.cancel())
+                    _LOG.info(
+                        "cancelling: %d drawing(s) not started were "
+                        "dropped; letting in-flight drawings finish",
+                        pending)
+                if future.cancelled():
+                    continue
                 source_str = futures[future]
                 try:
                     row = future.result()
@@ -5890,6 +6462,18 @@ def run_batch(
                     _log_memory()
 
     # -- pass 2: retry failures serially against the full chain ------------
+    # Checked between the passes as well: cancelling during pass 1 and then
+    # sitting through a serial AutoCAD retry is not what Cancel means.
+    if should_cancel and should_cancel():
+        _LOG.info("cancelled before pass 2; %d drawing(s) completed",
+                  len(rows))
+        for row in rows:
+            if row["status"] == "retry-pending":
+                row["status"] = "cancelled"
+        order = {str(p): i for i, p in enumerate(sources)}
+        rows.sort(key=lambda r: order.get(r["source"], 0))
+        return rows
+
     if needs_serial_pass and workers > 1:
         retry = [r for r in rows if r["status"] == "retry-pending"]
         if retry:
@@ -5900,6 +6484,10 @@ def run_batch(
             )
             by_source = {r["source"]: r for r in rows}
             for index, row in enumerate(retry, 1):
+                if should_cancel and should_cancel():
+                    _LOG.info("cancelled during pass 2 after %d of %d",
+                              index - 1, len(retry))
+                    break
                 source = Path(row["source"])
                 out_dir = plan_output(source, in_root, out_root, flat)
                 new_row = _convert_task(
@@ -6422,7 +7010,7 @@ def build_parser() -> argparse.ArgumentParser:
              "0 means fit to page (default: 0)",
     )
     group.add_argument(
-        "--layouts", default="model",
+        "--layouts", default="auto",
         help="'auto' (paper space where it has content, else model space -- "
              "the safe choice for an uncatalogued archive), 'model', "
              "'paper', 'all', or an explicit layout name (default: model)",
@@ -6494,6 +7082,28 @@ def build_parser() -> argparse.ArgumentParser:
              "failures; 'visible' starts it visible and minimised",
     )
     group.add_argument(
+        "--accore-mode", choices=("prompt", "script"), default="prompt",
+        help="how to answer accoreconsole's -PLOT prompts. 'prompt' "
+             "(default) reads each question and replies to THAT question; "
+             "'script' writes the old fixed-order .scr, which breaks "
+             "whenever the prompt set differs (AutoCAD asks 'Enter paper "
+             "units' for some devices and not others)",
+    )
+    group.add_argument(
+        "--acad-attach", action="store_true",
+        help="let acad-com use an ALREADY RUNNING AutoCAD instead of "
+             "starting a private one. Off by default since 0.5.0: it "
+             "plots through the session you are working in, and a batch "
+             "fault lands in your face",
+    )
+    group.add_argument(
+        "--acad-recycle-after", type=int, default=50, metavar="N",
+        help="quit and restart acad-com's AutoCAD every N drawings "
+             "(default 50, 0 to disable). An automation session "
+             "accumulates state and eventually faults outright; this "
+             "makes that cost one restart rather than the run",
+    )
+    group.add_argument(
         "--no-accore-calibrate", dest="accore_calibrate",
         action="store_false", default=True,
         help="do not measure the accoreconsole plot-device answer on the "
@@ -6559,19 +7169,174 @@ def build_parser() -> argparse.ArgumentParser:
                        help="log resident memory every ten drawings")
     group.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     group.add_argument("-q", "--quiet", action="store_true", help="warnings and errors only")
+    group.add_argument(
+        "--verbose-libs", action="store_true",
+        help="let library loggers (ezdxf, PIL, ...) log at the same level "
+             "as dwg2pdf. OFF by default: ezdxf's recover pass emits one "
+             "line per repaired structure irregularity, dozens per "
+             "drawing, which under -v buries the progress display "
+             "entirely and makes a healthy run look hung",
+    )
+    group.add_argument(
+        "--log-file", type=Path, default=None, metavar="FILE",
+        help="also write the full, undeduplicated log here at DEBUG. The "
+             "console is for watching a run; this is for reading it "
+             "afterwards",
+    )
     group.add_argument("--version", action="version",
                        version=f"dwg2pdf.py revision {__revision__}")
     return parser
 
 
-def _configure_logging(verbose: bool, quiet: bool) -> None:
-    """Set up console logging at the requested level."""
-    level = logging.DEBUG if verbose else (logging.WARNING if quiet else logging.INFO)
-    logging.basicConfig(
-        level=level,
-        format="%(levelname)-7s %(message)s",
-        stream=sys.stderr,
-    )
+#: Loggers that belong to libraries rather than to this program.  Capped
+#: rather than silenced: a real ezdxf warning is worth seeing, but its
+#: recover pass emits one INFO line per repaired structure irregularity,
+#: and a drawing with a repeated block reference yields dozens.  Under -v
+#: that buried the progress display completely and a perfectly healthy
+#: 1762-drawing run was reported as hung.
+_LIBRARY_LOGGERS = (
+    "ezdxf",
+    "PIL",
+    "matplotlib",
+    "fontTools",
+    "comtypes",
+    "pyvips",
+)
+
+
+class _LibraryCapFilter(logging.Filter):
+    """Drop library records below *level* on this handler only.
+
+    Deliberately a handler filter and NOT ``logger.setLevel``.  Setting
+    the level on ``logging.getLogger("ezdxf")`` stops the record at
+    source, so it never reaches ANY handler -- including a
+    ``--log-file``, which is the one place the detail is wanted.  The
+    console wants quiet; the file wants everything; those are handler
+    decisions, so they are made at the handler.
+    """
+
+    def __init__(self, names: Sequence[str], level: int) -> None:
+        super().__init__()
+        self._names = tuple(names)
+        self._level = level
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= self._level:
+            return True
+        return not record.name.split(".")[0] in self._names
+
+
+class _DedupFilter(logging.Filter):
+    """Collapse identical consecutive log records on one handler.
+
+    Attached to the HANDLER rather than to a logger, so it applies to
+    everything that reaches the console no matter who emitted it.
+
+    When the run moves on, the tally is emitted as its own record,
+    carrying the level and logger name of the message it counts -- not
+    grafted onto the next message, which would label it with an
+    unrelated level.  Emitting from inside a filter needs the
+    re-entrancy guard below, since the synthetic record passes back
+    through this same filter chain.
+    """
+
+    def __init__(self, handler: logging.Handler) -> None:
+        super().__init__()
+        self._handler = handler
+        self._last: Optional[tuple] = None
+        self._last_record: Optional[logging.LogRecord] = None
+        self._count = 0
+        self._emitting = False
+
+    def _flush(self) -> None:
+        """Emit the tally for the run of records just ended."""
+        if not self._count or self._last_record is None:
+            return
+        count, previous = self._count, self._last_record
+        self._count = 0
+        self._emitting = True
+        try:
+            tally = logging.LogRecord(
+                name=previous.name, level=previous.levelno,
+                pathname=previous.pathname, lineno=previous.lineno,
+                msg="(the previous message repeated %d more time%s)"
+                    % (count, "" if count == 1 else "s"),
+                args=(), exc_info=None,
+            )
+            self._handler.emit(tally)
+        finally:
+            self._emitting = False
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if self._emitting:                    # the tally itself
+            return True
+        key = (record.name, record.levelno, record.getMessage())
+        if key == self._last:
+            self._count += 1
+            self._last_record = record
+            return False
+        self._flush()
+        self._last = key
+        self._last_record = record
+        return True
+
+
+def _configure_logging(
+    verbose: bool,
+    quiet: bool,
+    *,
+    verbose_libs: bool = False,
+    log_file: Optional[Path] = None,
+) -> None:
+    """Set up console logging at the requested level.
+
+    Parameters
+    ----------
+    verbose, quiet : bool
+        ``-v`` and ``-q``.  Mutually exclusive in practice; verbose wins.
+    verbose_libs : bool, optional
+        Let library loggers through at the same level as this program's.
+        Off by default -- see :data:`_LIBRARY_LOGGERS` for why.
+    log_file : pathlib.Path, optional
+        Also write everything, at DEBUG and undeduplicated, here.  The
+        console is for watching; the file is for reading afterwards, and
+        those want opposite things.
+    """
+    level = logging.DEBUG if verbose else (
+        logging.WARNING if quiet else logging.INFO)
+
+    console = logging.StreamHandler(stream=sys.stderr)
+    console.setFormatter(logging.Formatter("%(levelname)-7s %(message)s"))
+    # Cap BEFORE dedup: filters run in the order added and the first
+    # False drops the record, so dedup-first counts library messages the
+    # cap then hides, and the console shows a tally for a message nobody
+    # ever saw.  --verbose-libs means "treat them like us" (the old
+    # behaviour), so it adds no cap at all.
+    if not verbose_libs:
+        console.addFilter(_LibraryCapFilter(
+            _LIBRARY_LOGGERS, max(level, logging.WARNING)))
+    console.addFilter(_DedupFilter(console))
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG if log_file else level)
+    console.setLevel(level)
+    for existing in list(root.handlers):
+        root.removeHandler(existing)
+    root.addHandler(console)
+
+    if log_file:
+        try:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            handler = logging.FileHandler(
+                log_file, mode="w", encoding="utf-8")
+            handler.setLevel(logging.DEBUG)
+            handler.setFormatter(logging.Formatter(
+                "%(asctime)s %(levelname)-7s %(name)s: %(message)s"))
+            root.addHandler(handler)            # NO dedup filter here
+        except OSError as exc:
+            _LOG.warning("cannot write --log-file %s: %s", log_file, exc)
+
+
 
 
 def _print_probe() -> int:
@@ -6624,7 +7389,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     """
     parser = build_parser()
     args = parser.parse_args(argv)
-    _configure_logging(args.verbose, args.quiet)
+    _configure_logging(
+        args.verbose, args.quiet,
+        verbose_libs=args.verbose_libs,
+        log_file=args.log_file,
+    )
     install_noise_filters()
 
     if args.probe:
@@ -6693,6 +7462,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         AcCoreConsoleBackend.language = args.accore_lang
     AcCoreConsoleBackend.command = args.accore_command
     AcCoreConsoleBackend.CALIBRATE = args.accore_calibrate
+    AcCoreConsoleBackend.mode = args.accore_mode
+    AcadComBackend.attach = args.acad_attach
+    AcadComBackend.recycle_after = max(0, args.acad_recycle_after)
     AcadComBackend.window_mode = args.acad_window
     if args.acad_pc3:
         # Set the OVERRIDE on both, not the stock default: PC3 stays the

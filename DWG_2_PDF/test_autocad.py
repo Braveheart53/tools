@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Engine-side checks for the AutoCAD backends (dwg2pdf 0.4.2).
+"""Engine-side checks for the AutoCAD backends (dwg2pdf 0.5.0).
 
 These run anywhere -- they exercise the parts of the AutoCAD path that are
 pure Python: the generated ``.scr`` text, the plot-device calibration, the
@@ -55,6 +55,24 @@ import sys
 from pathlib import Path                      # noqa: E402
 
 import dwg2pdf as engine                      # noqa: E402
+
+
+# %% Fixture bootstrap
+def _ensure_fixtures() -> None:
+    """Generate the test fixtures if this is a clean unpack.
+
+    This file needed none until 0.4.5 added test_cancel_hook(), which
+    converts real drawings to prove run_batch() can be stopped.  Without
+    this the suite died on a clean unpack with ZeroDivisionError -- an
+    empty fixture list and a modulo -- which is a worse failure than the
+    one it was testing for.
+    """
+    try:
+        import make_test_drawings
+        make_test_drawings.ensure_fixtures()
+    except Exception as exc:                               # noqa: BLE001
+        print("  NOTE  cannot bootstrap fixtures: %s" % exc)
+
 
 # %% State
 RESULTS = {"pass": 0, "fail": 0}
@@ -797,6 +815,228 @@ def test_calibration_timeout_budget() -> None:
          backend._calibration_failures, backend._attempt) = saved
 
 
+def test_cancel_hook() -> None:
+    """run_batch must be stoppable, on both paths, without losing work.
+
+    This is the hook whose ABSENCE made the GUI reimplement the whole
+    orchestration -- and that duplicate is why check_decoder() never
+    fired there.  One orchestrator only works if it can be cancelled.
+    """
+    import shutil
+    import tempfile
+
+    chain = [engine.LibreDwgEzdxfBackend, engine.EzdxfBackend]
+    if not all(c.available() for c in chain):
+        chk("cancel hook accepts should_cancel",
+            "should_cancel" in
+            __import__("inspect").signature(engine.run_batch).parameters)
+        return
+
+    base = sorted(Path("test_drawings").rglob("*.dxf"))
+    if not base:
+        chk("cancel hook exists (no fixtures to exercise it with)",
+            "should_cancel" in
+            __import__("inspect").signature(engine.run_batch).parameters)
+        return
+
+    with tempfile.TemporaryDirectory(prefix="dwg2pdf_cancel_") as tmp:
+        root = Path(tmp) / "in"
+        root.mkdir()
+        for i in range(12):
+            shutil.copy(base[i % len(base)], root / ("sheet-%02d.dxf" % i))
+        sources = sorted(root.glob("*.dxf"))
+
+        # Serial path: stops BEFORE starting another drawing.
+        out = Path(tmp) / "serial"
+        calls = {"n": 0}
+
+        def stop_after_one() -> bool:
+            calls["n"] += 1
+            return calls["n"] > 1
+
+        rows = engine.run_batch(
+            sources, root, out, chain, engine.PageSpec(paper="AUTO"),
+            workers=1, should_cancel=stop_after_one)
+        chk("serial: cancelling stops the run",
+            0 < len(rows) < len(sources))
+        chk("serial: completed work is still returned",
+            all(r["status"] == "ok" for r in rows))
+        chk("serial: no PDF for a drawing that never ran",
+            len(list(out.rglob("*.pdf"))) == len(rows))
+
+        # Parallel path.  MORE JOBS THAN WORKERS, deliberately: with one
+        # job per worker every future is already in flight when the
+        # first completes, and letting in-flight drawings finish is the
+        # documented behaviour -- killing a worker mid-plot can leave a
+        # half-written PDF where a deliverable should be.
+        out = Path(tmp) / "parallel"
+        calls = {"n": 0}
+
+        def stop_after_three() -> bool:
+            calls["n"] += 1
+            return calls["n"] > 3
+
+        rows = engine.run_batch(
+            sources, root, out, chain, engine.PageSpec(paper="AUTO"),
+            workers=2, should_cancel=stop_after_three)
+        chk("parallel: cancelling stops the run",
+            0 < len(rows) < len(sources))
+        chk("parallel: completed work is still returned", bool(rows))
+
+        # An absent hook must change nothing at all.
+        out = Path(tmp) / "nohook"
+        rows = engine.run_batch(
+            sources, root, out, chain, engine.PageSpec(paper="AUTO"),
+            workers=2)
+        chk("no hook: every drawing still converts",
+            sum(1 for r in rows if r["status"] == "ok") == len(sources))
+
+    import inspect
+    src = inspect.getsource(engine.run_batch)
+    chk("cancellation is checked BEFORE each serial drawing",
+        "Cancel should not start" in src)
+    chk("pass 2 is not entered after a cancel",
+        "cancelled before pass 2" in src)
+
+
+def test_log_noise() -> None:
+    """A healthy run must stay readable, and the detail must survive.
+
+    A 1762-drawing run converting at 1-3 s/sheet with nothing failing was
+    reported as HUNG, because ezdxf's recover pass logs one line per
+    repaired structure irregularity -- 107 of them between two
+    consecutive progress lines -- and -v lets library loggers through.
+    A progress display that cannot be read is not a progress display.
+    """
+    import io
+    import logging
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="dwg2pdf_log_") as tmp:
+        log_file = Path(tmp) / "run.log"
+        buf, real = io.StringIO(), sys.stderr
+        sys.stderr = buf
+        try:
+            engine._configure_logging(verbose=True, quiet=False,
+                                      log_file=log_file)
+            ez = logging.getLogger("ezdxf")
+            eng = logging.getLogger(engine._LOG.name)
+            eng.info("[1/1762] a.dwg -> 1 page file(s)")
+            for _ in range(53):
+                ez.info("Found non-unique entity handle #A1, "
+                        "data validation is required.")
+            for _ in range(54):
+                ez.info("Found ENDBLK without a preceding BLOCK, "
+                        "ignoring content.")
+            eng.info("[2/1762] b.dwg -> 1 page file(s)")
+            for _ in range(20):
+                eng.debug("plot device attempt 1/4: DWG To PDF.pc3")
+            ez.warning("a real ezdxf warning")
+            eng.info("[3/1762] c.dwg -> 1 page file(s)")
+            for handler in logging.getLogger().handlers:
+                handler.flush()
+        finally:
+            sys.stderr = real
+            engine._configure_logging(verbose=False, quiet=True)
+
+        out = buf.getvalue()
+        lines = [ln for ln in out.strip().splitlines() if ln.strip()]
+
+        chk("107 library lines do not reach the console",
+            "non-unique" not in out and "ENDBLK" not in out)
+        chk("every progress line survives", out.count("/1762]") == 3)
+        chk("a real library WARNING still gets through",
+            "a real ezdxf warning" in out)
+        chk("the console stays readable (< 12 lines, not 127)",
+            len(lines) < 12)
+        # No orphaned tallies: a count for a message the cap hid would be
+        # worse than the noise, because it is unattributable.
+        chk("no tally for a message that was never shown",
+            out.count("previous message repeated")
+            <= out.count("plot device attempt"))
+        chk("repeats of OUR OWN messages are collapsed with a count",
+            "plot device attempt" in out
+            and "repeated 19 more times" in out)
+
+        # The file is for reading afterwards, so it keeps everything --
+        # capping the LOGGER instead of the handler would have discarded
+        # these at source, which was the first attempt at this fix.
+        detail = log_file.read_text(encoding="utf-8")
+        chk("the log file keeps all 107 library lines",
+            detail.count("non-unique") + detail.count("ENDBLK") == 107)
+        chk("the log file is undeduplicated",
+            detail.count("plot device attempt") == 20)
+        chk("the log file names the logger, for triage",
+            "ezdxf" in detail)
+
+    chk("--verbose-libs exists as the escape hatch",
+        "--verbose-libs" in engine.build_parser().format_help())
+    chk("--log-file exists",
+        "--log-file" in engine.build_parser().format_help())
+
+
+def test_decoder_warning() -> None:
+    """The old-decoder advice must describe what is actually on disk.
+
+    0.4.2 asserted "the copy bundled in vendor/ is newer" without
+    checking that vendor/ existed, and sent an operator to inspect PATH
+    ordering for a file that was not there.
+    """
+    backend = engine.LibreDwgEzdxfBackend
+    saved = (backend.version, backend._exe)
+    try:
+        # A current decoder must say nothing at all.
+        backend.version = classmethod(lambda cls: (0, 14, 8593))
+        backend._exe = classmethod(lambda cls: Path("/usr/bin/dwg2dxf"))
+        chk("a current decoder produces no warning",
+            backend.decoder_warning() is None)
+
+        # An old one must warn, and name the version and the path.
+        backend.version = classmethod(lambda cls: (0, 11, 3876))
+        msg = backend.decoder_warning()
+        chk("an old decoder warns", bool(msg))
+        chk("the warning names the version", "0.11.3876" in (msg or ""))
+        chk("the warning names the executable it resolved",
+            "dwg2dxf" in (msg or ""))
+
+        # Off Windows there is no linux vendor dir in this tree, so this
+        # exercises the honest branch: say the bundled copy is absent and
+        # that PATH order cannot help, rather than advising a reorder.
+        if backend.bundled_decoder() is None:
+            chk("it says the bundled copy is NOT on disk",
+                "NOT on disk" in (msg or ""))
+            chk("it names where it looked",
+                str(backend.bundled_decoder_dir()) in (msg or ""))
+            chk("it does not advise reordering PATH for a missing file",
+                "PATH order is irrelevant" in (msg or ""))
+        else:
+            chk("a present bundled copy is reported as unexpected",
+                "unexpected" in (msg or ""))
+            chk("it names the bundled copy it found",
+                str(backend.bundled_decoder()) in (msg or ""))
+            chk("it does not claim the file is missing",
+                "NOT on disk" not in (msg or ""))
+
+        # No decoder at all: nothing to warn ABOUT, and certainly no
+        # advice to give about its version.
+        backend._exe = classmethod(lambda cls: None)
+        chk("no decoder at all warns about nothing",
+            backend.decoder_warning() is None)
+    finally:
+        backend.version, backend._exe = saved
+
+    chk("check_decoder is callable from the parent",
+        callable(engine.check_decoder))
+    # Proof the warning is emitted by the PARENT, not per worker: the
+    # backend's own inline notice is DEBUG now.
+    import inspect
+    src = inspect.getsource(engine.LibreDwgEzdxfBackend._dwg_to_dxf)
+    chk("the in-worker notice is DEBUG, not WARNING",
+        "_LOG.debug" in src and "_LOG.warning" not in src)
+    chk("run_batch performs the check in the parent",
+        "check_decoder()" in inspect.getsource(engine.run_batch))
+
+
 def test_stdin_is_devnull() -> None:
     """A short script must not leave accoreconsole reading the console.
 
@@ -861,9 +1101,150 @@ def test_exclude() -> None:
 
 
 
+
+
+# %% 0.5.0: the field run's four defects
+def test_prompt_answers() -> None:
+    """Answers must be bound to QUESTIONS, not to positions.
+
+    The field run's calibration accepted the device on attempt 1 -- the
+    paper default moved to ANSI A, DWG To PDF's own -- and then failed
+    two prompts later::
+
+        Enter paper size or [?] <ANSI A (11.00 x 8.50 Inches)>:
+        Enter paper units [Inches/Millimeters] <Inches>: L
+        Command: N  Unknown command "N".
+
+    "Enter paper units" was a prompt the fixed answer list did not know
+    about, so the ORIENTATION answer fed it and everything after shifted
+    by one.  The prompt set also varies between devices and drawings, so
+    no fixed list can be right.
+    """
+    backend = engine.AcCoreConsoleBackend
+
+    # The prompt that caused it.
+    chk("the paper-units prompt is now answered",
+        backend._answer_for(
+            "Enter paper units [Inches/Millimeters] <Inches>:") == "")
+    # ...and not with the orientation answer, which is what went wrong.
+    chk("orientation is bound to the orientation prompt",
+        backend._answer_for(
+            "Enter drawing orientation [Portrait/Landscape] <Landscape>:")
+        == "@ORIENT@")
+    chk("the device is bound to the device prompt",
+        backend._answer_for(
+            "Enter an output device name or [?] <Adobe PDF>:") == "@DEVICE@")
+    chk("the output path is bound to the file-name prompt",
+        backend._answer_for("Enter file name <x.pdf>:") == "@TARGET@")
+
+    # An unknown prompt must take the DEFAULT, never another answer.
+    chk("an unknown prompt returns None, meaning 'press Enter'",
+        backend._answer_for("Enter something never seen before:") is None)
+
+    # Overlapping fragments must not shadow each other.
+    chk("'plot upside down' is not swallowed by a looser 'plot' rule",
+        backend._answer_for("Plot upside down? [Yes/No] <No>:") == "N")
+    chk("'plot with lineweights' keeps its own answer",
+        backend._answer_for("Plot with lineweights? [Yes/No] <Yes>:") == "Y")
+    chk("'plot with plot styles' keeps its own answer",
+        backend._answer_for("Plot with plot styles? [Yes/No] <Yes>:") == "Y")
+    chk("every rule has a distinct fragment",
+        len({f for f, _ in backend._PROMPT_ANSWERS})
+        == len(backend._PROMPT_ANSWERS))
+    chk("prompt mode is the default (0.5.0)", backend.mode == "prompt")
+    chk("the .scr path is still reachable for comparison",
+        "script" in engine.build_parser().format_help())
+
+
+def test_no_hijacking_autocad() -> None:
+    """A batch must not run inside the operator's own AutoCAD session.
+
+    On the field run it attached to the running instance, plotted through
+    the window the operator was working in, and died with
+    "FATAL ERROR: Unhandled Access Violation Reading 0x05aa".
+    """
+    backend = engine.AcadComBackend
+    chk("attaching is OFF by default (0.5.0)", backend.attach is False)
+    chk("--acad-attach exists to opt back in",
+        "--acad-attach" in engine.build_parser().format_help())
+
+    # Recycling: an automation session that faults outright must cost one
+    # restart, not the run -- but not a restart per sheet either, which
+    # would be 30-60 s of start-up each.
+    chk("the COM session is recycled periodically",
+        backend.recycle_after > 1)
+    chk("recycling is not per drawing", backend.recycle_after >= 10)
+    chk("--acad-recycle-after exposes it",
+        "--acad-recycle-after" in engine.build_parser().format_help())
+    chk("both reach the workers",
+        "attach" in engine.BACKEND_SETTING_KEYS["acad-com"]
+        and "recycle_after" in engine.BACKEND_SETTING_KEYS["acad-com"])
+    chk("the accore mode reaches the workers too",
+        "mode" in engine.BACKEND_SETTING_KEYS["accoreconsole"])
+
+
+def test_plot_straight_to_destination() -> None:
+    """The scratch rename turned a viewer LOCK into a viewer DIALOG.
+
+    0.4.0 plotted into .dwg2pdf_plot and renamed, which did defeat the
+    lock -- and handed the viewer a path the rename had already moved::
+
+        Cannot open the document ... \\.dwg2pdf_plot\\<sheet>.pdf
+        Error [Operating system]: The system cannot find the path specified.
+
+    Once per sheet, modal, in a 956-sheet serial run.
+    """
+    import tempfile
+
+    backend = engine.AcadComBackend
+    with tempfile.TemporaryDirectory(prefix="dwg2pdf_dest_") as tmp:
+        target = Path(tmp) / "sheet.pdf"
+        chk("a free destination needs no clearing",
+            backend._clear_destination(target))
+
+        target.write_bytes(b"%PDF-1.4 last run")
+        chk("an existing deliverable is removed so the plot can go there",
+            backend._clear_destination(target) and not target.exists())
+
+        # A directory cannot be unlinked, which stands in for a locked
+        # file: the caller must learn that and fall back, not crash.
+        blocked = Path(tmp) / "blocked.pdf"
+        blocked.mkdir()
+        chk("an unremovable destination reports False, it does not raise",
+            backend._clear_destination(blocked, attempts=2) is False)
+
+    import inspect
+    # _plot_once is where the plot actually happens; _convert_impl is the
+    # thin wrapper that retries it on a context error.
+    src = inspect.getsource(backend._plot_once)
+    chk("the plot target IS the deliverable by default",
+        "plotted, scratch = target, None" in src)
+    chk("the scratch path survives only as the fallback",
+        "_clear_destination" in src and ".dwg2pdf_plot" in src)
+    chk("no rename happens when we plotted straight there",
+        "if plotted != target:" in src)
+
+
+def test_layouts_default() -> None:
+    """Paper-space-only sheets must not fail pass 1 for nothing.
+
+    "nothing to render for --layouts 'model': Model (empty)" accounted
+    for a large share of the field run's 956 pass-1 failures -- sheets
+    whose content is in paper space, sent to the AutoCAD passes by a
+    default that never suited a drawing set.
+    """
+    chk("PageSpec defaults to 'auto' (0.5.0)",
+        engine.PageSpec(paper="AUTO").layouts == "auto")
+    chk("the CLI default matches the dataclass",
+        engine.build_parser().get_default("layouts") == "auto")
+    chk("'model' is still selectable",
+        engine.PageSpec(paper="AUTO", layouts="model").layouts == "model")
+
+
 # %% Entry point
 def run_test() -> int:
     """Run every check and report."""
+    _ensure_fixtures()
     print("AUTOCAD BACKEND CHECKS (engine %s)" % engine.__revision__)
     test_script_text()
     test_faults()
@@ -872,6 +1253,13 @@ def run_test() -> int:
     test_prompt_repeat_fault()
     test_system_printers()
     test_calibration_timeout_budget()
+    test_prompt_answers()
+    test_no_hijacking_autocad()
+    test_plot_straight_to_destination()
+    test_layouts_default()
+    test_cancel_hook()
+    test_log_noise()
+    test_decoder_warning()
     test_stdin_is_devnull()
     test_exclude()
     test_device_probe()

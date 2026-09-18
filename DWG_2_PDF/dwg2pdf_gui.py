@@ -63,6 +63,61 @@ Semantic versioning: External Release.Internal Release.Working version
 #              re-run separately.
 #              Companion to engine 0.3.16, which fixes AutoCAD never being
 #              quit (the "AutoCAD Error Aborting" dialog at the end of a
+# 0.2.20       In step with engine 0.5.0, whose four fixes all need a
+#              surface here: --accore-mode (answer the prompts AutoCAD
+#              actually asks, rather than a fixed list that broke on
+#              "Enter paper units"), --acad-attach (OFF by default now:
+#              it used to hijack the operator's own AutoCAD and killed
+#              it with an access violation), --acad-recycle-after (the
+#              COM session faults eventually; recycle rather than lose
+#              the run), and the "auto" layouts default (paper-space
+#              sheets were failing pass 1 for nothing).
+#
+# 0.2.19       ONE ORCHESTRATOR.  This window has always IMPORTED the
+#              engine rather than shelling out to it, but it
+#              reimplemented the batch orchestration -- its own serial
+#              loop, its own process pool, its own pass-2 retry, about
+#              104 lines duplicating engine.run_batch().  The only
+#              reason was that run_batch() could not be stopped, and a
+#              GUI needs Cancel.
+#
+#              That duplication was a correctness problem, not a style
+#              one: every engine fix had to be made twice or it silently
+#              did not reach the GUI, and one silently did not --
+#              check_decoder(), the out-of-date LibreDWG warning, is
+#              called by run_batch(), so a GUI operator was never told
+#              pass 1 was running on a 2020 decoder.  That is exactly
+#              the failure that cost a field run.
+#
+#              engine 0.4.5 adds the missing should_cancel hook, so
+#              _run_serial(), _run_parallel() and _serial_retry() are
+#              DELETED and this window calls run_batch() with progress=
+#              and should_cancel=.  Identical code path to the CLI, so
+#              the next engine fix cannot miss the GUI.
+#
+# 0.2.18       In step with engine 0.4.4.  The Detailed log tab had the
+#              same flood the CLI did: install_noise_filters() absorbed
+#              two SPECIFICALLY NAMED benign messages, so ezdxf's
+#              recover pass -- "non-unique entity handle", "ENDBLK
+#              without a preceding BLOCK", dozens per drawing -- went
+#              straight through and buried the per-drawing progress.
+#              Now the engine's own _LibraryCapFilter and _DedupFilter
+#              are installed on the Qt handler as well, in the same
+#              order, so ANY future library noise is handled by class
+#              rather than needing a new named message each time.  NEW
+#              "Show library detail" checkbox on the Log tab for when
+#              the question really is what ezdxf did to one drawing.
+#
+# 0.2.17       In step with engine 0.4.3.  FIXES A REAL GAP: the GUI
+#              drives engine._convert_task() in its own loop and never
+#              calls engine.run_batch(), so engine.check_decoder() --
+#              which is what warns about an out-of-date LibreDWG -- never
+#              fired here at all.  A GUI operator therefore got NO
+#              warning that pass 1 was running on a 2020 decoder, which
+#              is exactly the failure that cost a field run.  The check
+#              now runs once at the start of every conversion and its
+#              message goes to the log pane, not just to the logger.
+#
 # 0.2.16       In step with engine 0.4.2.  The ".pc3" field now REJECTS
 #              Windows system printers (Adobe PDF, Microsoft Print to
 #              PDF) with an inline warning: they take their output path
@@ -300,7 +355,7 @@ import dwg2pdf as engine   # noqa: E402
 __author__ = "William W. Wallace"
 __email__ = "naval.antennas@gmail.com"
 __phone__ = "(304) 456-2216"
-__revision__ = "0.2.16"
+__revision__ = "0.2.20"
 
 #: Percent of logical cores used by the "Automatic (by CPU cores)" mode.
 DEFAULT_CORE_PERCENT = 75
@@ -428,7 +483,8 @@ class QtLogHandler(logging.Handler):
         return buffered
 
 
-def install_logging(level: int = logging.INFO) -> QtLogHandler:
+def install_logging(level: int = logging.INFO,
+                    *, verbose_libs: bool = False) -> QtLogHandler:
     """Route Python logging into the GUI and silence the benign font noise.
 
     Parameters
@@ -457,8 +513,26 @@ def install_logging(level: int = logging.INFO) -> QtLogHandler:
     complaint and ezdxf's ``ignoring DIMTXSTY override`` -- each explained
     once instead of repeated per font and per dimension.  See
     :class:`dwg2pdf._ThirdPartyNoiseFilter` for why both are harmless.
+
+    That was not enough, and 0.2.18 says why.  Naming individual messages
+    only absorbs the ones already met: ezdxf's recover pass emits
+    ``Found non-unique entity handle`` and ``Found ENDBLK without a
+    preceding BLOCK`` dozens of times per drawing, neither of them on the
+    list, and on a real 1762-drawing set that buried the per-drawing
+    progress entirely.  So the engine's :class:`dwg2pdf._LibraryCapFilter`
+    and :class:`dwg2pdf._DedupFilter` are installed here too -- the same
+    two, in the same order -- which handles library noise by CLASS rather
+    than by name, and so covers the next one without a code change.
+
     Everything else, including genuinely broken fonts and every warning
     about the drawing itself, still reaches the panel.
+
+    Parameters
+    ----------
+    verbose_libs : bool, optional
+        Let library loggers through at *level*, as before 0.2.18.  The
+        Log tab exposes this, because occasionally the question really is
+        what ezdxf did to one particular drawing.
     """
     noise = engine.install_noise_filters()
     bridge = LogBridge()
@@ -468,6 +542,13 @@ def install_logging(level: int = logging.INFO) -> QtLogHandler:
     # filters DO drop records (the level check that precedes them only
     # matters if you try to demote a level rather than reject the record).
     handler.addFilter(noise)
+    # ORDER MATTERS, for the reason the engine documents: filters run in
+    # the order added and the first False drops the record, so capping
+    # AFTER dedup would show a tally for a message the cap then hid.
+    if not verbose_libs:
+        handler.addFilter(engine._LibraryCapFilter(
+            engine._LIBRARY_LOGGERS, max(level, logging.WARNING)))
+    handler.addFilter(engine._DedupFilter(handler))
     root = logging.getLogger()
     root.setLevel(level)
     root.addHandler(handler)
@@ -576,60 +657,44 @@ class ConversionWorker(QtCore.QObject):
                               % ("flattened" if opts["flat"]
                                  else "mirrors the source tree"))
             self.message.emit("Drawings     : %d" % total)
+
+            # 0.2.17 called engine.check_decoder() explicitly here,
+            # because this window did not call run_batch().  It does now
+            # (0.2.19), and run_batch() performs the check itself -- and
+            # its warning reaches the Detailed log tab through
+            # QtLogHandler on the root logger.  Calling it again here
+            # would simply print the paragraph twice, which is the defect
+            # 0.4.3 fixed in the engine.
+
             self.message.emit("-" * 60)
 
-            spec_dict = engine.dataclasses.asdict(opts["spec"])
-            jobs = []
-            for src in sources:
-                out_dir = engine.plan_output(
-                    src, opts["in_root"], opts["out_root"], opts["flat"]
-                )
-                out_dir.mkdir(parents=True, exist_ok=True)
-                jobs.append((str(src), str(out_dir)))
+            # THE SAME CALL THE CLI MAKES.  Everything below the two
+            # callbacks -- the two-pass split, worker recycling, the
+            # spawn context, settings propagation, the decoder check,
+            # input-order restoration -- belongs to run_batch() and is
+            # no longer duplicated here.  See the 0.2.19 note: the copy
+            # this replaced is why check_decoder() never fired in the
+            # GUI.
+            def on_progress(done_n: int, total_n: int, row: dict) -> None:
+                """One drawing finished.  Runs in whichever thread ran it."""
+                self.progress.emit(done_n, total_n, row)
 
-            # A chain containing a backend that cannot run concurrently
-            # (acad-com drives one COM Application) is NOT run serially
-            # throughout -- that would pay for a last-resort fallback on
-            # every drawing.  Pass 1 runs the parallel-safe prefix
-            # concurrently; pass 2 retries only the failures serially
-            # against the full chain.  See
-            # dwg2pdf.split_chain_for_parallel.
-            prefix, needs_serial = engine.split_chain_for_parallel(
-                opts["chain"])
-            prefix_names = [c.name for c in prefix]
-            if not prefix:
-                self.message.emit(
-                    "%s cannot run concurrently and leads the chain - "
-                    "running serially." % chain_names[0]
-                )
-                workers = 1
-            elif needs_serial and workers > 1:
-                self.message.emit(
-                    "Pass 1: %s in parallel. %s cannot run concurrently, "
-                    "so only failures are retried against the full chain."
-                    % (" -> ".join(prefix_names),
-                       ", ".join(c.name for c in opts["chain"]
-                                 if not c.parallel_safe))
-                )
-
-            self._needs_serial = needs_serial
-            if workers <= 1:
-                rows, cancelled = self._run_serial(
-                    jobs, chain_names, spec_dict, opts, total
-                )
-            else:
-                rows, cancelled = self._run_parallel(
-                    jobs, prefix_names or chain_names, spec_dict, opts,
-                    total, workers
-                )
-                if needs_serial and not cancelled:
-                    rows = self._serial_retry(
-                        rows, chain_names, spec_dict, opts, total
-                    )
-
-            # Restore input order; a pool returns results scrambled.
-            order = {str(p): i for i, p in enumerate(sources)}
-            rows.sort(key=lambda r: order.get(r["source"], 0))
+            rows = engine.run_batch(
+                sources,
+                opts["in_root"],
+                opts["out_root"],
+                opts["chain"],
+                opts["spec"],
+                workers=workers,
+                flat=opts["flat"],
+                timeout=opts["timeout"],
+                skip_existing=opts["skip_existing"],
+                recycle_after=opts.get("recycle_after", 0),
+                report_memory=opts.get("report_memory", False),
+                progress=on_progress,
+                should_cancel=lambda: self._cancel,
+            )
+            cancelled = self._cancel
 
             if rows and opts.get("write_manifest", True):
                 csv_path, json_path = engine.write_manifest(
@@ -667,149 +732,9 @@ class ConversionWorker(QtCore.QObject):
         self.finished.emit(rows, time.perf_counter() - started, cancelled)
 
     # ------------------------------------------------------------------
-    def _run_serial(self, jobs, chain_names, spec_dict, opts, total):
-        """One drawing at a time, in this thread.  Exact progress."""
-        rows = []
-        for index, (src, out_dir) in enumerate(jobs, 1):
-            if self._cancel:
-                return rows, True
-            row = engine._convert_task(
-                src, out_dir, chain_names, spec_dict,
-                opts["timeout"], opts["skip_existing"],
-                engine.backend_settings(),
-            )
-            rows.append(row)
-            self.progress.emit(index, total, row)
-        return rows, False
 
-    # ------------------------------------------------------------------
-    def _run_parallel(self, jobs, chain_names, spec_dict, opts, total, workers):
-        """Process pool.  Cancellation is checked between completions."""
-        rows = []
-        cancelled = False
-        needs_serial = getattr(self, "_needs_serial", False)
-        pool_kwargs: Dict[str, Any] = {"max_workers": workers}
-        recycle = int(opts.get("recycle_after", 0) or 0)
 
-        # THE MULTIPROCESSING CONTEXT, AND WHY IT IS CHOSEN EXPLICITLY.
-        #
-        # ``max_tasks_per_child`` looks like a free win -- it recycles a
-        # worker after N drawings, which bounds resident memory.  But
-        # passing it with no ``mp_context`` SILENTLY SWITCHES THE POOL TO
-        # THE 'spawn' START METHOD, and it is incompatible with 'fork'
-        # outright (ValueError).  Under spawn every worker re-imports the
-        # program's entry module.  For a GUI that means each worker
-        # importing Qt, and any unguarded top-level code running once per
-        # worker.  Caught here by a test whose own output appeared four
-        # times over.
-        #
-        # So the context is chosen deliberately rather than inherited:
-        #   POSIX  -- 'fork'.  No re-import, near-instant worker start.
-        #             Recycling is unavailable, and is not needed: the
-        #             engine already drops each Drawing and runs the
-        #             collector before returning.
-        #   Windows -- 'spawn' is the only start method there anyway, so
-        #             recycling costs nothing extra and is switched on.
-        #             Re-import is safe because everything in this module
-        #             below ``main()`` is behind an ``if __name__`` guard.
-        import multiprocessing
 
-        if os.name == "nt":
-            pool_kwargs["mp_context"] = multiprocessing.get_context("spawn")
-            if sys.version_info >= (3, 11) and recycle > 0:
-                pool_kwargs["max_tasks_per_child"] = recycle
-        else:
-            pool_kwargs["mp_context"] = multiprocessing.get_context("fork")
-            if recycle > 0:
-                self.message.emit(
-                    "Note: worker recycling is a Windows-only setting; on "
-                    "this platform the 'fork' start method is used instead "
-                    "(faster, and memory is bounded per drawing)."
-                )
-
-        with ProcessPoolExecutor(**pool_kwargs) as pool:
-            # Captured HERE, in the parent: a spawned worker re-imports
-            # the engine and would otherwise use the class defaults, which
-            # is how every AutoCAD option was silently ignored before
-            # 0.2.15.
-            settings = engine.backend_settings()
-            futures = {
-                pool.submit(
-                    engine._convert_task, src, out_dir, chain_names,
-                    spec_dict, opts["timeout"], opts["skip_existing"],
-                    settings,
-                ): src
-                for src, out_dir in jobs
-            }
-            done_n = 0
-            for fut in as_completed(futures):
-                src = futures[fut]
-                try:
-                    row = fut.result()
-                except Exception as exc:  # a worker died outright
-                    row = engine.ConversionResult(
-                        source=Path(src),
-                        status="failed",
-                        message="worker process failed: %s: %s"
-                                % (type(exc).__name__, exc),
-                    ).as_row()
-                if needs_serial and row["status"] == "failed":
-                    # Pass 2 has not run yet -- see the engine's note.
-                    row["status"] = "retry-pending"
-                rows.append(row)
-                done_n += 1
-                self.progress.emit(done_n, total, row)
-
-                if self._cancel:
-                    cancelled = True
-                    # Drop everything not yet started; let running work end.
-                    try:
-                        pool.shutdown(wait=False, cancel_futures=True)
-                    except TypeError:      # Python < 3.9
-                        pool.shutdown(wait=False)
-                    break
-        return rows, cancelled
-
-    # ------------------------------------------------------------------
-    def _serial_retry(self, rows, chain_names, spec_dict, opts, total):
-        """Retry failed drawings serially against the full backend chain.
-
-        Pass 1 deliberately used only the parallel-safe prefix, so a sheet
-        that failed there has not yet seen the serial-only backends.  This
-        gives it that chance without having serialised the whole run.
-        """
-        failed = [r for r in rows if r["status"] == "retry-pending"]
-        if not failed:
-            for row in rows:
-                if row["status"] == "retry-pending":
-                    row["status"] = "failed"
-            return rows
-        self.message.emit(
-            "Pass 2: retrying %d failed drawing(s) serially against %s"
-            % (len(failed), " -> ".join(chain_names))
-        )
-        by_source = {r["source"]: r for r in rows}
-        for index, row in enumerate(failed, 1):
-            if self._cancel:
-                break
-            source = Path(row["source"])
-            out_dir = engine.plan_output(
-                source, opts["in_root"], opts["out_root"], opts["flat"]
-            )
-            new_row = engine._convert_task(
-                str(source), str(out_dir), chain_names, spec_dict,
-                opts["timeout"], opts["skip_existing"],
-                engine.backend_settings(),
-            )
-            by_source[row["source"]] = new_row
-            self.progress.emit(total, total, new_row)
-        out = list(by_source.values())
-        for row in out:
-            if row["status"] == "retry-pending":
-                row["status"] = "failed"   # pass 2 was cancelled
-        return out
-
-    # ------------------------------------------------------------------
     def _make_archive(self, out_root: Path, target: Path,
                       fmt: str) -> Optional[Path]:
         """Package the whole output folder into one archive.
@@ -1340,6 +1265,64 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.calib_cb.toggled.connect(self._update_command)
         f.addRow("", self.calib_cb)
+
+        # --accore-mode.  The fixed answer list was wrong by construction:
+        # -PLOT asks "Enter paper units" for some devices and not others,
+        # and one missing prompt shifts every later answer by one.
+        self.accoremode_combo = QtWidgets.QComboBox()
+        for label, value in (
+            ("Answer the prompts AutoCAD asks (recommended)", "prompt"),
+            ("Fixed script (.scr) -- for comparison only", "script"),
+        ):
+            self.accoremode_combo.addItem(label, value)
+        self.accoremode_combo.setToolTip(
+            "How accoreconsole's -PLOT prompts get answered.\n"
+            "\n"
+            "The old fixed .scr assumed a prompt ORDER. It is not\n"
+            "fixed: AutoCAD asks 'Enter paper units' for some devices\n"
+            "and not others, and may skip plot area, scale and offset\n"
+            "entirely. One missing prompt shifts every later answer by\n"
+            "one, and the console then exits 0 having plotted nothing.\n"
+            "\n"
+            "'Answer the prompts' reads each question and replies to\n"
+            "THAT question; an unrecognised prompt takes the default."
+        )
+        self.accoremode_combo.currentIndexChanged.connect(
+            self._update_command)
+        f.addRow("accoreconsole prompts", self.accoremode_combo)
+
+        self.attach_cb = QtWidgets.QCheckBox(
+            "Use an already-running AutoCAD (not recommended)")
+        self.attach_cb.setChecked(False)
+        self.attach_cb.setToolTip(
+            "Off by default since engine 0.5.0.\n"
+            "\n"
+            "Attaching used to be automatic, and on a 1762-drawing run\n"
+            "it grabbed the session the operator was WORKING IN, plotted\n"
+            "through that window, and then died with\n"
+            "'FATAL ERROR: Unhandled Access Violation Reading 0x05aa'.\n"
+            "\n"
+            "A batch belongs in its own private instance."
+        )
+        self.attach_cb.toggled.connect(self._update_command)
+        f.addRow("", self.attach_cb)
+
+        self.recycle_spin = QtWidgets.QSpinBox()
+        self.recycle_spin.setRange(0, 1000)
+        self.recycle_spin.setValue(50)
+        self.recycle_spin.setSpecialValueText("never")
+        self.recycle_spin.setToolTip(
+            "Quit and restart AutoCAD every N drawings.\n"
+            "\n"
+            "An automation session accumulates state and eventually\n"
+            "faults outright rather than reporting an error, so this\n"
+            "makes that cost one restart instead of the run.\n"
+            "\n"
+            "Not every drawing: that would spend 30-60 s of AutoCAD\n"
+            "start-up per sheet."
+        )
+        self.recycle_spin.valueChanged.connect(self._update_command)
+        f.addRow("Restart AutoCAD every", self.recycle_spin)
         lay.addWidget(gb)
 
         gb2 = QtWidgets.QGroupBox("Engines detected on this machine")
@@ -2231,6 +2214,12 @@ class MainWindow(QtWidgets.QMainWindow):
             parts += ["--acad-pc3", '"%s"' % self.pc3_edit.text().strip()]
         for glob in self._excludes():
             parts += ["--exclude", '"%s"' % glob]
+        if self.accoremode_combo.currentData() != "prompt":
+            parts += ["--accore-mode", self.accoremode_combo.currentData()]
+        if self.attach_cb.isChecked():
+            parts += ["--acad-attach"]
+        if self.recycle_spin.value() != 50:
+            parts += ["--acad-recycle-after", str(self.recycle_spin.value())]
         if self.acadwin_combo.currentData() != "auto":
             parts += ["--acad-window", self.acadwin_combo.currentData()]
         if not self.calib_cb.isChecked():
@@ -2296,6 +2285,9 @@ class MainWindow(QtWidgets.QMainWindow):
         engine.AcadComBackend.pc3 = pc3
         engine.AcCoreConsoleBackend.CALIBRATE = self.calib_cb.isChecked()
         engine.AcadComBackend.window_mode = self.acadwin_combo.currentData()
+        engine.AcCoreConsoleBackend.mode = self.accoremode_combo.currentData()
+        engine.AcadComBackend.attach = self.attach_cb.isChecked()
+        engine.AcadComBackend.recycle_after = self.recycle_spin.value()
 
         out_root = Path(out_text).expanduser().resolve()
         archive = None

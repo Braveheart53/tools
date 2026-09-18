@@ -26,6 +26,26 @@ from pathlib import Path                     # noqa: E402
 from qtpy import QtWidgets                   # noqa: E402
 
 import dwg2pdf as engine                     # noqa: E402
+
+
+# %% Fixture bootstrap
+def _ensure_fixtures() -> None:
+    """Generate the test fixtures if this is a clean unpack.
+
+    The suites must pass straight out of the archive; requiring the
+    operator to run a generator first is how a release ends up looking
+    broken when it is merely un-bootstrapped.
+    """
+    try:
+        import make_test_drawings
+    except Exception as exc:                               # noqa: BLE001
+        print("  NOTE  cannot bootstrap fixtures: %s" % exc)
+        return
+    try:
+        make_test_drawings.ensure_fixtures()
+    except Exception as exc:                               # noqa: BLE001
+        print("  NOTE  fixture generation failed: %s" % exc)
+
 import dwg2pdf_gui as gui                    # noqa: E402
 
 # %% State
@@ -40,8 +60,151 @@ def chk(label: str, cond: bool) -> None:
 
 
 # %% Test body
+# %% 0.4.x parity: every engine fix must be reachable from this window
+def check_engine_fix_coverage() -> None:
+    """The GUI must expose, or at least not defeat, every engine fix.
+
+    Written because one was silently missing.  The GUI drives
+    ``engine._convert_task()`` in its own loop and never calls
+    ``engine.run_batch()`` -- so ``engine.check_decoder()``, the
+    out-of-date LibreDWG warning, never fired in the GUI at all.  A GUI
+    operator got no hint that pass 1 was running on a 2020 decoder,
+    which is exactly the failure that cost a field run.
+
+    The lesson generalises: anything ``run_batch()`` does for the CLI is
+    a thing this window has to do for itself, so it gets a check.
+    """
+    import inspect
+    import pickle
+
+    src = inspect.getsource(gui)
+    # Strip comment-only lines: this module's revision history quotes the
+    # very calls some checks below assert are GONE, so grepping the whole
+    # source would test the changelog rather than the code.
+    code = "\n".join(ln for ln in src.splitlines()
+                      if not ln.lstrip().startswith("#"))
+
+    # 0.5.0 -- all four field-run fixes need a surface here.
+    chk("--accore-mode is exposed (0.5.0)", "--accore-mode" in code)
+    chk("prompt mode reaches the engine",
+        "AcCoreConsoleBackend.mode" in code)
+    chk("--acad-attach is exposed, and defaults OFF",
+        "--acad-attach" in code and "setChecked(False)" in code)
+    chk("attaching reaches the engine", "AcadComBackend.attach" in code)
+    chk("--acad-recycle-after is exposed",
+        "--acad-recycle-after" in code)
+    chk("recycling reaches the engine",
+        "AcadComBackend.recycle_after" in code)
+
+    # 0.4.4 -- library log noise. The GUI's Detailed log tab had the same
+    # flood the CLI did, and naming individual messages was not enough.
+    chk("the Qt handler caps library loggers (0.4.4)",
+        "_LibraryCapFilter" in src)
+    chk("the Qt handler collapses repeats",
+        "_DedupFilter" in src)
+    chk("library detail can still be turned back on",
+        "verbose_libs" in src)
+
+    # 0.4.5 -- THE structural fix. The GUI must call run_batch(), not
+    # reimplement it: that duplication is why check_decoder() (0.4.3)
+    # never fired here, and it would have hidden the next fix too.
+    chk("the GUI calls engine.run_batch() (0.4.5)",
+        "engine.run_batch(" in src)
+    chk("it passes a cancel hook rather than owning the loop",
+        "should_cancel=lambda" in src)
+    chk("it passes a progress callback", "progress=on_progress" in src)
+    chk("the duplicated serial loop is gone",
+        "def _run_serial" not in code)
+    chk("the duplicated process pool is gone",
+        "def _run_parallel" not in code)
+    chk("the duplicated pass-2 retry is gone",
+        "def _serial_retry" not in code)
+    chk("nothing drives _convert_task directly any more",
+        "engine._convert_task(" not in code)
+
+    # 0.4.3 -- and so the decoder warning now arrives via run_batch(),
+    # reaching the log pane through QtLogHandler on the root logger.
+    # Calling it here as well would print the paragraph twice.
+    chk("check_decoder() is not called a second time here",
+        "engine.check_decoder()" not in code)
+
+    # 0.4.2 -- --exclude, and the system-printer guard.
+    chk("--exclude is exposed (0.4.2)", "--exclude" in src)
+    chk("excludes reach discover_inputs",
+        "exclude=self._excludes()" in src)
+    chk("a system printer is caught in the .pc3 field",
+        "_is_system_printer" in src)
+
+    # 0.4.1 / 0.4.0 -- the .pc3 override must reach BOTH backends, and
+    # the window mode and calibration switch must reach the engine.
+    chk("the .pc3 override reaches accoreconsole (0.4.1)",
+        "AcCoreConsoleBackend.pc3" in src)
+    chk("the .pc3 override reaches acad-com",
+        "AcadComBackend.pc3" in src)
+    chk("--acad-window is exposed (0.4.0)", "window_mode" in src)
+    chk("calibration can be switched off", "CALIBRATE" in src)
+
+    # 0.4.0 -- all of it must survive the trip to a spawned worker, and
+    # that is now run_batch's responsibility rather than this window's.
+    # Asserted on the ENGINE, because the GUI no longer has a call site
+    # to get wrong.
+    import inspect as _inspect
+    chk("run_batch takes the settings snapshot for both code paths",
+        "settings = backend_settings()"
+        in _inspect.getsource(engine.run_batch))
+    chk("run_batch accepts the cancel hook the GUI relies on",
+        "should_cancel" in _inspect.signature(engine.run_batch).parameters)
+    keys = engine.BACKEND_SETTING_KEYS
+    chk("the snapshot covers both AutoCAD backends",
+        "accoreconsole" in keys and "acad-com" in keys)
+    snap = engine.backend_settings()
+    chk("the snapshot is picklable, as spawn requires",
+        pickle.loads(pickle.dumps(snap)) == snap)
+
+
+def check_log_noise_is_filtered() -> None:
+    """The Qt handler must collapse the flood, not merely import filters.
+
+    Reproduces what a real drawing does: ezdxf's recover pass emitting
+    dozens of identical lines between two per-drawing progress lines.
+    """
+    import logging
+
+    captured = []
+    handler = gui.install_logging(logging.INFO)
+    handler.bridge.line.connect(captured.append)
+    # The handler buffers until a sink connects, so nothing logged during
+    # start-up is lost; go_live() is what MainWindow calls.
+    captured.extend(handler.go_live())
+    try:
+        ez = logging.getLogger("ezdxf")
+        eng = logging.getLogger(engine._LOG.name)
+        eng.info("[1/1762] a.dwg -> 1 page file(s)")
+        for _ in range(53):
+            ez.info("Found non-unique entity handle #A1, "
+                    "data validation is required.")
+        for _ in range(54):
+            ez.info("Found ENDBLK without a preceding BLOCK, "
+                    "ignoring content.")
+        eng.info("[2/1762] b.dwg -> 1 page file(s)")
+        ez.warning("a real ezdxf warning")
+    finally:
+        logging.getLogger().removeHandler(handler)
+
+    text = "\n".join(captured)
+    chk("107 library lines do not reach the log pane",
+        "non-unique" not in text and "ENDBLK" not in text)
+    chk("both progress lines still reach the log pane",
+        text.count("/1762]") == 2)
+    chk("a real library WARNING still reaches the log pane",
+        "a real ezdxf warning" in text)
+    chk("the log pane stays readable",
+        len([ln for ln in captured if ln.strip()]) < 8)
+
+
 def run_test() -> int:
     """Build the window, drive it, and verify a real conversion."""
+    _ensure_fixtures()
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
     gui.apply_theme(app, dark=False)
@@ -217,6 +380,8 @@ def run_test() -> int:
     chk("7z archive created",
         archive.is_file() and archive.stat().st_size > 1000)
     chk("worker thread cleaned up", w._thread is None)
+    check_engine_fix_coverage()
+    check_log_noise_is_filtered()
     w.grab().save("gui2_results.png")
 
     print("\n  %d passed, %d failed" % (RESULTS["pass"], RESULTS["fail"]))

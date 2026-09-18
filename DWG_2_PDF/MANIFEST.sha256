@@ -1,12 +1,12 @@
-dwg2pdf 0.4.3 / GUI 0.2.17 -- COMPLETE release, 2026-09-18
+dwg2pdf 0.5.0 / GUI 0.2.20 -- COMPLETE release, 2026-09-18
 ================================================================
 
 Everything needed to run, test and rebuild. Nothing omitted.
 
-  dwg2pdf.py                 engine, revision 0.4.3
-  dwg2pdf_gui.py             Qt GUI (qt.py -> PySide6), revision 0.2.17
-  test_autocad.py            127 checks, runs anywhere
-  test_gui.py                 59 checks, needs a Qt platform
+  dwg2pdf.py                 engine, revision 0.5.0
+  dwg2pdf_gui.py             Qt GUI (qt.py -> PySide6), revision 0.2.20
+  test_autocad.py            173 checks, runs anywhere
+  test_gui.py                 79 checks, needs a Qt platform
   test_images.py              23 checks
   make_test_drawings.py      generates test_drawings/ and test_images/
   README.md                  the whole record, including section 9
@@ -16,12 +16,29 @@ Everything needed to run, test and rebuild. Nothing omitted.
   dwg_samples/               real DWGs, five source versions
   docs/                      screenshots referenced by the README
 
+WHAT CHANGED IN 0.5.0 -- READ THIS BEFORE THE NEXT RUN
+-----------------------------------------------------
+1. accoreconsole now ANSWERS THE PROMPTS AutoCAD actually asks. The
+   old fixed .scr assumed an order; AutoCAD asks 'Enter paper units'
+   for some devices and not others, and one missing prompt shifted
+   every later answer by one. The plot device was never the problem.
+   --accore-mode script restores the old path for comparison.
+2. acad-com NO LONGER ATTACHES to a running AutoCAD (--acad-attach
+   opts back in). It used to plot through the session you were working
+   in and then died with an access violation. It also recycles its own
+   AutoCAD every 50 drawings (--acad-recycle-after).
+3. The plot goes STRAIGHT TO THE DELIVERABLE. The 0.4.0 scratch rename
+   defeated viewer locks but made the viewer report a missing file once
+   per sheet -- a modal dialog is worse than a lock.
+4. --layouts NOW DEFAULTS TO 'auto', not 'model'. Paper-space-only
+   sheets were failing pass 1 for nothing and falling through to the
+   slow AutoCAD passes.
+
 INSTALL
 -------
 Unpack so that dwg2pdf.py and vendor/ are SIBLINGS. _find_tool()
 resolves the bundled decoder relative to dwg2pdf.py, NOT to the
-working directory, so a vendor/ one level out is a vendor/ that does
-not exist. Verify:
+working directory. Verify:
 
     python dwg2pdf.py --probe
 
@@ -29,22 +46,28 @@ which must report:
 
     LibreDWG dwg2dxf 0.14.8593 at ...\vendor\libredwg-win64\dwg2dxf.exe [bundled]
 
-Anything older than 0.13 there means vendor/ is misplaced and a
-conda-forge 0.11 from 2020 has won -- see README section 9.30.
+Anything older than 0.13 means vendor/ is misplaced -- README 9.30.
 
 TEST
 ----
-    python test_autocad.py        # 127, no AutoCAD needed
-    python test_gui.py            # 59
-    python test_images.py         # 23
+    python test_autocad.py        # 173, no AutoCAD needed
+    python test_gui.py            #  79
+    python test_images.py         #  23
 
-The fixtures the last two need are generated on first run, so these
-pass straight out of the archive with no preparatory step.
+Fixtures are generated on first run, so these pass straight out of
+the archive with no preparatory step.
+
+GUI AND CLI ARE ONE CODE PATH (0.4.5 / 0.2.19)
+----------------------------------------------
+The GUI imports the engine and calls engine.run_batch(), the same
+function the CLI calls. It has no serial loop, process pool or pass-2
+retry of its own, so every engine fix reaches both by construction;
+test_gui.py's check_engine_fix_coverage() asserts it.
 
 SHA-256                                                                     bytes  path
-acc39d8599854e5a31ca23602a9fae3d91d1d324d2ea66d7670975f2c05db9af      96767  README.md
-9c0028b0cd9b310b76329d74b176cc8fa0086aff9ecd4492b6ac625788df9e6e     313978  __pycache__/dwg2pdf.cpython-311.pyc
-07aef87ed770eea8a98df9c076e622957dafddad569b54d38535569f0f843aba     158252  __pycache__/dwg2pdf_gui.cpython-311.pyc
+437543967289e0cb86576cb9f101ecaa65325c53bbda17af281c6166a98517c1     105837  README.md
+fdab9a366b088917331a563767bf537cdc733e871c6560414bc854eab8b3ad73     342944  __pycache__/dwg2pdf.cpython-311.pyc
+e5f70201edd1ec1a66e44ad889befa147a487444274668fb0901e67d6a044638     157505  __pycache__/dwg2pdf_gui.cpython-311.pyc
 e90a6fb41ff339e33a8d68af2ecf8ed8135707eabdc50893c0c104dbdd8a7bfd       1515  build_libredwg.sh
 dbdd58d576f49b992d4fb01f95441c4457afa005f4c6e073111c9b0af6686dbf     111954  docs/gui-dark.png
 e68f31ffc11e01af9a9b5c299d8c180e7b789a8549b1d18c9dbad147f6c77bda     112042  docs/gui-images.png
@@ -52,8 +75,8 @@ afd82e8c31c479de74a08521b5b3b081e3be2329f40f20d7a097fdcdec9ae7b4     113823  doc
 ab7cb41a150dbffc9178a023377a54f71d2bd5c877ed2f5f242ef3a34c4f29bd     135485  docs/gui-results.png
 77a32ea9249d2d81d9b3bb1b1dce60e72eb73ca0f1ff4a20a5b73f96156f1e71     204858  docs/trim-outliers-after.png
 656cca64b902ffb469ffb1c24837e31dae303aad0a83c000acd70bb2fe2029f6     109443  docs/trim-outliers-before.png
-9253a43feadddd5be7bda41e7a917c66479ee866a98925fef7a82aa1ff260873     306161  dwg2pdf.py
-be953603de0f9bf4a1cb811c37605139f44aa9c988883e62967bd165ea0561ca     116093  dwg2pdf_gui.py
+2a3b8fcb14f1f07f142c6a5ffab52a74cdf351364c8768ed9413f75efc64eec5     335751  dwg2pdf.py
+0a3f71804abcf9b5e4ffd1df282ff9d365330ed4a6d3eca156346fe4a058daec     115601  dwg2pdf_gui.py
 f9b372579812de9867961f12a842898c27a7dff763a71f41ea10335964b877d4       5416  dwg_samples/entities-2d.dwg
 34574244d7556d1ef7b437443d9b3d1ad8662e1c669c42d80cff6a8a19799be9     582572  dwg_samples/example_2000.dwg
 e72d5e86d5d36d64b08822fb25a46079f592fd895a6157b1b8d9b07775e06108     187890  dwg_samples/example_2004.dwg
@@ -61,8 +84,8 @@ ce80953e4881899cde8c42b97919feb2697259554ca54dc4005b19068a12c18f     146906  dwg
 e296ca50f237abb9eec1a8bdab77aa16fd59518e246df812aa4dd4f859bd12d3      26840  dwg_samples/v.dwg
 c3b2dcbe93e0d89511f264265fa98187195fd64b7258b934204dd6cf5134c37b       2240  environment-dwg2pdf.yml
 61dca6456ea2f6f88b2bdf45a102afd751c4e98e56cc1a31d2e539e2258013bd       5490  make_test_drawings.py
-242da57347ee2b0915b40537d5a5b104874a374af694c74b0b899385c319f080      39854  test_autocad.py
-6076b15a47c6f273fe737436ae420eb1b52ebd93407d3c72c22c40e07d7dc7f3      12442  test_gui.py
+36f17d31e74a914e69a8a8db704a8c869560b5e2449588f609983b14a703c8b8      53787  test_autocad.py
+feb8dff9aa54b844bfe03b853a0427fb35584edf8694fc74dcf2d9b97b9df69b      16599  test_gui.py
 c72231002e8d2adbfeceadecfe190deb768ddcdec5e642484646434034f814b7       8837  test_images.py
 8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903      35147  vendor/libredwg-win64/COPYING-LibreDWG-GPL3.txt
 0afa1ed184281bda5bad267f7180e6f7851c9e372f4ca586714081e7bd2b6a29       1938  vendor/libredwg-win64/README-VENDOR.txt
@@ -72,4 +95,4 @@ c72231002e8d2adbfeceadecfe190deb768ddcdec5e642484646434034f814b7       8837  tes
 5c7e30acca82ccba685feab142b469b76d74fb55ee6e14365718900327c5ada5   20375118  vendor/libredwg-win64/libredwg.dll
 38961d71f2f4f01fb59d5204ee126baecf05e79bbb7c9e2a306b8ee1ae925d0e     131367  vendor/libredwg-win64/libssp-0.dll
 
-29 files, 24205948 bytes.
+29 files, 24290425 bytes.

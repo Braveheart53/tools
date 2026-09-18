@@ -20,6 +20,26 @@ from pathlib import Path                      # noqa: E402
 
 import dwg2pdf as engine                      # noqa: E402
 
+
+# %% Fixture bootstrap
+def _ensure_fixtures() -> None:
+    """Generate the test fixtures if this is a clean unpack.
+
+    The suites must pass straight out of the archive; requiring the
+    operator to run a generator first is how a release ends up looking
+    broken when it is merely un-bootstrapped.
+    """
+    try:
+        import make_test_drawings
+    except Exception as exc:                               # noqa: BLE001
+        print("  NOTE  cannot bootstrap fixtures: %s" % exc)
+        return
+    try:
+        make_test_drawings.ensure_fixtures()
+    except Exception as exc:                               # noqa: BLE001
+        print("  NOTE  fixture generation failed: %s" % exc)
+
+
 # %% State
 RESULTS = {"pass": 0, "fail": 0}
 OUT = Path("/tmp/dwg2pdf_imgtest")
@@ -205,6 +225,7 @@ def test_decoder() -> None:
 
 def run_test() -> int:
     """Run every check and report."""
+    _ensure_fixtures()
     print("IMAGE CONVERSION CHECKS (engine %s)" % engine.__revision__)
     if not engine.ImageBackend.available():
         print("  SKIP: Pillow is not installed")

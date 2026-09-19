@@ -1,0 +1,629 @@
+
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+							<style>
+								body {
+									background-color: white; /* Ensure the iframe has a white background */
+								}
+
+								
+							</style>
+                        </head>
+                        <body>
+                            <!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open WebUI + Dockerized Jupyter GPU Server (Windows 10/11)</title>
+    <style>
+        :root { --transition-speed: 0.3s; }
+        [data-theme="dark"] {
+            --bg-primary: #0d1117; --bg-secondary: #161b22; --bg-tertiary: #1c2333; --bg-panel: #12161e;
+            --bg-card: #1a2035; --bg-hover: #252d3d; --bg-code: #0d1117; --bg-code-inline: #2d333b;
+            --bg-nav: #0d1117ee; --bg-input: #0d1117; --text-primary: #e6edf3; --text-secondary: #8b949e;
+            --text-muted: #6e7681; --accent: #58a6ff; --accent-hover: #79b8ff; --accent-green: #3fb950;
+            --accent-orange: #d29922; --accent-red: #f85149; --accent-purple: #bc8cff; --accent-cyan: #39d2c0;
+            --accent-pink: #f778ba; --border-color: #30363d; --border-light: #21262d; --shadow: 0 8px 32px rgba(0,0,0,0.4);
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.3); --scrollbar-thumb: #30363d; --scrollbar-track: #161b22;
+            --gradient-accent: linear-gradient(135deg, #58a6ff, #bc8cff); --gradient-green: linear-gradient(135deg, #3fb950, #39d2c0);
+            --gradient-orange: linear-gradient(135deg, #d29922, #f778ba); --step-border: #30363d;
+        }
+        [data-theme="light"] {
+            --bg-primary: #ffffff; --bg-secondary: #f6f8fa; --bg-tertiary: #eef1f5; --bg-panel: #f0f3f7;
+            --bg-card: #ffffff; --bg-hover: #e8ecf0; --bg-code: #f6f8fa; --bg-code-inline: #e8ecf0;
+            --bg-nav: #ffffffee; --bg-input: #ffffff; --text-primary: #1f2328; --text-secondary: #656d76;
+            --text-muted: #8b949e; --accent: #0969da; --accent-hover: #0550ae; --accent-green: #1a7f37;
+            --accent-orange: #9a6700; --accent-red: #cf222e; --accent-purple: #8250df; --accent-cyan: #0b9d93;
+            --accent-pink: #bf3989; --border-color: #d0d7de; --border-light: #e1e4e8; --shadow: 0 8px 32px rgba(0,0,0,0.08);
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.06); --scrollbar-thumb: #c1c8cf; --scrollbar-track: #f0f3f7;
+            --gradient-accent: linear-gradient(135deg, #0969da, #8250df); --gradient-green: linear-gradient(135deg, #1a7f37, #0b9d93);
+            --gradient-orange: linear-gradient(135deg, #9a6700, #bf3989); --step-border: #d0d7de;
+        }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; font-size: 16px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; background: var(--bg-primary); color: var(--text-primary); transition: background var(--transition-speed), color var(--transition-speed); overflow: hidden; height: 100vh; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+        ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+        .app-container { display: flex; height: 100vh; width: 100vw; }
+        .sidebar { width: 280px; min-width: 280px; background: var(--bg-panel); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: all var(--transition-speed); z-index: 100; position: relative; }
+        .sidebar.collapsed { width: 0; min-width: 0; overflow: hidden; border-right: none; }
+        .sidebar-header { padding: 20px 16px 12px; border-bottom: 1px solid var(--border-color); }
+        .sidebar-header h2 { font-size: 1rem; font-weight: 700; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+        .sidebar-toggle { position: absolute; top: 16px; right: -36px; width: 32px; height: 32px; background: var(--bg-card); border: 1px solid var(--border-color); border-left: none; border-radius: 0 6px 6px 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1rem; z-index: 101; transition: all var(--transition-speed); }
+        .sidebar-toggle:hover { background: var(--accent); color: white; }
+        .sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 0; }
+        .nav-group { margin-bottom: 8px; }
+        .nav-group-title { padding: 8px 20px 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); user-select: none; }
+        .nav-link { display: flex; align-items: center; gap: 10px; padding: 8px 20px; color: var(--text-secondary); text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: all 0.15s; cursor: pointer; border-left: 3px solid transparent; }
+        .nav-link:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .nav-link.active { color: var(--accent); background: var(--bg-hover); border-left-color: var(--accent); font-weight: 600; }
+        .nav-link .nav-icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
+        .nav-link .badge { margin-left: auto; font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; color: white; font-weight: 600; }
+        .badge.nvidia { background: linear-gradient(135deg, #76b900, #529600); }
+        .badge.amd { background: linear-gradient(135deg, #ed1c24, #ff6b35); }
+        .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border-color); }
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .top-bar { height: 56px; min-height: 56px; background: var(--bg-nav); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; z-index: 50; }
+        .top-bar-left { display: flex; align-items: center; gap: 16px; }
+        .top-bar-left h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); }
+        .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-muted); }
+        .breadcrumb span { color: var(--text-secondary); }
+        .breadcrumb .sep { color: var(--text-muted); }
+        .top-bar-right { display: flex; align-items: center; gap: 12px; }
+        .theme-toggle { position: relative; width: 56px; height: 28px; background: var(--bg-code); border: 1px solid var(--border-color); border-radius: 14px; cursor: pointer; transition: all var(--transition-speed); display: flex; align-items: center; padding: 2px; }
+        .theme-toggle:hover { border-color: var(--accent); }
+        .theme-toggle-knob { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); transition: all var(--transition-speed); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        [data-theme="dark"] .theme-toggle-knob { transform: translateX(0); }
+        [data-theme="light"] .theme-toggle-knob { transform: translateX(28px); }
+        .content-area { flex: 1; overflow-y: auto; padding: 0; }
+        .content-inner { max-width: 960px; margin: 0 auto; padding: 40px 48px 80px; }
+        .article-hero { margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid var(--border-color); }
+        .article-hero h1 { font-size: 2.2rem; font-weight: 800; line-height: 1.2; margin-bottom: 16px; background: var(--gradient-accent); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .article-hero .subtitle { font-size: 1.1rem; color: var(--text-secondary); line-height: 1.6; max-width: 740px; }
+        .path-buttons { display: flex; gap: 20px; margin-top: 24px; flex-wrap: wrap; }
+        .path-btn { padding: 14px 24px; border-radius: 10px; border: 2px solid var(--border-color); background: var(--bg-card); color: var(--text-primary); font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px; font-size: 1rem; text-decoration: none; }
+        .path-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); border-color: var(--accent); }
+        .path-btn.nvidia { border-color: #76b900; }
+        .path-btn.nvidia:hover { background: linear-gradient(135deg, rgba(118,185,0,0.1), transparent); }
+        .path-btn.amd { border-color: #ed1c24; }
+        .path-btn.amd:hover { background: linear-gradient(135deg, rgba(237,28,36,0.1), transparent); }
+        .section { margin-bottom: 48px; scroll-margin-top: 80px; }
+        .section h2 { font-size: 1.6rem; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 2px solid var(--border-color); }
+        .section h2 .section-icon { font-size: 1.3rem; }
+        .section h3 { font-size: 1.2rem; font-weight: 600; margin: 28px 0 12px; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+        .section h4 { font-size: 1rem; font-weight: 600; margin: 20px 0 8px; color: var(--text-primary); }
+        .section p, .section li { color: var(--text-secondary); line-height: 1.75; margin-bottom: 12px; font-size: 0.95rem; }
+        .section ul, .section ol { margin-left: 24px; margin-bottom: 16px; }
+        .code-block-wrapper { position: relative; margin: 16px 0 24px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border-color); background: var(--bg-code); }
+        .code-block-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--bg-tertiary); border-bottom: 1px solid var(--border-color); font-size: 0.75rem; color: var(--text-muted); }
+        .code-block-header .lang-label { font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+        .code-block-header .dots { display: flex; gap: 6px; }
+        .code-block-header .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .code-block-header .dot.red { background: #f85149; }
+        .code-block-header .dot.yellow { background: #d29922; }
+        .code-block-header .dot.green { background: #3fb950; }
+        .copy-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); padding: 3px 10px; border-radius: 6px; cursor: pointer; font-size: 0.7rem; transition: all 0.15s; display: flex; align-items: center; gap: 4px; }
+        .copy-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
+        pre { padding: 16px 20px; overflow-x: auto; font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace; font-size: 0.82rem; line-height: 1.65; color: var(--text-primary); tab-size: 4; }
+        code { font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace; }
+        .code-block-wrapper pre code { display: block; }
+        .comment { color: var(--text-muted); font-style: italic; }
+        .keyword { color: var(--accent-purple); font-weight: 600; }
+        .string { color: var(--accent-green); }
+        .function { color: var(--accent); }
+        .number { color: var(--accent-orange); }
+        .flag { color: var(--accent-cyan); }
+        .path { color: var(--accent-pink); }
+        .var { color: var(--accent-red); }
+        .prompt { color: var(--accent-green); font-weight: 700; }
+        .info-box { padding: 16px 20px; border-radius: 10px; margin: 16px 0 24px; display: flex; gap: 12px; font-size: 0.9rem; line-height: 1.65; border: 1px solid; }
+        .info-box .box-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 2px; }
+        .info-box.tip { background: color-mix(in srgb, var(--accent-green) 8%, transparent); border-color: color-mix(in srgb, var(--accent-green) 30%, transparent); color: var(--text-secondary); }
+        .info-box.warning { background: color-mix(in srgb, var(--accent-orange) 8%, transparent); border-color: color-mix(in srgb, var(--accent-orange) 30%, transparent); color: var(--text-secondary); }
+        .info-box.danger { background: color-mix(in srgb, var(--accent-red) 8%, transparent); border-color: color-mix(in srgb, var(--accent-red) 30%, transparent); color: var(--text-secondary); }
+        .info-box.info { background: color-mix(in srgb, var(--accent) 8%, transparent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text-secondary); }
+        .step { background: var(--bg-card); border: 1px solid var(--step-border); border-radius: 12px; padding: 24px; margin-bottom: 20px; transition: all 0.2s; }
+        .step:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+        .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .step-number { width: 32px; height: 32px; border-radius: 50%; background: var(--gradient-accent); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
+        .step-header h4 { font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin: 0; }
+        .step > p, .step > li { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.65; margin-bottom: 12px; }
+        .table-wrapper { overflow-x: auto; margin: 16px 0 24px; border-radius: 10px; border: 1px solid var(--border-color); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        thead { background: var(--bg-tertiary); }
+        th { padding: 12px 16px; text-align: left; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--border-color); white-space: nowrap; }
+        td { padding: 10px 16px; color: var(--text-secondary); border-bottom: 1px solid var(--border-light); }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: var(--bg-hover); }
+        .reading-progress { position: fixed; top: 0; left: 0; height: 3px; background: var(--gradient-accent); z-index: 999; transition: width 0.1s; }
+        .back-to-top { position: fixed; bottom: 24px; right: 24px; width: 42px; height: 42px; border-radius: 50%; background: var(--accent); color: white; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; box-shadow: var(--shadow); opacity: 0; transform: translateY(20px); transition: all 0.3s; z-index: 80; }
+        .back-to-top.visible { opacity: 1; transform: translateY(0); }
+        .back-to-top:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(88, 166, 255, 0.4); }
+        .search-box { padding: 10px 16px; border-bottom: 1px solid var(--border-color); }
+        .search-box input { width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.82rem; outline: none; transition: border-color 0.2s; }
+        .search-box input::placeholder { color: var(--text-muted); }
+        .search-box input:focus { border-color: var(--accent); }
+        mark { background: var(--accent-orange); color: white; padding: 1px 4px; border-radius: 3px; }
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; height: 100vh; z-index: 200; box-shadow: var(--shadow); }
+            .sidebar.collapsed { width: 0; border: none; }
+            .content-inner { padding: 24px 20px 60px; }
+            .article-hero h1 { font-size: 1.6rem; }
+            .path-buttons { flex-direction: column; }
+            .sidebar-toggle { right: -36px; }
+        }
+        @media print {
+            .sidebar, .top-bar, .back-to-top, .reading-progress, .copy-btn, .theme-toggle { display: none !important; }
+            .main-content { flex: none; }
+            .content-area { overflow: visible; }
+            .content-inner { max-width: 100%; padding: 0; }
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .section { animation: fadeIn 0.4s ease-out; }
+    </style>
+</head>
+<body>
+    <div class="reading-progress" id="readingProgress"></div>
+    <div class="app-container">
+        <aside class="sidebar" id="sidebar">
+            <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">☰</button>
+            <div class="sidebar-header"><h2><span class="logo-icon">📘</span> Open WebUI Docs</h2></div>
+            <div class="search-box"><input type="text" id="searchInput" placeholder="🔍  Search topics..." /></div>
+            <nav class="sidebar-nav" id="sidebarNav">
+                <div class="nav-group"><div class="nav-group-title">Core Setup</div>
+                    <a class="nav-link active" href="#overview" data-section="overview"><span class="nav-icon">📋</span> Overview & Path Select</a>
+                    <a class="nav-link" href="#prerequisites" data-section="prerequisites"><span class="nav-icon">✅</span> Windows WSL2 Prerequisites</a>
+                    <a class="nav-link" href="#docker-gpu" data-section="docker-gpu"><span class="nav-icon">🐳</span> Docker GPU Passthrough</a>
+                </div>
+                <div class="nav-group"><div class="nav-group-title">GPU Ecosystems</div>
+                    <a class="nav-link" href="#nvidia-path" data-section="nvidia-path"><span class="nav-icon">💚</span> NVIDIA CUDA Path</a>
+                    <a class="nav-link" href="#amd-path" data-section="amd-path"><span class="nav-icon">🔴</span> AMD ROCm Path</a>
+                </div>
+                <div class="nav-group"><div class="nav-group-title">Deployment</div>
+                    <a class="nav-link" href="#jupyter-config" data-section="jupyter-config"><span class="nav-icon">📓</span> Jupyter Server Config</a>
+                    <a class="nav-link" href="#nssm-services" data-section="nssm-services"><span class="nav-icon">🛠️</span> NSSM Service Bridge</a>
+                    <a class="nav-link" href="#docker-webui" data-section="docker-webui"><span class="nav-icon">🔗</span> Open WebUI Integration</a>
+                </div>
+                <div class="nav-group"><div class="nav-group-title">Operations</div>
+                    <a class="nav-link" href="#testing" data-section="testing"><span class="nav-icon">🧪</span> Testing & Verification</a>
+                    <a class="nav-link" href="#troubleshooting" data-section="troubleshooting"><span class="nav-icon">🔧</span> Troubleshooting</a>
+                </div>
+                <div class="nav-group"><div class="nav-group-title">Reference</div>
+                    <a class="nav-link" href="#reference" data-section="reference"><span class="nav-icon">📚</span> Compatibility & Docs</a>
+                </div>
+            </nav>
+            <div class="sidebar-footer"><div style="font-size:0.75rem; color:var(--text-muted); text-align:center;">Windows 10/11 + Docker Desktop + GPU Passthrough + NSSM Guide v5.0</div></div>
+        </aside>
+
+        <main class="main-content">
+            <div class="top-bar">
+                <div class="top-bar-left">
+                    <div class="breadcrumb"><span>📘</span><span class="sep">›</span><span>Documentation</span><span class="sep">›</span><span id="breadcrumbCurrent">Overview</span></div>
+                </div>
+                <div class="top-bar-right">
+                    <div class="theme-toggle" id="themeToggle" title="Toggle Light/Dark Theme">
+                        <div class="theme-toggle-knob"><span class="toggle-icon" id="themeIcon">🌙</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-area" id="contentArea">
+                <div class="content-inner">
+                    <div class="article-hero" id="overview">
+                        <h1>Dockerized Jupyter GPU Server for Open WebUI</h1>
+                        <p class="subtitle">Complete, explicit guide to running Jupyter inside a containerized environment with direct GPU passthrough on Windows 10/11. Manages persistent services via NSSM + PowerShell. Uses Micromamba for fast dependency resolution. Fully separated NVIDIA CUDA and AMD ROCm deployment paths.</p>
+                        <div class="meta">
+                            <span>📅 Updated: 2025</span><span>⏱️ ~65 min read</span><span>🐳 Docker Desktop</span><span>🛠️ NSSM + PowerShell</span>
+                        </div>
+                        <p style="margin-top: 24px; font-weight: 600;">Select your GPU ecosystem to proceed:</p>
+                        <div class="path-buttons">
+                            <a href="#nvidia-path" class="path-btn nvidia"><span style="font-size:1.4rem">💚</span> NVIDIA CUDA Path</a>
+                            <a href="#amd-path" class="path-btn amd"><span style="font-size:1.4rem">🔴</span> AMD ROCm Path</a>
+                        </div>
+                    </div>
+
+                    <section class="section path-section" id="prerequisites">
+                        <h2><span class="section-icon">✅</span> Step 1: Windows WSL2 & Docker Prerequisites</h2>
+                        <div class="step">
+                            <div class="step-header"><div class="step-number">1</div><h4>Install WSL2 & Ubuntu Distro</h4></div>
+                            <div class="code-block-wrapper">
+                                <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">PowerShell (Admin)</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                                <pre><code><span class="prompt">PS C:\> wsl --install -d Ubuntu-24.04</span>
+<span class="prompt">PS C:\> wsl --set-default-version 2</span>
+<span class="comment"># Reboot if prompted</span></code></pre>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-header"><div class="step-number">2</div><h4>Install Docker Desktop (Windows Host)</h4></div>
+                            <ul>
+                                <li>Download from <code class="inline-code">docker.com/products/docker-desktop</code></li>
+                                <li>During install, check <strong>"Use WSL 2 instead of Hyper-V"</strong></li>
+                                <li>Launch Docker Desktop → Settings → General → Ensure <strong>"Use the WSL 2 based engine"</strong> is checked</li>
+                                <li>Go to <strong>Resources → GPU Access</strong> and ensure your GPU is listed/enabled</li>
+                            </ul>
+                        </div>
+                        <div class="step">
+                            <div class="step-header"><div class="step-number">3</div><h4>Verify Docker WSL2 & GPU Integration</h4></div>
+                            <div class="code-block-wrapper">
+                                <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">PowerShell & WSL2</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                                <pre><code><span class="comment"># Windows Host:</span>
+<span class="prompt">PS C:\> docker info | grep -i "gpu"</span>
+<span class="prompt">PS C:\> wsl --list --running</span>
+
+<span class="comment"># WSL2 Ubuntu Terminal:</span>
+<span class="prompt">$</span> docker run --rm hello-world  <span class="comment"># Should pull and run via WSL2 engine</span>
+<span class="prompt">$</span> docker info | grep -i "nvidia\|rocm\|gpu"</code></pre>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="section" id="docker-gpu">
+                        <h2><span class="section-icon">🐳</span> Step 2: Docker GPU Passthrough Architecture</h2>
+                        <p>Modern Docker Desktop on Windows WSL2 automatically exposes the host GPU to containers. NVIDIA uses `--gpus all` (handled natively). AMD requires explicit device mounts and ROCm environment variables.</p>
+                        <div class="card-grid">
+                            <div class="card" style="border-color: var(--accent-green);">
+                                <div class="card-icon">💚</div>
+                                <div class="card-title">NVIDIA Passthrough</div>
+                                <div class="card-desc">Docker Desktop automatically routes `--gpus all` to the WSL2 backend. No host-side toolkit configuration required.</div>
+                            </div>
+                            <div class="card" style="border-color: var(--accent-red);">
+                                <div class="card-icon">🔴</div>
+                                <div class="card-title">AMD Passthrough</div>
+                                <div class="card-desc">Requires `--device /dev/kfd --device /dev/dri`, ROCm Win drivers, and `HSA_OVERRIDE_GFX_VERSION` to map architecture correctly.</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="section path-section" id="nvidia-path">
+                        <h2><span class="section-icon">💚</span> NVIDIA CUDA Container Path</h2>
+                        <div class="step">
+                            <div class="step-header"><div class="step-number">1</div><h4>Install Windows GPU Driver & Update WSL2</h4></div>
+                            <div class="code-block-wrapper">
+                                <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">PowerShell (Admin)</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                                <pre><code><span class="comment"># 1. Install NVIDIA GameReady/Studio Driver ≥ 535 (CUDA 12.x) or ≥ 550 (CUDA 12.4+)</span>
+<span class="prompt">PS C:\> winget install --id NVIDIA.Driver</span>
+<span class="comment"># Reboot Windows after driver installation</span>
+
+<span class="comment"># 2. Update WSL2 kernel to ensure GPU passthrough stability</span>
+<span class="prompt">PS C:\> wsl --update</span>
+<span class="prompt">PS C:\> wsl --shutdown</span></code></pre>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-header"><div class="step-number">2</div><h4>Create NVIDIA Container Stack</h4></div>
+                            <div class="code-block-wrapper">
+                                <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">docker-compose.yml (NVIDIA)</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                                <pre><code><span class="comment"># C:\Projects\jupyter-gpu-nvidia\docker-compose.yml</span>
+<span class="keyword">version</span>: <span class="string">"3.8"</span>
+<span class="keyword">services</span>:
+  <span class="var">jupyter-gpu</span>:
+    <span class="keyword">image</span>: <span class="string">"jupyter/pytorch-gpu-notebook:latest"</span>
+    <span class="keyword">container_name</span>: <span class="string">jupyter-nvidia-gpu</span>
+    <span class="keyword">restart</span>: <span class="string">unless-stopped</span>
+    <span class="keyword">ports</span>:
+      <span class="string">"- 8888:8888"</span>
+    <span class="keyword">devices</span>:
+      <span class="string">- /dev/nvidiactl:/dev/nvidiactl</span>
+      <span class="string">- /dev/nvidia-uvm:/dev/nvidia-uvm</span>
+      <span class="string">- /dev/nvidia0:/dev/nvidia0</span>
+    <span class="keyword">environment</span>:
+      <span class="string">"- NVIDIA_DRIVER_CAPABILITIES=compute,utility"</span>
+      <span class="string">"JUPYTER_TOKEN"</span>: <span class="string">"<span class="comment">YOUR_GENERATED_TOKEN</span>"</span>
+    <span class="keyword">volumes</span>:
+      <span class="string">"- ./notebooks:/home/jovyan/work"</span>
+      <span class="string">"- ./config:/home/jovyan/.jupyter"</span>
+    <span class="keyword">command</span>: <span class="string">"/opt/conda/bin/start.sh lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root"</span></code></pre>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="section path-section" id="amd-path">
+                        <h2><span class="section-icon">🔴</span> AMD ROCm Container Path</h2>
+                        <div class="step">
+                            <div class="step-header"><div class="step-number">1</div><h4>Install Windows GPU Driver & ROCm WSL2 Support</h4></div>
+                            <div class="code-block-wrapper">
+                                <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">PowerShell (Admin)</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                                <pre><code><span class="comment"># 1. Install AMD Adrenalin Software + ROCm Windows Support Package</span>
+<span class="prompt">PS C:\> winget install --id AMD.AdrenalinEdition</span>
+<span class="prompt">PS C:\> winget install --id AMD.ROCm-Windows</span>
+<span class="comment"># Reboot Windows after installation</span></code></pre>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-header"><div class="step-number">2</div><h4>Create AMD Container Stack</h4></div>
+                            <div class="code-block-wrapper">
+                                <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">docker-compose.yml (AMD)</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                                <pre><code><span class="comment"># C:\Projects\jupyter-gpu-amd\docker-compose.yml</span>
+<span class="keyword">version</span>: <span class="string">"3.8"</span>
+<span class="keyword">services</span>:
+  <span class="var">jupyter-rocm</span>:
+    <span class="keyword">image</span>: <span class="string">"rocm/pytorch:rocm6.1_ubuntu22.04"</span>
+    <span class="keyword">container_name</span>: <span class="string">jupyter-amd-gpu</span>
+    <span class="keyword">restart</span>: <span class="string">unless-stopped</span>
+    <span class="keyword">ports</span>:
+      <span class="string">"- 8889:8888"</span>  <span class="comment"># Different port to avoid NVIDIA conflict if running both</span>
+    <span class="keyword">devices</span>:
+      <span class="string">- /dev/kfd:/dev/kfd</span>
+      <span class="string">- /dev/dri:/dev/dri</span>
+    <span class="keyword">environment</span>:
+      <span class="string">"HSA_OVERRIDE_GFX_VERSION"</span>: <span class="string">"<span class="comment">$HSA_OVERRIDE_GFX_VERSION</span>"</span>
+      <span class="string">"ROC_VISIBLE_DEVICES"</span>: <span class="string">"0,1"</span>
+      <span class="string">"RCCL_DEBUG"</span>: <span class="string">"INFO"</span>
+      <span class="string">"JUPYTER_TOKEN"</span>: <span class="string">"<span class="comment">YOUR_GENERATED_TOKEN</span>"</span>
+    <span class="keyword">volumes</span>:
+      <span class="string">"- ./notebooks:/home/jovyan/work"</span>
+      <span class="string">"- ./config:/home/jovyan/.jupyter"</span>
+    <span class="keyword">command</span>: <span class="string">"/opt/conda/bin/start.sh lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root"</span></code></pre>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="section" id="jupyter-config">
+                        <h2><span class="section-icon">📓</span> Step 3: Jupyter Server Configuration (Shared)</h2>
+                        <p>Identical for both paths. Generate token, bind to all interfaces, and install GPU kernel.</p>
+                        <div class="code-block-wrapper">
+                            <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">WSL2 Ubuntu</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                            <pre><code><span class="comment"># 1. Generate configuration file (host side for volume mount)</span>
+<span class="prompt">$</span> mkdir -p ./config && cd config
+<span class="prompt">$</span> jupyter lab --generate-config
+
+<span class="comment"># 2. Generate secure token & password hash</span>
+<span class="prompt">$</span> python -c <span class="string">"from jupyter_server.auth import passwd; print(passwd('your_strong_password', 'argon2'))"</span> <span class="comment"># Save output</span>
+<span class="prompt">$</span> python -c <span class="string">"import secrets; print(secrets.token_urlsafe(32))"</span> <span class="comment"># Use as JUPYTER_TOKEN in compose</span></code></pre>
+                        </div>
+                        <div class="code-block-wrapper">
+                            <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">config/jupyter_lab_config.py</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                            <pre><code><span class="comment"># config/jupyter_lab_config.py (Mounts into container)</span>
+<span class="var">c</span>.<span class="var">ServerApp</span>.ip = <span class="string">"0.0.0.0"</span>
+<span class="var">c</span>.<span class="var">ServerApp</span>.port = <span class="number">8888</span>
+<span class="var">c</span>.<span class="var">ServerApp</span>.open_browser = <span class="keyword">False</span>
+<span class="var">c</span>.<span class="var">ServerApp</span>.allow_remote_access = <span class="keyword">True</span>
+<span class="var">c</span>.<span class="var">ServerApp</span>.allow_root = <span class="keyword">True</span>
+<span class="var">c</span>.<span class="var">ServerApp</span>.disable_check_xsrf = <span class="keyword">True</span>
+<span class="var">c</span>.<span class="var">ServerApp</span>.token = <span class="string">"<span class="comment">$JUPYTER_TOKEN</span>"</span>
+<span class="var">c</span>.<span class="var">ServerApp</span>.notebook_dir = <span class="string">"/home/jovyan/work"</span></code></pre>
+                        </div>
+                    </section>
+
+                    <section class="section" id="nssm-services">
+                        <h2><span class="section-icon">🛠️</span> Step 4: NSSM Service Bridge (PowerShell)</h2>
+                        <p>Use NSSM to run a PowerShell script that manages the Docker container lifecycle, handles logs, and auto-restarts on failure.</p>
+                        <div class="code-block-wrapper">
+                            <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">start-jupyter-docker.ps1 (NVIDIA Example)</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                            <pre><code><span class="comment"># C:\Scripts\start-jupyter-docker.ps1</span>
+<span class="var">$env</span>:DOCKER_DIR = <span class="string">"C:\Projects\jupyter-gpu-nvidia"</span>
+<span class="var">$LOG_DIR</span>    = <span class="string">"C:\Logs"</span>
+
+<span class="function">New-Item</span> <span class="var">$LOG_DIR</span> -ItemType Directory -Force | Out-Null
+
+<span class="keyword">while</span> (<span class="keyword">-true</span>) {
+    <span class="function">Write-Host</span> <span class="string">"[INFO] Starting Jupyter Docker Container..."</span> -ForegroundColor Green
+    <span class="function">Set-Location</span> <span class="var">$env</span>:DOCKER_DIR
+    <span class="function">docker compose up -d --remove-orphans 2>&1 | Tee-Object -FilePath "<span class="var">$LOG_DIR</span>\jupyter-docker.out.log" -Append</span>
+
+    <span class="comment"># Health check loop (wait for Jupyter to respond)</span>
+    <span class="keyword">for</span> (<span class="var">$i</span> = <span class="number">0</span>; <span class="var">$i</span> -lt <span class="number">30</span>; <span class="var">$i</span>++) {
+        <span class="function">Start-Sleep</span> <span class="number">2</span>
+        <span class="var">$status</span> = <span class="function">curl.exe</span> -s http://localhost:8888/api/status | Out-String
+        <span class="keyword">if</span> (<span class="var">$status</span>.Contains(<span class="string">"started"</span>)) { <span class="keyword">break</span>; }
+    }
+
+    <span class="comment"># Monitor container health (optional: use docker stats or exit loop if needed)</span>
+    <span class="function">Start-Sleep</span> <span class="number">300</span> <span class="comment"># Check every 5 minutes</span>
+}</code></pre>
+                        </div>
+                        <div class="code-block-wrapper">
+                            <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">PowerShell (Service Install)</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                            <pre><code><span class="comment"># Install NSSM if not present: https://nssm.cc/download</span>
+<span class="var">$NSSM_PATH</span> = <span class="string">"C:\Program Files\nssm\bin\win64\nssm.exe"</span>
+
+<span class="prompt">PS C:\> & "$NSSM_PATH" install "JupyterGPUContainer" "powershell.exe" "-ExecutionPolicy Bypass -File C:\Scripts\start-jupyter-docker.ps1"</span>
+<span class="prompt">PS C:\> & "$NSSM_PATH" set "JupyterGPUContainer" AppStdout "C:\Logs\jupyter.out.log"</span>
+<span class="prompt">PS C:\> & "$NSSM_PATH" set "JupyterGPUContainer" AppStderr "C:\Logs\jupyter.err.log"</span>
+<span class="prompt">PS C:\> & "$NSSM_PATH" start "JupyterGPUContainer"</span>
+
+<span class="comment"># Verify service status</span>
+<span class="prompt">PS C:\> Get-Service JupyterGPUContainer</span></code></pre>
+                        </div>
+                    </section>
+
+                    <section class="section" id="docker-webui">
+                        <h2><span class="section-icon">🔗</span> Step 5: Open WebUI Integration</h2>
+                        <p>Open WebUI runs on Windows host via Docker Desktop. Connects to Jupyter container via `host.docker.internal`.</p>
+                        <div class="code-block-wrapper">
+                            <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">docker-compose.yml (Open WebUI Host)</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                            <pre><code><span class="comment"># C:\Projects\open-webui\docker-compose.yml</span>
+<span class="keyword">version</span>: <span class="string">"3.8"</span>
+<span class="keyword">services</span>:
+  <span class="var">open-webui</span>:
+    <span class="keyword">image</span>: <span class="string">"ghcr.io/open-webui/open-webui:main"</span>
+    <span class="keyword">container_name</span>: <span class="string">open-webui</span>
+    <span class="keyword">restart</span>: <span class="string">unless-stopped</span>
+    <span class="keyword">ports</span>:
+      <span class="string">"- 3000:8080"</span>
+    <span class="keyword">volumes</span>:
+      <span class="string">"- open-webui-data:/app/backend/data"</span>
+    <span class="keyword">environment</span>:
+      <span class="comment"># Point to Jupyter container via Docker internal DNS or host IP</span>
+      <span class="string">"JUPYTER_SERVER_URL"</span>: <span class="string">"http://host.docker.internal:8888"</span>  <span class="comment"># NVIDIA path</span>
+      <span class="comment"># "JUPYTER_SERVER_URL": "http://host.docker.internal:8889"  # AMD path</span>
+      <span class="string">"JUPYTER_API_TOKEN"</span>: <span class="string">"<span class="comment">YOUR_GENERATED_TOKEN</span>"</span>
+      <span class="string">"WEBUI_AUTH"</span>: <span class="string">"true"</span>
+      <span class="string">"ENABLE_OAUTH_SIGNUP"</span>: <span class="string">"true"</span>
+    <span class="keyword">depends_on</span>:
+      <span class="string">- jupyter-gpu</span>
+
+  <span class="comment"># Optional: Include Jupyter in same compose if managing on one host</span>
+<span class="comment"># ... (copy NVIDIA or AMD stack here)</span>
+
+<span class="keyword">volumes</span>:
+  <span class="var">open-webui-data</span>:
+<span class="keyword">networks</span>:
+  <span class="var">win-docker-net</span>:
+    <span class="keyword">driver</span>: <span class="string">nat</span></code></pre>
+                        </div>
+                    </section>
+
+                    <section class="section" id="testing">
+                        <h2><span class="section-icon">🧪</span> Step 6: Testing & Verification</h2>
+                        <div class="code-block-wrapper">
+                            <div class="code-block-header"><div class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div><span class="lang-label">test_gpu_stack.py</span><button class="copy-btn" onclick="copyCode(this)">📋 Copy</button></div>
+                            <pre><code><span class="comment"># Run inside any activated GPU environment or Jupyter notebook cell</span>
+<span class="keyword">import</span> <span class="var">torch</span>, <span class="var">requests</span>
+
+<span class="function">print</span>(<span class="string">"🧪 Dockerized Jupyter GPU Stack Test"</span>)
+<span class="function">test</span>(<span class="string">"GPU Backend Available"</span>, <span class="var">torch</span>.cuda.is_available())
+<span class="function">test</span>(<span class="string">"GPU Device Count"</span>, <span class="var">torch</span>.cuda.device_count() > <span class="number">0</span>)
+<span class="function">test</span>(<span class="string">"Jupyter API Status"</span>, <span class="var">requests</span>.<span class="function">get</span>(<span class="string">"http://host.docker.internal:8888/api/status"</span>).status_code == <span class="number">200</span>)
+<span class="function">test</span>(<span class="string">"Open WebUI Reachable"</span>, <span class="var">requests</span>.<span class="function">get</span>(<span class="string">"http://localhost:3000/api/status"</span>).status_code == <span class="number">200</span>)
+<span class="function">print</span>(<span class="string">"✅ All systems operational. Access Open WebUI at http://localhost:3000"</span>)</code></pre>
+                        </div>
+                    </section>
+
+                    <section class="section" id="troubleshooting">
+                        <h2><span class="section-icon">🔧</span> Step 7: Troubleshooting</h2>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead><tr><th>Issue</th><th>NVIDIA Path Fix</th><th>AMD Path Fix</th><th>Docker/NSSM Fix</th></tr></thead>
+                                <tbody>
+                                    <tr><td><code class="inline-code">GPU not available in container</code></td><td>Run `docker info | grep -i nvidia`. Ensure Docker Desktop GPU access is enabled.</td><td>Verify `/dev/kfd` and `/dev/dri` exist in WSL2. Run `rocm-smi --showhw` first.</td><td>Add `--gpus all` or explicit device mounts. Check Docker Desktop Resources → GPU Access.</td></tr>
+                                    <tr><td><code class="inline-code">Docker container exits immediately</code></td><td colspan="2">Check logs: `docker logs jupyter-nvidia-gpu`. Missing CUDA/ROCm deps or volume mount errors.</td></tr>
+                                    <tr><td><code class="inline-code">NSSM service won't start</code></td><td colspan="2">Run PSScript manually first. Ensure `wsl --install` and Docker Desktop are configured for WSL2 backend.</td></tr>
+                                    <tr><td><code class="inline-code">Open WebUI tool timeout</code></td><td colspan="2">Increase `DASK_DISTRIBUTED__COMM_TIMEOUT=120s` in Jupyter environment config. Check CORS/network.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="section" id="reference">
+                        <h2><span class="section-icon">📚</span> Step 8: Reference Tables</h2>
+                        <h4>Windows WSL2 Docker GPU Runtime Matrix</h4>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead><tr><th>GPU Family</th><th>Windows Driver</th><th>Docker Compose Key</th><th>Micromamba Channel</th></tr></thead>
+                                <tbody>
+                                    <tr><td>NVIDIA RTX 30/40</td><td>550+ (GameReady/Studio)</td><td>`--gpus all` + nvidia device mounts</td><td>`conda-forge`, `nvidia`, `pytorch`</td></tr>
+                                    <tr><td>NVIDIA A100/H100</td><td>550+ (Data Center)</td><td>Same as above</td><td>Same as above</td></tr>
+                                    <tr><td>AMD RX 7000 / PRO W7</td><td>Adrenalin 24.x + ROCm Win</td><td>`--device /dev/kfd --device /dev/dri`</td><td>`conda-forge`, `conda-forge/label/rocm_rel`</td></tr>
+                                    <tr><td>AMD Instinct MI300X</td><td>ROCm 6.1+ Windows</td><td>Same as RX 7000 + `HSA_OVERRIDE_GFX_VERSION`</td><td>Same as above</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <h4>Key Documentation Links</h4>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead><tr><th>Resource</th><th>URL</th></tr></thead>
+                                <tbody>
+                                    <tr><td>NVIDIA Docker on Windows WSL2</td><td><code class="inline-code">docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html</code></td></tr>
+                                    <tr><td>AMD ROCm Docker Images</td><td><code class="inline-code">hub.docker.com/r/rocm/pytorch</code></td></tr>
+                                    <tr><td>Docker Desktop GPU Acceleration</td><td><code class="inline-code">docs.docker.com/desktop/gpu/</code></td></tr>
+                                    <tr><td>NSSM Documentation</td><td><code class="inline-code">nssm.cc/docs</code></td></tr>
+                                    <tr><td>Open WebUI Custom Tools API</td><td><code class="inline-code">docs.openwebui.com</code></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="text-align:center; margin-top:40px; padding-top:24px; border-top:1px solid var(--border-color); color:var(--text-muted); font-size:0.85rem;">
+                            <p>Windows 10/11 + Docker Desktop GPU Passthrough + NSSM + Open WebUI</p>
+                            <p style="margin-top:4px;">🐳 Dockerized Jupyter &nbsp;|&nbsp; 🟢 CUDA 12.x / 🔴 ROCm 6.x &nbsp;|&nbsp; 🛠️ NSSM Services &nbsp;|&nbsp; 🐍 Micromamba &nbsp;|&nbsp; 🔗 Open WebUI</p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <button class="back-to-top" id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+    <script>
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const html = document.documentElement;
+        function setTheme(theme) {
+            html.setAttribute('data-theme', theme);
+            themeIcon.textContent = theme === 'dark' ? '🌙' : '☀️';
+            localStorage.setItem('theme', theme);
+        }
+        themeToggle.addEventListener('click', () => {
+            const current = html.getAttribute('data-theme');
+            setTheme(current === 'dark' ? 'light' : 'dark');
+        });
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        setTheme(savedTheme);
+
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('.section, .article-hero');
+        const breadcrumbCurrent = document.getElementById('breadcrumbCurrent');
+        const contentArea = document.getElementById('contentArea');
+        function updateActiveNav() {
+            let currentSection = '';
+            sections.forEach(section => {
+                const rect = section.getBoundingClientRect();
+                if (rect.top <= 120) currentSection = section.id;
+            });
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + currentSection) link.classList.add('active');
+            });
+            if (currentSection) {
+                const title = currentSection.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                breadcrumbCurrent.textContent = title;
+            }
+        }
+        contentArea.addEventListener('scroll', () => {
+            updateActiveNav();
+            const scrollTop = contentArea.scrollTop;
+            const scrollHeight = contentArea.scrollHeight - contentArea.clientHeight;
+            document.getElementById('readingProgress').style.width = (scrollTop / scrollHeight) * 100 + '%';
+            document.getElementById('backToTop').classList.toggle('visible', scrollTop > 400);
+        });
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = document.getElementById(link.getAttribute('href').substring(1));
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (window.innerWidth <= 768) sidebar.classList.add('collapsed');
+            });
+        });
+
+        function copyCode(btn) {
+            const code = btn.closest('.code-block-wrapper').querySelector('code');
+            navigator.clipboard.writeText(code.innerText).then(() => {
+                btn.innerHTML = '✅ Copied!';
+                btn.style.background = 'var(--accent-green)';
+                btn.style.color = 'white';
+                setTimeout(() => { btn.innerHTML = '📋 Copy'; btn.style.background = ''; btn.style.color = ''; }, 2000);
+            });
+        }
+
+        const searchInput = document.getElementById('searchInput');
+        searchInput.addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase().trim();
+            navLinks.forEach(link => {
+                link.style.display = (!q || link.textContent.toLowerCase().includes(q)) ? '' : 'none';
+            });
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); searchInput.focus(); }
+            if (e.key === 't' && !e.ctrlKey && !e.metaKey && document.activeElement !== searchInput) themeToggle.click();
+        });
+    </script>
+</body>
+</html>
+
+							<script>
+                            	
+							</script>
+                        </body>
+                        </html>
+                    

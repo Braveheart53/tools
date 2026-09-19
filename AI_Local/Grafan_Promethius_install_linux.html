@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Install & Use Prometheus + Grafana on Node A</title>
+    <style>
+        body {font-family: Arial, Helvetica, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px;}
+        h1, h2, h3 {color: #2c3e50;}
+        pre {background:#f4f4f4; padding:10px; overflow-x:auto; border-radius:4px;}
+        code {background:#e8e8e8; padding:2px 5px; border-radius:3px;}
+        .note {background:#fff3cd; border-left:4px solid #ffc107; padding:10px; margin:15px 0;}
+        .step {margin-bottom:20px;}
+        .footer {font-size:0.9em; color:#777; margin-top:40px; text-align:center;}
+    </style>
+</head>
+<body>
+
+<h1>Install & Use Prometheus + Grafana on Node A</h1>
+
+<p>This page walks you through:</p>
+<ul>
+    <li>Installing Prometheus (the monitoring server).</li>
+    <li>Installing Node Exporter (the agent that gathers metrics from each node).</li>
+    <li>Installing Grafana (the web UI for visualising the data).</li>
+    <li>Configuring Prometheus to scrape metrics from Node A and any other nodes.</li>
+    <li>Adding Prometheus as a data source in Grafana and creating a simple dashboard.</li>
+    <li>Viewing the status of the other nodes from Node A.</li>
+</ul>
+
+<hr>
+
+<div class="step">
+
+<h2>1️⃣ Prerequisites</h2>
+<ul>
+    <li>A Linux machine (Ubuntu 20.04/22.04, Debian, CentOS 8, or any systemd‑based distro).</li>
+    <li>Root or sudo privileges.</li>
+    <li>Internet access to download packages.</li>
+</ul>
+
+<div class="note">
+<strong>Why Node Exporter?</strong> It exposes CPU, memory, disk, and GPU metrics (if the GPU driver provides them) in a format Prometheus can scrape.
+</div>
+
+</div>
+
+<div class="step">
+
+<h2>2️⃣ Install Prometheus</h2>
+
+<h3>2.1 Download the latest release</h3>
+<pre># Choose the version you need – here we use 2.53.0 as an example
+VERSION=2.53.0
+wget https://github.com/prometheus/prometheus/releases/download/v${VERSION}/prometheus-${VERSION}.linux-amd64.tar.gz</pre>
+
+<h3>2.2 Extract & create a directory</h3>
+<pre>tar xvf prometheus-${VERSION}.linux-amd64.tar.gz
+sudo mkdir -p /etc/prometheus /var/lib/prometheus
+sudo mv prometheus-${VERSION}.linux-amd64/* /etc/prometheus/
+sudo chown -R root:root /etc/prometheus /var/lib/prometheus</pre>
+
+<h3>2.3 Create a basic Prometheus configuration</h3>
+<pre>cat <<'EOF' | sudo tee /etc/prometheus/prometheus.yml
+global:
+  scrape_interval: 15s   # how often to scrape targets
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Node Exporter running on the same host (Node A)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['localhost:9100']
+
+  # Add other nodes here – replace <IP> with the actual address of each node
+  - job_name: 'remote-nodes'
+    static_configs:
+      - targets: ['<IP-of-Node-B>:9100',
+                 '<IP-of-Node-C>:9100']
+EOF</pre>
+
+<h3>2.4 Create a systemd service file</h3>
+<pre>cat <<'EOF' | sudo tee /etc/systemd/system/prometheus.service
+[Unit]
+Description=Prometheus Monitoring Server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=root
+Group=root
+ExecStart=/etc/prometheus/prometheus \\
+  --config.file=/etc/prometheus/prometheus.yml \\
+  --storage.tsdb.path=/var/lib/prometheus \\
+  --web.console.templates=/etc/prometheus/consoles \\
+  --web.console.libraries=/etc/prometheus/console_libraries
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF</pre>
+
+<h3>2.5 Enable & start Prometheus</h3>
+<pre>sudo systemctl daemon-reload
+sudo systemctl enable prometheus
+sudo systemctl start prometheus</pre>
+
+<h3>2.6 Verify it’s running</h3>
+<pre>sudo systemctl status prometheus</pre>
+<p>Open a browser on Node A and go to <code>http://localhost:9090</code>. You should see the Prometheus UI.</p>
+
+</div>
+
+<div class="step">
+
+<h2>3️⃣ Install Node Exporter (the metric collector)</h2>
+
+<h3>3.1 Download & extract</h3>
+<pre>VERSION=1.8.0
+wget https://github.com/prometheus/node_exporter/releases/download/v${VERSION}/node_exporter-${VERSION}.linux-amd64.tar.gz
+tar xvf node_exporter-${VERSION}.linux-amd64.tar.gz
+sudo mv node_exporter-${VERSION}.linux-amd64 /opt/node_exporter
+sudo ln -s /opt/node_exporter/node_exporter /usr/local/bin/node_exporter</pre>
+
+<h3>3.2 Create a systemd service</h3>
+<pre>cat <<'EOF' | sudo tee /etc/systemd/system/node_exporter.service
+[Unit]
+Description=Prometheus Node Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=root
+Group=root
+ExecStart=/opt/node_exporter/node_exporter
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF</pre>
+
+<h3>3.3 Enable & start Node Exporter</h3>
+<pre>sudo systemctl daemon-reload
+sudo systemctl enable node_exporter
+sudo systemctl start node_exporter</pre>
+
+<h3>3.4 Verify</h3>
+<pre>curl http://localhost:9100/metrics | head -n 20</pre>
+<p>You should see a long list of metrics ending with a line like <code># HELP node_cpu_seconds_total...</code>.</p>
+
+</div>
+
+<div class="step">
+
+<h2>4️⃣ Install Grafana</h2>
+
+<h3>4.1 Add the official Grafana APT repository (Ubuntu/Debian)</h3>
+<pre>sudo apt-get update
+sudo apt-get install -y wget gnupg2 curl</pre>
+
+<pre>curl https://apt.grafana.com/gpg.key | sudo apt-key add -
+echo "deb https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list</pre>
+
+<h3>4.2 Install Grafana</h3>
+<pre>sudo apt-get update
+sudo apt-get install -y grafana</pre>
+
+<h3>4.3 Enable & start the service</h3>
+<pre>sudo systemctl daemon-reload
+sudo systemctl enable grafana-server
+sudo systemctl start grafana-server</pre>
+
+<h3>4.4 Access Grafana UI</h3>
+<p>Open a browser on Node A and navigate to <code>http://localhost:3000</code>.<br>
+Default login: <code>admin / admin</code>. You will be prompted to change the password on first login.</p>
+
+</div>
+
+<div class="step">
+
+<h2>5️⃣ Add Prometheus as a Data Source in Grafana</h2>
+
+<ol>
+    <li>Log in to Grafana (the UI you just opened).</li>
+    <li>Click the <strong>⚙️ Configuration (gear) icon → Data Sources → Add data source</strong>.</li>
+    <li>Select <strong>Prometheus</strong> from the list.</li>
+    <li>Set the <strong>URL</strong> to <code>http://localhost:9090</code> (Prometheus runs on the same host).</li>
+    <li>Leave <strong>Access</strong> as <em>Direct access</em>.</li>
+    <li>Click <strong>Save & test</strong>. You should see <em>Success</em>.</li>
+</ol>
+
+<div class="note">
+If you plan to run Grafana on a different machine than Node A, replace <code>localhost</code> with the IP address of Node A and make sure the firewall allows traffic on port 9090.
+</div>
+
+</div>
+
+<div class="step">
+
+<h2>6️⃣ Create a Simple Dashboard to Visualise Node A & Other Nodes</h2>
+
+<ol>
+    <li>In Grafana, click the <strong>+ (Create)</strong> button → <strong>Dashboard</strong> → <strong>Add new panel</strong>.</li>
+    <li>In the panel editor, change the <strong>Query</strong> dropdown to <strong>Prometheus</strong>.</li>
+    <li>Enter the following PromQL query to see CPU utilisation of Node A (the node exporter runs on the same host):</li>
+    <pre>100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)</pre>
+    <li>Under <strong>Visualization</strong>, pick <strong>Graph</strong>. Give the panel a title like “Node A CPU %”.</li>
+</ol>
+
+<h3>6.1 Add panels for other nodes</h3>
+<p>Repeat the steps above, but change the query to target a specific node (replace <code>node-B</code> with the actual instance name you see in Prometheus):</p>
+
+<pre># CPU % for Node B
+100 - (avg by (instance) (rate(node_cpu_seconds_total{instance="node-B:9100",mode="idle"}[5m])) * 100)
+
+# GPU utilisation (if the driver exports a metric called node_gpu_utilisation_percent)
+avg by (instance) (node_gpu_utilisation_percent{instance="node-B:9100"})</pre>
+
+<p>You can also create a <strong>Table</strong> panel that lists the status (UP/DOWN) of each node:</p>
+
+<pre>up{job="node"} == 1</pre>
+
+<p>Set the visualization to <strong>Table</strong>, enable <strong>Color mode → Status</strong>, and you’ll get a green/red view of every node’s health.</p>
+
+</div>
+
+<div class="step">
+
+<h2>7️⃣ Using Grafana from Node A to Check the Status of Other Nodes</h2>
+
+<p>Grafana itself does not provide a “one‑liner” command to query another node’s status, but you can combine the Prometheus API with a tiny script on Node A.</p>
+
+<h3>7.1 Example Bash script (requires `curl` and `jq`)</h3>
+<pre>#!/usr/bin/env bash
+# List of node IPs or hostnames you want to monitor
+NODES=("node-b.example.com" "node-c.example.com")
+
+for n in "\${NODES[@]}"; do
+    # Query Prometheus for the 'up' metric (1 = up, 0 = down)
+    STATUS=\$(curl -s "http://\${n}:9090/api/v1/query?query=up{\\"instance\\":\\"\${n}\\"}" | jq -r '.data.result[0].value[1]')
+    if [[ "\$STATUS" == "1" ]]; then
+        echo "✅ \${n} is UP"
+    else
+        echo "❌ \${n} is DOWN"
+    fi
+done</pre>
+
+<p>Save this as <code>check_nodes.sh</code>, make it executable (<code>chmod +x check_nodes.sh</code>), and run it. It will print a quick health summary for each node.</p>
+
+</div>
+
+<div class="step">
+
+<h2>8️⃣ Optional: Enable GPU Metrics (if your GPU driver exposes them)</h2>
+
+<p>Most NVIDIA GPUs expose metrics via the <code>nvidia-smi</code> command. To make those available to Prometheus, you can use the <a href="https://github.com/NVIDIA/gpu-prometheus-exporter">nvidia-gpu-prometheus-exporter</a>.</p>
+
+<h3>8.1 Quick install of the exporter</h3>
+<pre># Download latest release
+EXPORTER_VER=0.4.0
+wget https://github.com/NVIDIA/gpu-prometheus-exporter/releases/download/v${EXPORTER_VER}/gpu-prometheus-exporter-linux-amd64.tar.gz
+tar xvf gpu-prometheus-exporter-linux-amd64.tar.gz
+sudo mv gpu-prometheus-exporter-linux-amd64 /opt/gpu-exporter
+sudo ln -s /opt/gpu-exporter/gpu-prometheus-exporter /usr/local/bin/gpu-exporter
+
+# Run it as a service (listens on 9185)
+cat <<'EOF' | sudo tee /etc/systemd/system/gpu-exporter.service
+[Unit]
+Description=NVIDIA GPU Prometheus Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=root
+Group=root
+ExecStart=/opt/gpu-exporter/gpu-prometheus-exporter --web.listen-address=:9185
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable gpu-exporter
+sudo systemctl start gpu-exporter</pre>
+
+<h3>8.2 Add the GPU exporter to Prometheus</h3>
+<pre># Edit /etc/prometheus/prometheus.yml and add another scrape target:
+- job_name: 'gpu'
+  static_configs:
+    - targets: ['localhost:9185']
+</pre>
+
+<h3>8.3 Query GPU utilisation in Grafana</h3>
+<pre>avg by (instance) (nvidia_gpu_utilization{instance="node-B:9185"})</pre>
+
+<p>You can now plot GPU % alongside CPU, memory, and network charts.</p>
+
+</div>
+
+<div class="step">
+
+<h2>9️⃣ Summary Checklist</h2>
+<ol>
+    <li>✅ Install Prometheus and start the service.</li>
+    <li>✅ Install Node Exporter on every node (including Node A) and start it.</li>
+    <li>✅ (Optional) Install nvidia‑gpu‑prometheus‑exporter if you need GPU stats.</li>
+    <li>✅ Install Grafana and start its service.</li>
+    <li>✅ Add Prometheus as a datasource in Grafana.</li>
+    <li>✅ Build dashboards (CPU, memory, GPU, node health).</li>
+    <li>✅ Use a small script or Grafana’s built‑in “Explore” to query other nodes from Node A.</li>
+</ol>
+
+<div class="note">
+All services are managed by <code>systemd</code>, so they will automatically restart after a reboot. Use <code>sudo systemctl status &lt;service&gt;</code> to verify they are running.
+</div>
+
+</div>
+
+<div class="footer">
+© 2025 – Monitoring your cluster with Prometheus & Grafana. <br>
+Feel free to adapt the steps to CentOS, Rocky Linux, or any other systemd‑based distribution.
+</div>
+
+</body>
+</html>

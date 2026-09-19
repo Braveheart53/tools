@@ -1,0 +1,13 @@
+# Files that you need to find and download based on your GPU and otherwise
+AI_Local/cuda_11.8.0_522.06_windows.exe
+AI_Local/cuda_12.5.0_555.85_windows.exe
+AI_Local/cuda_12.6.3_561.17_windows.exe
+AI_Local/cuda_12.8.2_572.61_windows.exe
+AI_Local/cuda_13.2.1_windows.exe
+AI_Local/Docker Desktop Installer.exe
+AI_Local/grafana_13.0.1+security-01_25720641773_windows_amd64.msi
+AI_Local/prometheus-3.5.3.windows-amd64.zip
+AI_Local/vulkansdk-windows-X64-1.4.350.0.exe
+AI_Local/Win64OpenSSL-4_0_0.exe
+AI_Local/prometheus-3.5.3.windows-amd64/prometheus.exe
+AI_Local/prometheus-3.5.3.windows-amd64/promtool.exe

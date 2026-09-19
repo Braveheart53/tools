@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Install &amp; Use Prometheus + Grafana on Windows / WSL2</title>
+    <style>
+        body {font-family: Arial, Helvetica, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px;}
+        h1, h2, h3 {color: #2c3e50;}
+        pre {background:#f4f4f4; padding:10px; overflow-x:auto; border-radius:4px;}
+        code {background:#e8e8e8; padding:2px 5px; border-radius:3px;}
+        .note  {background:#fff3cd; border-left:4px solid #ffc107; padding:10px; margin:15px 0;}
+        .info  {background:#d1ecf1; border-left:4px solid #17a2b8; padding:10px; margin:15px 0;}
+        .warn  {background:#f8d7da; border-left:4px solid #dc3545; padding:10px; margin:15px 0;}
+        .step  {margin-bottom:30px;}
+        .tab-bar {display:flex; gap:6px; margin-bottom:0; border-bottom:2px solid #adb5bd;}
+        .tab-btn {
+            padding:6px 18px; cursor:pointer; border:1px solid #adb5bd;
+            border-bottom:none; border-radius:4px 4px 0 0;
+            background:#e9ecef; font-size:0.9em;
+        }
+        .tab-btn.active {background:#fff; font-weight:bold; border-bottom:2px solid #fff; margin-bottom:-2px;}
+        .tab-panel {display:none; border:1px solid #adb5bd; border-top:none; padding:14px; border-radius:0 4px 4px 4px;}
+        .tab-panel.active {display:block;}
+        .footer {font-size:0.9em; color:#777; margin-top:40px; text-align:center;}
+        table {border-collapse:collapse; width:100%;}
+        th, td {border:1px solid #ccc; padding:8px 12px; text-align:left;}
+        th {background:#f0f0f0;}
+    </style>
+    <script>
+        function swTab(btn, group) {
+            const bar = btn.parentElement;
+            bar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const panels = [];
+            let el = bar.nextElementSibling;
+            while (el && el.classList.contains('tab-panel')) { panels.push(el); el = el.nextElementSibling; }
+            const idx = [...bar.querySelectorAll('.tab-btn')].indexOf(btn);
+            panels.forEach((p, i) => p.classList.toggle('active', i === idx));
+        }
+    </script>
+</head>
+<body>
+
+<h1>Install &amp; Use Prometheus + Grafana on Windows / WSL2</h1>
+
+<p>This page walks you through:</p>
+<ul>
+    <li>Installing <strong>Prometheus</strong> (the monitoring server) as a Windows service.</li>
+    <li>Installing <strong>windows_exporter</strong> (the Windows-native metric collector; replaces <em>node_exporter</em> on Windows hosts).</li>
+    <li>Installing <strong>node_exporter</strong> inside WSL2 Ubuntu if you prefer a Linux-side collector.</li>
+    <li>Installing <strong>Grafana</strong> via the official Windows MSI installer.</li>
+    <li>Configuring Prometheus to scrape metrics from Node A and remote nodes.</li>
+    <li>Adding Prometheus as a data source in Grafana and creating a simple dashboard.</li>
+    <li>Viewing the status of other nodes from Node A.</li>
+    <li>Optional: NVIDIA GPU metrics via <code>nvidia_gpu_exporter</code>.</li>
+</ul>
+
+<div class="info">
+<strong>Linux vs Windows approach at a glance:</strong><br>
+On Linux you use <em>systemd</em> to manage services and <code>node_exporter</code> to collect metrics.
+On Windows you use <strong>NSSM</strong> (Non‑Sucking Service Manager) or native Windows Services for Prometheus,
+and <strong>windows_exporter</strong> (MSI) instead of node_exporter. Grafana installs as a standard Windows service via MSI.
+</div>
+
+<hr>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>1️⃣ Prerequisites</h2>
+<ul>
+    <li>Windows 10 (1903+) or Windows 11 — 64-bit.</li>
+    <li>Administrator / PowerShell-as-Admin access.</li>
+    <li>Internet access to download packages.</li>
+    <li><strong>Optional (WSL2 path):</strong> WSL2 with Ubuntu 22.04 installed (<code>wsl --install</code>).</li>
+    <li>PowerShell execution policy set to at least <code>RemoteSigned</code>:<br>
+        <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code></li>
+</ul>
+
+<div class="note">
+<strong>Which collector should I use?</strong>
+<ul>
+    <li><strong>windows_exporter (MSI)</strong> – easiest on Windows; collects CPU, RAM, disk, network, services.  Recommended for Node A and any Windows worker nodes.</li>
+    <li><strong>node_exporter (WSL2)</strong> – useful if you already run WSL2 and want Linux-style metrics; note that some metrics (disk, network) reflect the WSL2 virtual machine, not the physical host.</li>
+</ul>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>2️⃣ Install &amp; Run Prometheus on Windows</h2>
+
+<h3>2.1 Download Prometheus (Windows binary)</h3>
+<p>Download the latest Windows .zip from the official releases page. In PowerShell (as Administrator):</p>
+<pre>$VERSION = "2.53.0"   # change to latest from https://github.com/prometheus/prometheus/releases
+$URL = "https://github.com/prometheus/prometheus/releases/download/v$VERSION/prometheus-$VERSION.windows-amd64.zip"
+
+Invoke-WebRequest -Uri $URL -OutFile "$env:TEMP\prometheus.zip"
+Expand-Archive -Path "$env:TEMP\prometheus.zip" -DestinationPath "C:\prometheus" -Force
+# Flatten one level so binaries are directly in C:\prometheus
+Get-ChildItem "C:\prometheus\prometheus-$VERSION.windows-amd64\*" | Move-Item -Destination "C:\prometheus\" -Force
+Remove-Item "C:\prometheus\prometheus-$VERSION.windows-amd64" -Recurse -Force</pre>
+
+<h3>2.2 Create a data directory</h3>
+<pre>New-Item -ItemType Directory -Force -Path C:\prometheus\data</pre>
+
+<h3>2.3 Write a basic prometheus.yml</h3>
+<p>Edit (or create) <code>C:\prometheus\prometheus.yml</code>:</p>
+<pre>global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # windows_exporter running on THIS host (Node A) – port 9182 is the Windows default
+  - job_name: 'node-a-windows'
+    static_configs:
+      - targets: ['localhost:9182']
+
+  # Remote Windows nodes – replace IPs with your actual worker addresses
+  - job_name: 'remote-nodes'
+    static_configs:
+      - targets:
+          - '192.168.1.11:9182'   # Node B
+          - '192.168.1.12:9182'   # Node C
+          - '192.168.1.13:9182'   # Node D
+
+  # Optional: NVIDIA GPU exporter on Node A (see section 8)
+  # - job_name: 'gpu'
+  #   static_configs:
+  #     - targets: ['localhost:9835']</pre>
+
+<div class="note">
+<strong>Port difference:</strong> On Linux <code>node_exporter</code> uses port <strong>9100</strong>.
+On Windows, <code>windows_exporter</code> defaults to port <strong>9182</strong>. Update any existing Grafana dashboards accordingly.
+</div>
+
+<h3>2.4 Install Prometheus as a Windows Service with NSSM</h3>
+<p>Download NSSM from <a href="https://nssm.cc/download">https://nssm.cc/download</a>, extract, and place <code>nssm.exe</code> at <code>C:\nssm\nssm.exe</code>. Then, in an Administrator PowerShell:</p>
+<pre># Install and configure the Prometheus service
+C:\nssm\nssm.exe install Prometheus "C:\prometheus\prometheus.exe"
+C:\nssm\nssm.exe set Prometheus AppParameters `
+    "--config.file=C:\prometheus\prometheus.yml --storage.tsdb.path=C:\prometheus\data"
+C:\nssm\nssm.exe set Prometheus AppDirectory       "C:\prometheus"
+C:\nssm\nssm.exe set Prometheus Start              SERVICE_AUTO_START
+C:\nssm\nssm.exe set Prometheus AppStdout          "C:\prometheus\logs\stdout.log"
+C:\nssm\nssm.exe set Prometheus AppStderr          "C:\prometheus\logs\stderr.log"
+
+New-Item -ItemType Directory -Force -Path C:\prometheus\logs
+
+Start-Service Prometheus
+Get-Service Prometheus   # should show: Status = Running</pre>
+
+<h3>2.5 Open Windows Firewall (inbound)</h3>
+<pre># Allow Prometheus UI / API from your LAN only
+New-NetFirewallRule `
+    -DisplayName "Prometheus" `
+    -Direction Inbound `
+    -Protocol TCP `
+    -LocalPort 9090 `
+    -RemoteAddress 192.168.1.0/24 `
+    -Action Allow `
+    -Profile Private</pre>
+
+<h3>2.6 Verify Prometheus is running</h3>
+<pre>Get-Service Prometheus   # Status: Running
+# Open in browser:
+Start-Process "http://localhost:9090"</pre>
+<p>You should see the Prometheus UI at <code>http://localhost:9090</code>.</p>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>3️⃣ Install the Metric Collector</h2>
+<p>Choose the approach that matches your setup. Both produce Prometheus-compatible metrics; use the tabs below.</p>
+
+<div class="tab-bar">
+    <button class="tab-btn active" onclick="swTab(this,'exp')">Option A – windows_exporter (Recommended)</button>
+    <button class="tab-btn" onclick="swTab(this,'exp')">Option B – node_exporter inside WSL2</button>
+</div>
+
+<div class="tab-panel active">
+<h4>windows_exporter MSI (all Windows nodes: A, B, C, D)</h4>
+<p>Download the latest <code>.msi</code> from <a href="https://github.com/prometheus-community/windows_exporter/releases">https://github.com/prometheus-community/windows_exporter/releases</a> and run it on every Windows node. In Administrator PowerShell:</p>
+<pre>$EXP_VER = "0.30.5"   # check for latest release
+$MSI_URL = "https://github.com/prometheus-community/windows_exporter/releases/download/v$EXP_VER/windows_exporter-$EXP_VER-amd64.msi"
+
+Invoke-WebRequest -Uri $MSI_URL -OutFile "$env:TEMP\windows_exporter.msi"
+
+# Silent install – registers as the "windows_exporter" Windows Service automatically
+msiexec /i "$env:TEMP\windows_exporter.msi" /quiet /norestart</pre>
+
+<p>The MSI registers and starts the service automatically. Verify on each node:</p>
+<pre>Get-Service windows_exporter   # Status: Running
+# Metrics endpoint (default port 9182):
+Invoke-RestMethod http://localhost:9182/metrics | Select-Object -First 20</pre>
+
+<p>Open the firewall so Prometheus on Node A can reach workers B, C, D (run on each worker):</p>
+<pre># On NODE-B, C, D – allow scraping from Node A only
+New-NetFirewallRule `
+    -DisplayName "windows_exporter" `
+    -Direction Inbound `
+    -Protocol TCP `
+    -LocalPort 9182 `
+    -RemoteAddress 192.168.1.10 `
+    -Action Allow `
+    -Profile Private</pre>
+
+<div class="note">
+<strong>Default collectors enabled by the MSI:</strong> cpu, logical_disk, memory, net, os, process, service, system, tcp, time.
+For GPU metrics, see Section 8.
+</div>
+</div>
+
+<div class="tab-panel">
+<h4>node_exporter inside WSL2 Ubuntu</h4>
+<p>Open a WSL2 Ubuntu terminal and run:</p>
+<pre>VERSION=1.8.0
+wget https://github.com/prometheus/node_exporter/releases/download/v${VERSION}/node_exporter-${VERSION}.linux-amd64.tar.gz
+tar xvf node_exporter-${VERSION}.linux-amd64.tar.gz
+sudo mv node_exporter-${VERSION}.linux-amd64 /opt/node_exporter
+sudo ln -s /opt/node_exporter/node_exporter /usr/local/bin/node_exporter</pre>
+
+<p>Create a systemd service inside WSL2:</p>
+<pre>cat &lt;&lt;'EOF' | sudo tee /etc/systemd/system/node_exporter.service
+[Unit]
+Description=Prometheus Node Exporter
+After=network-online.target
+
+[Service]
+ExecStart=/opt/node_exporter/node_exporter
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable node_exporter
+sudo systemctl start node_exporter</pre>
+
+<p>Verify from WSL2:</p>
+<pre>curl http://localhost:9100/metrics | head -n 20</pre>
+
+<div class="info">
+<strong>Accessing WSL2 metrics from Windows:</strong> WSL2 runs on a virtual NIC. From Windows (or Prometheus on Node A), the WSL2 host is reachable at <code>localhost:9100</code> because Windows 10/11 auto-forwards localhost ports to WSL2. If using a remote Prometheus, forward with <code>netsh interface portproxy</code>.
+</div>
+<p>Add <code>localhost:9100</code> to your <code>prometheus.yml</code> scrape targets in place of (or alongside) the <code>windows_exporter</code> entry.</p>
+</div>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>4️⃣ Install Grafana on Windows</h2>
+
+<h3>4.1 Download and run the MSI installer</h3>
+<p>The official Grafana MSI auto-installs as a Windows service. Download from <a href="https://grafana.com/grafana/download?platform=windows">https://grafana.com/grafana/download</a> (choose Windows, OSS edition):</p>
+<pre># In Administrator PowerShell – adjust version as needed
+$GF_VER = "11.1.0"
+$GF_URL = "https://dl.grafana.com/oss/release/grafana-$GF_VER.windows-amd64.msi"
+
+Invoke-WebRequest -Uri $GF_URL -OutFile "$env:TEMP\grafana.msi"
+Start-Process msiexec -ArgumentList "/i `"$env:TEMP\grafana.msi`" /quiet /norestart" -Wait</pre>
+
+<p>Grafana is installed to <code>C:\Program Files\GrafanaLabs\grafana\</code> and registered as the <strong>Grafana</strong> Windows service, set to auto-start.</p>
+
+<h3>4.2 Start / verify the Grafana service</h3>
+<pre>Start-Service Grafana
+Get-Service Grafana      # Status: Running
+# Or using sc.exe:
+sc.exe query grafana     # Look for STATE : 4  RUNNING</pre>
+
+<h3>4.3 Access the Grafana UI</h3>
+<p>Open a browser on Node A and navigate to <code>http://localhost:3000</code>.<br>
+Default login: <code>admin / admin</code>. You will be prompted to change the password on first login.</p>
+
+<h3>4.4 Reset admin password (if needed)</h3>
+<pre>cd "C:\Program Files\GrafanaLabs\grafana\bin"
+.\grafana-cli admin reset-admin-password yournewpassword
+
+# Then restart the service to apply
+Restart-Service Grafana</pre>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>5️⃣ Add Prometheus as a Data Source in Grafana</h2>
+
+<ol>
+    <li>Log in to Grafana at <code>http://localhost:3000</code>.</li>
+    <li>Click <strong>⚙️ Configuration (gear icon) → Data Sources → Add data source</strong>.</li>
+    <li>Select <strong>Prometheus</strong> from the list.</li>
+    <li>Set the <strong>URL</strong> to <code>http://localhost:9090</code> (Prometheus runs on the same Node A host).</li>
+    <li>Leave <strong>Access</strong> as <em>Server (default)</em>.</li>
+    <li>Click <strong>Save &amp; test</strong>. You should see a green <em>Data source is working</em> banner.</li>
+</ol>
+
+<div class="note">
+If you run Grafana on a machine other than Node A, replace <code>localhost</code> with Node A's IP address (<code>192.168.1.10</code>) and ensure the Windows Firewall rule from Step 2.5 allows traffic on port 9090.
+</div>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>6️⃣ Create a Dashboard to Visualise Nodes</h2>
+
+<h3>6.1 Import a pre-built Windows dashboard (quickest)</h3>
+<p>Grafana has a community dashboard for <code>windows_exporter</code>. In the Grafana UI:</p>
+<ol>
+    <li>Click <strong>+ → Import</strong>.</li>
+    <li>Enter dashboard ID <strong>14694</strong> (Windows Node dashboard for windows_exporter) and click <strong>Load</strong>.</li>
+    <li>Select your Prometheus data source and click <strong>Import</strong>.</li>
+</ol>
+
+<h3>6.2 Build panels manually with PromQL</h3>
+<p>Click <strong>+ → Dashboard → Add new panel</strong>, set the query dropdown to <strong>Prometheus</strong>, and enter queries like these:</p>
+
+<pre># CPU % for Node A (windows_exporter metric – note the different metric name vs node_exporter)
+100 - (avg by (instance) (rate(windows_cpu_time_total{mode="idle"}[5m])) * 100)
+
+# Memory available % on Node A
+(windows_os_physical_memory_free_bytes / windows_cs_physical_memory_bytes) * 100
+
+# CPU % scoped to a specific remote node (e.g. Node B at 192.168.1.11)
+100 - (avg by (instance) (rate(windows_cpu_time_total{instance="192.168.1.11:9182",mode="idle"}[5m])) * 100)</pre>
+
+<div class="note">
+<strong>Metric name change:</strong> On Linux, <code>node_exporter</code> uses <code>node_cpu_seconds_total</code>.
+On Windows, <code>windows_exporter</code> uses <code>windows_cpu_time_total</code>.
+Update any copied Linux queries accordingly.
+</div>
+
+<h3>6.3 Node UP/DOWN status table</h3>
+<pre>up{job="remote-nodes"}</pre>
+<p>Set the visualization to <strong>Table</strong>, enable <strong>Color mode → Status</strong>, and you get a green/red view of every node's health.</p>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>7️⃣ Check Node Status from Node A via PowerShell</h2>
+
+<p>Instead of the Linux bash script, use PowerShell to query the Prometheus API from Node A:</p>
+
+<pre># Save as Check-NodeStatus.ps1 and run from Node A
+$PrometheusBase = "http://localhost:9090"
+$Nodes = @(
+    @{ name="Node-B"; instance="192.168.1.11:9182" },
+    @{ name="Node-C"; instance="192.168.1.12:9182" },
+    @{ name="Node-D"; instance="192.168.1.13:9182" }
+)
+
+foreach ($node in $Nodes) {
+    $query = [uri]::EscapeDataString("up{instance=`"$($node.instance)`"}")
+    $uri   = "$PrometheusBase/api/v1/query?query=$query"
+    try {
+        $resp   = Invoke-RestMethod -Uri $uri -ErrorAction Stop
+        $status = $resp.data.result[0].value[1]
+        if ($status -eq "1") {
+            Write-Host "✅ $($node.name) ($($node.instance)) is UP"
+        } else {
+            Write-Host "❌ $($node.name) ($($node.instance)) is DOWN or not scraped"
+        }
+    } catch {
+        Write-Host "⚠️  $($node.name) – query failed: $_"
+    }
+}</pre>
+
+<p>Run it with:</p>
+<pre>.\Check-NodeStatus.ps1</pre>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>8️⃣ Optional: NVIDIA GPU Metrics on Windows</h2>
+
+<p>Use <a href="https://github.com/utkuozdemir/nvidia_gpu_exporter"><strong>nvidia_gpu_exporter</strong></a> — it calls <code>nvidia-smi.exe</code> directly and works natively on Windows without Docker or Linux. It listens on port <strong>9835</strong> by default.</p>
+
+<h3>8.1 Download and install</h3>
+<pre># In Administrator PowerShell – check for latest release at
+# https://github.com/utkuozdemir/nvidia_gpu_exporter/releases
+$GPU_EXP_VER = "1.2.1"
+$GPU_URL = "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v$GPU_EXP_VER/nvidia_gpu_exporter_${GPU_EXP_VER}_windows_x86_64.zip"
+
+Invoke-WebRequest -Uri $GPU_URL -OutFile "$env:TEMP\gpu_exporter.zip"
+Expand-Archive -Path "$env:TEMP\gpu_exporter.zip" -DestinationPath "C:\gpu-exporter" -Force</pre>
+
+<h3>8.2 Install as a Windows service with NSSM</h3>
+<pre>C:\nssm\nssm.exe install NvidiaGPUExporter "C:\gpu-exporter\nvidia_gpu_exporter.exe"
+C:\nssm\nssm.exe set NvidiaGPUExporter AppDirectory "C:\gpu-exporter"
+C:\nssm\nssm.exe set NvidiaGPUExporter Start SERVICE_AUTO_START
+
+Start-Service NvidiaGPUExporter
+Get-Service NvidiaGPUExporter   # Status: Running</pre>
+
+<h3>8.3 Verify GPU metrics are exposed</h3>
+<pre>Invoke-RestMethod http://localhost:9835/metrics | Select-Object -First 20
+# Should include lines like: nvidia_smi_utilization_gpu_ratio, nvidia_smi_memory_used_bytes, etc.</pre>
+
+<h3>8.4 Add the GPU exporter to prometheus.yml</h3>
+<p>Add a new scrape job in <code>C:\prometheus\prometheus.yml</code> and restart Prometheus:</p>
+<pre>  - job_name: 'gpu'
+    static_configs:
+      - targets: ['localhost:9835']</pre>
+<pre>Restart-Service Prometheus</pre>
+
+<h3>8.5 Query GPU utilisation in Grafana</h3>
+<pre># GPU utilisation % on Node A
+nvidia_smi_utilization_gpu_ratio * 100
+
+# GPU memory used on a specific node
+nvidia_smi_memory_used_bytes{instance="192.168.1.11:9835"}</pre>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>9️⃣ Service Management Reference</h2>
+
+<p>All services run as Windows Services. Use these PowerShell commands to manage them:</p>
+
+<table>
+    <thead>
+        <tr><th>Action</th><th>Prometheus</th><th>windows_exporter</th><th>Grafana</th><th>NvidiaGPUExporter</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>Start</td><td><code>Start-Service Prometheus</code></td><td><code>Start-Service windows_exporter</code></td><td><code>Start-Service Grafana</code></td><td><code>Start-Service NvidiaGPUExporter</code></td></tr>
+        <tr><td>Stop</td><td><code>Stop-Service Prometheus</code></td><td><code>Stop-Service windows_exporter</code></td><td><code>Stop-Service Grafana</code></td><td><code>Stop-Service NvidiaGPUExporter</code></td></tr>
+        <tr><td>Restart</td><td><code>Restart-Service Prometheus</code></td><td><code>Restart-Service windows_exporter</code></td><td><code>Restart-Service Grafana</code></td><td><code>Restart-Service NvidiaGPUExporter</code></td></tr>
+        <tr><td>Status</td><td><code>Get-Service Prometheus</code></td><td><code>Get-Service windows_exporter</code></td><td><code>Get-Service Grafana</code></td><td><code>Get-Service NvidiaGPUExporter</code></td></tr>
+        <tr><td>Event log</td><td colspan="4"><code>Get-EventLog -LogName Application -Source "nssm" -Newest 20</code></td></tr>
+    </tbody>
+</table>
+
+<div class="note">
+All services are set to <code>SERVICE_AUTO_START</code>, so they restart automatically after a reboot.
+Use <code>services.msc</code> or the table above to verify they are running.
+</div>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="step">
+<h2>🔟 Summary Checklist</h2>
+<ol>
+    <li>✅ Install Prometheus (Windows .zip) and register it as a Windows service with NSSM.</li>
+    <li>✅ Install <strong>windows_exporter</strong> MSI on every Windows node (A, B, C, D) – opens metrics on port 9182.</li>
+    <li>✅ Open Firewall: port 9090 (Prometheus) on Node A; port 9182 (windows_exporter) on all nodes.</li>
+    <li>✅ (Optional) Install <strong>node_exporter</strong> inside WSL2 if you want Linux-style metrics on port 9100.</li>
+    <li>✅ (Optional) Install <strong>nvidia_gpu_exporter</strong> on the NVIDIA node and expose port 9835.</li>
+    <li>✅ Install Grafana via MSI on Node A – auto-starts as a Windows service on port 3000.</li>
+    <li>✅ Add Prometheus as a data source in Grafana (<code>http://localhost:9090</code>).</li>
+    <li>✅ Import dashboard ID <strong>14694</strong> for a pre-built Windows node overview.</li>
+    <li>✅ Build custom panels using <code>windows_cpu_time_total</code> and <code>nvidia_smi_*</code> metrics.</li>
+    <li>✅ Run <code>Check-NodeStatus.ps1</code> from Node A to verify all remote nodes are up.</li>
+</ol>
+</div>
+
+<div class="footer">
+© 2025 – Monitoring your cluster with Prometheus &amp; Grafana on Windows / WSL2.<br>
+All services use Windows Service auto-start – no Linux, systemd, or APT required.
+</div>
+
+</body>
+</html>

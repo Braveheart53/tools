@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU Monitoring Documentation</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #1abc9c;
+            --bg: #f8f9fa;
+            --text: #333;
+            --code-bg: #282c34;
+        }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            margin: 0;
+            background: var(--bg);
+        }
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 2.5rem 1rem;
+            text-align: center;
+        }
+        nav {
+            background: #34495e;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .nav-container {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+        }
+        .page-btn {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #ecf0f1;
+            padding: 15px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+        }
+        .page-btn:hover { background: rgba(255,255,255,0.08); }
+        .page-btn.active { border-bottom: 3px solid var(--accent); background: rgba(255,255,255,0.1); color: white; }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+        .page { display: none; animation: fadeIn 0.3s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        h1, h2, h3 { color: var(--primary); margin-top: 1.5rem; }
+        h2 { border-bottom: 2px solid var(--accent); padding-bottom: 8px; margin-top: 2rem; }
+        code { background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', Monaco, monospace; font-size: 0.95em; }
+        pre { background: var(--code-bg); color: #abb2bf; padding: 15px; border-radius: 6px; overflow-x: auto; margin: 15px 0; }
+        ul, ol { padding-left: 20px; }
+        li { margin-bottom: 8px; }
+        .note { background: #e8f4fd; border-left: 4px solid #3498db; padding: 14px; margin: 18px 0; border-radius: 4px; }
+        .note strong { color: #2980b9; }
+        .btn-download {
+            display: inline-block;
+            background: var(--accent);
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin-top: 30px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-download:hover { background: #16a085; }
+        footer { text-align: center; padding: 30px; color: #7f8c8d; font-size: 14px; border-top: 1px solid #e0e0e0; margin-top: 40px; }
+        .badge { display: inline-block; background: #eee; color: #555; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 8px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>GPU Monitoring Documentation</h1>
+        <p>Windows Exporter & Grafana Dashboard Integration Guide</p>
+    </header>
+    <nav>
+        <div class="nav-container">
+            <button class="page-btn active" onclick="showPage('page1')">1. Windows GPU Exporter Setup</button>
+            <button class="page-btn" onclick="showPage('page2')">2. Grafana Dashboard Configuration</button>
+        </div>
+    </nav>
+    <div class="container">
+        <!-- PAGE 1: Windows Exporter Setup (Reconstructed from context) -->
+        <div id="page1" class="page active">
+            <h2>Overview</h2>
+            <p>This guide covers installing and configuring the NVIDIA GPU exporter on Windows to expose hardware metrics to Prometheus.</p>
+            
+            <h2>Prerequisites</h2>
+            <ul>
+                <li>Windows Server/10/11 with NVIDIA GPUs and driver installed</li>
+                <li>Prometheus instance running & configured</li>
+                <li>Administrator privileges</li>
+            </ul>
+
+            <h2>Step 1: Download & Extract</h2>
+            <pre><code># Download latest release (replace version if needed)
+curl -LO https://github.com/prometheus-community/nvidia_gpu_exporter/releases/download/v1.5.0/nvidia_gpu_exporter-1.5.0.windows-amd64.zip
+Expand-Archive -Path nvidia_gpu_exporter-*.zip -DestinationPath C:\nvidia-exporter</code></pre>
+
+            <h2>Step 2: Configure & Run as Service</h2>
+            <pre><code># Create configuration file
+New-Item -Path "C:\nvidia-exporter\config.yaml" -ItemType file -Force
+
+# Start exporter manually to verify
+"C:\nvidia-exporter\nvidia_gpu_exporter.exe" --path-msi="C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.msi"
+
+# Or register as Windows Service for persistence
+New-Service -Name "NvidiaGPUExporter" -BinaryPathName "C:\nvidia-exporter\nvidia_gpu_exporter.exe" -DisplayName "NVIDIA GPU Exporter" -StartupType Automatic
+Start-Service "NvidiaGPUExporter"</code></pre>
+
+            <h2>Step 3: Verify Metrics</h2>
+            <p>Open a browser and visit: <code>http://localhost:9835</code></p>
+            <p>Confirm key metrics are exposed:</p>
+            <ul>
+                <li><code>nvidia_smi_utilization_gpu_ratio</code></li>
+                <li><code>nvidia_smi_memory_used_bytes</code></li>
+                <li>Power, temperature, and ECC metrics</li>
+            </ul>
+            <div class="note">ℹ️ <strong>Note:</strong> Ensure your <code>prometheus.yml</code> includes a scrape job targeting <code>localhost:9835</code>. Metrics will only appear in Prometheus after the first successful scrape cycle.</div>
+        </div>
+
+        <!-- PAGE 2: Grafana Dashboard Configuration (New Addition) -->
+        <div id="page2" class="page">
+            <h2>Overview</h2>
+            <p>Visualize GPU metrics in Grafana using the official NVIDIA GPU Exporter dashboard. This page covers data source configuration, dashboard import, and customization.</p>
+            
+            <h2>Prerequisites</h2>
+            <ul>
+                <li>Grafana installed and accessible via web browser</li>
+                <li>Prometheus data source configured in Grafana</li>
+                <li>GPU exporter running and exposing metrics (as covered in Page 1)</li>
+            </ul>
+
+            <h2>Step 1: Add Prometheus as a Data Source</h2>
+            <ol>
+                <li>Open Grafana and navigate to <strong>Configuration > Data Sources</strong>.</li>
+                <li>Click <strong>Add data source</strong> and select <strong>Prometheus</strong>.</li>
+                <li>Set the URL to your Prometheus instance (e.g., <code>http://localhost:9090</code>).</li>
+                <li>Click <strong>Save & Test</strong> to verify connectivity.</li>
+            </ol>
+
+            <h2>Step 2: Import a GPU Dashboard</h2>
+            <p>The most widely adopted option is the official community dashboard (ID: <code>12574</code>).</p>
+            <ol>
+                <li>In Grafana, go to <strong>Create > Import</strong>.</li>
+                <li>Paste <code>12574</code> into the import field, or upload a valid JSON dashboard file.</li>
+                <li>Under <strong>Settings</strong>, map the dashboard to the Prometheus data source configured in Step 1.</li>
+                <li>Click <strong>Import</strong>.</li>
+            </ol>
+
+            <h2>Step 3: Configure & Verify Panels</h2>
+            <p>Once imported, panels will automatically query exposed metrics. Key panels typically include:</p>
+            <ul>
+                <li><strong>GPU Utilization:</strong> Queries <code>nvidia_smi_utilization_gpu_ratio</code></li>
+                <li><strong>Memory Usage:</strong> Visualizes <code>nvidia_smi_memory_used_bytes</code> vs allocated memory</li>
+                <li><strong>Temperature & Power:</strong> Tracks thermal output and power draw per GPU</li>
+            </ul>
+            <div class="note">ℹ️ <strong>Troubleshooting:</strong> If panels show <code>No Data</code>, verify:
+                <ul>
+                    <li>The exporter service is running (<code>Get-Service NvidiaGPUExporter</code>)</li>
+                    <li>Prometheus scrape job includes <code>localhost:9835</code></li>
+                    <li>Grafana time range covers the last 5–10 minutes</li>
+                </ul>
+            </div>
+
+            <h2>Step 4: Customize & Multi-GPU Support</h2>
+            <ol>
+                <li>Click any panel title > <strong>Edit</strong>.</li>
+                <li>Modify the PromQL query to target specific GPUs (e.g., <code>nvidia_smi_utilization_gpu_ratio{device=~"0|1|2"}</code> for a 3-GPU system).</li>
+                <li>Adjust panel thresholds, legends, and display units.</li>
+                <li>Click <strong>Apply</strong> to save changes.</li>
+            </ol>
+
+            <p><strong>✅ Pipeline Complete:</strong> You now have a fully functional monitoring stack: Windows Exporter → Prometheus → Grafana. You can track real-time GPU health, utilization, and memory consumption directly in your Grafana instance.</p>
+        </div>
+    </div>
+
+    <footer>
+        <p>GPU Monitoring Documentation | Generated for Immediate Deployment</p>
+        <button class="btn-download" onclick="downloadHTML()">⬇️ Download as .html File</button>
+    </footer>
+
+    <script>
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.page-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function downloadHTML() {
+            const htmlContent = document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'GPU-Monitoring-Guide.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

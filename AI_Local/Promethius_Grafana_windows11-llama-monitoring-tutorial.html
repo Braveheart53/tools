@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Windows 11 Prometheus + Grafana — Multi-Node llama-server</title>
+  <style>
+    :root, [data-theme="light"] {
+      --bg: #f6f7fb;
+      --surface: #ffffff;
+      --surface-2: #f0f3f9;
+      --text: #172033;
+      --muted: #5c6780;
+      --border: #d7ddeb;
+      --accent: #0b6bcb;
+      --accent-hover: #0955a8;
+      --warn-bg: #fff9f1;
+      --warn-border: #a85a00;
+      --code-bg: #101522;
+      --code-text: #e8eefc;
+      --shadow: 0 10px 30px rgba(18,34,66,0.08);
+      --hero-bg: linear-gradient(135deg,#eef5ff 0%,#f7fbff 55%,#eefaf7 100%);
+      --callout-bg: #f7fbff;
+      --callout-border: #0b6bcb;
+      --table-head: #f0f3f9;
+      --nav-bg: #ffffff;
+      --nav-active: #e6f0fc;
+      --nav-active-text: #0b6bcb;
+      --nav-border: #dce3f0;
+      --toggle-bg: #e0e7ef;
+    }
+    [data-theme="dark"] {
+      --bg: #13151c;
+      --surface: #1c1f2a;
+      --surface-2: #252836;
+      --text: #d4d8e8;
+      --muted: #8892aa;
+      --border: #2e3345;
+      --accent: #4d9cef;
+      --accent-hover: #74b4f5;
+      --warn-bg: #1e1608;
+      --warn-border: #e09040;
+      --code-bg: #0b0e16;
+      --code-text: #e2eaff;
+      --shadow: 0 10px 30px rgba(0,0,0,0.4);
+      --hero-bg: linear-gradient(135deg,#151c2e 0%,#131620 55%,#0f1e1c 100%);
+      --callout-bg: #161d2e;
+      --callout-border: #4d9cef;
+      --table-head: #1e2130;
+      --nav-bg: #1c1f2a;
+      --nav-active: #1e2e44;
+      --nav-active-text: #4d9cef;
+      --nav-border: #2e3345;
+      --toggle-bg: #2e3345;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; scroll-padding-top: 56px; }
+    body {
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      transition: background 0.25s, color 0.25s;
+    }
+    /* ── Top bar ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px;
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      transition: background 0.25s;
+    }
+    .topbar-title { font-weight: 700; font-size: 1rem; color: var(--text); }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .hamburger {
+      display: none; background: none; border: none;
+      cursor: pointer; color: var(--text); padding: 6px;
+    }
+    .theme-btn {
+      display: flex; align-items: center; gap: 7px;
+      padding: 7px 16px; border: 1px solid var(--border);
+      border-radius: 999px; background: var(--toggle-bg);
+      color: var(--text); cursor: pointer; font-size: 0.87rem;
+      font-family: inherit;
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+    /* ── Layout ── */
+    .layout { display: flex; min-height: calc(100vh - 52px); }
+    /* ── Sidebar nav ── */
+    .sidebar {
+      width: 270px; flex-shrink: 0;
+      background: var(--nav-bg);
+      border-right: 1px solid var(--nav-border);
+      position: sticky; top: 52px; height: calc(100vh - 52px);
+      overflow-y: auto; padding: 16px 0 32px;
+      transition: background 0.25s, transform 0.3s;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .nav-section { margin-bottom: 4px; }
+    .nav-h2 {
+      display: block; padding: 8px 16px; font-size: 0.82rem;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); text-decoration: none;
+      transition: color 0.15s;
+      cursor: pointer;
+    }
+    .nav-h2:hover { color: var(--accent); }
+    .nav-h2.active { color: var(--nav-active-text); }
+    .nav-h3-list { list-style: none; }
+    .nav-h3-list a {
+      display: block; padding: 5px 16px 5px 28px;
+      font-size: 0.83rem; color: var(--muted);
+      text-decoration: none; border-radius: 6px;
+      margin: 1px 8px; transition: background 0.15s, color 0.15s;
+    }
+    .nav-h3-list a:hover { background: var(--nav-active); color: var(--accent); }
+    .nav-h3-list a.active { background: var(--nav-active); color: var(--nav-active-text); font-weight: 600; }
+    /* ── Main content ── */
+    .main { flex: 1; min-width: 0; padding: 32px 36px 80px; max-width: 860px; }
+    /* ── Hero ── */
+    .hero {
+      background: var(--hero-bg); border: 1px solid var(--border);
+      border-radius: 22px; padding: 32px;
+      box-shadow: var(--shadow); margin-bottom: 28px;
+      transition: background 0.25s;
+    }
+    h1 { font-size: 2rem; margin-bottom: 10px; line-height: 1.2; }
+    h2 {
+      font-size: 1.45rem; margin-top: 36px; margin-bottom: 4px;
+      border-bottom: 2px solid var(--border); padding-bottom: 8px;
+      scroll-margin-top: 60px;
+    }
+    h3 { font-size: 1.05rem; margin-top: 22px; scroll-margin-top: 60px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px 22px;
+      box-shadow: var(--shadow); margin: 16px 0;
+      transition: background 0.25s;
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    pre {
+      background: var(--code-bg); color: var(--code-text);
+      padding: 15px; border-radius: 12px; overflow: auto;
+      border: 1px solid rgba(255,255,255,0.05);
+      white-space: pre-wrap; word-break: break-word;
+      margin: 10px 0; font-size: 0.88rem;
+      transition: background 0.25s;
+    }
+    code {
+      background: var(--surface-2); color: var(--accent);
+      padding: 2px 6px; border-radius: 5px; font-size: 0.9em;
+    }
+    pre code { background: none; color: inherit; padding: 0; }
+    .callout {
+      border-left: 5px solid var(--callout-border);
+      background: var(--callout-bg); padding: 12px 15px;
+      border-radius: 10px; margin: 14px 0;
+      transition: background 0.25s;
+    }
+    .callout.warn { border-left-color: var(--warn-border); background: var(--warn-bg); }
+    table {
+      width: 100%; border-collapse: collapse; background: var(--surface);
+      border-radius: 12px; overflow: hidden; margin: 14px 0 20px;
+      box-shadow: var(--shadow);
+    }
+    th, td { text-align: left; border: 1px solid var(--border); padding: 10px 13px; vertical-align: top; }
+    th { background: var(--table-head); font-size: 0.9rem; }
+    td { font-size: 0.92rem; }
+    .step {
+      display: inline-block; background: var(--accent); color: white;
+      border-radius: 999px; font-size: 0.82rem; padding: 3px 9px;
+      margin-right: 7px; vertical-align: middle;
+    }
+    ul, ol { padding-left: 20px; margin: 8px 0; }
+    li { margin: 4px 0; }
+    .pill {
+      display: inline-block; padding: 3px 10px; border-radius: 999px;
+      background: #e9f3ff; color: #0b4f96; font-size: 0.82rem; margin: 3px 5px 3px 0;
+    }
+    [data-theme="dark"] .pill { background: #1a2a42; color: #74b4f5; }
+    .footer {
+      margin-top: 36px; color: var(--muted); font-size: 0.9rem;
+      border-top: 1px solid var(--border); padding-top: 20px;
+    }
+    /* ── Mobile ── */
+    @media (max-width: 768px) {
+      .hamburger { display: block; }
+      .sidebar {
+        position: fixed; top: 52px; left: 0; z-index: 150;
+        transform: translateX(-100%); height: calc(100vh - 52px);
+        width: 260px; box-shadow: 4px 0 20px rgba(0,0,0,0.18);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .main { padding: 20px 16px 60px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header class="topbar">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button class="hamburger" id="hamburger" aria-label="Toggle navigation">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <span class="topbar-title">Prometheus + Grafana — Multi-Node llama-server</span>
+  </div>
+  <div class="topbar-right">
+    <button class="theme-btn" id="themeToggle" aria-label="Toggle dark mode">
+      <svg id="themeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <span id="themeLabel">Dark mode</span>
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar" aria-label="Page navigation">
+  <div class="nav-section">
+    <a class="nav-h2" href="#architecture">Architecture</a>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#prerequisites">Prerequisites</a>
+    <ul class="nav-h3-list">
+      <li><a href="#prereq-nodea">NODE-A</a></li>
+      <li><a href="#prereq-workers">NODE-B/C/D</a></li>
+    </ul>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#windows-exporter">Windows Exporter</a>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#prometheus-install">Install Prometheus</a>
+    <ul class="nav-h3-list">
+      <li><a href="#prometheus-yml">prometheus.yml</a></li>
+      <li><a href="#prometheus-test">Test config</a></li>
+    </ul>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#prometheus-service">Prometheus Service</a>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#grafana-install">Install Grafana</a>
+    <ul class="nav-h3-list">
+      <li><a href="#grafana-port">Change default port</a></li>
+    </ul>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#user-management">User Management</a>
+    <ul class="nav-h3-list">
+      <li><a href="#first-login">First login</a></li>
+      <li><a href="#roles">Roles explained</a></li>
+      <li><a href="#create-user">Create a user</a></li>
+      <li><a href="#change-role">Change role</a></li>
+      <li><a href="#server-admin">Server Admin</a></li>
+      <li><a href="#disable-delete">Disable / delete</a></li>
+      <li><a href="#reset-password">Reset password</a></li>
+      <li><a href="#teams">Teams</a></li>
+      <li><a href="#dashboard-perms">Dashboard permissions</a></li>
+      <li><a href="#anon-access">Anonymous access</a></li>
+    </ul>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#datasource">Data Source</a>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#dashboard-layout">Dashboard Layout</a>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#panels">Panel Creation</a>
+    <ul class="nav-h3-list">
+      <li><a href="#panel-targets">Target health</a></li>
+      <li><a href="#panel-cpu">Node CPU</a></li>
+      <li><a href="#panel-memory">Node memory</a></li>
+      <li><a href="#panel-model">Per-model metrics</a></li>
+      <li><a href="#panel-requests">Request rate</a></li>
+      <li><a href="#panel-tokens">Tokens / sec</a></li>
+    </ul>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#raw-metrics">Inspect Raw Metrics</a>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#troubleshooting">Troubleshooting</a>
+    <ul class="nav-h3-list">
+      <li><a href="#ts-prom-down">Target DOWN</a></li>
+      <li><a href="#ts-no-data">No data in Grafana</a></li>
+      <li><a href="#ts-model-empty">Model panels empty</a></li>
+      <li><a href="#ts-yaml">YAML errors</a></li>
+      <li><a href="#ts-login">Login / password</a></li>
+    </ul>
+  </div>
+  <div class="nav-section">
+    <a class="nav-h2" href="#maintenance">Maintenance</a>
+  </div>
+</nav>
+
+<!-- Main -->
+<main class="main" id="mainContent">
+  <section class="hero">
+    <div class="pill">Windows 11</div>
+    <div class="pill">Prometheus</div>
+    <div class="pill">Grafana</div>
+    <div class="pill">llama-server router mode</div>
+    <h1>Prometheus &amp; Grafana setup<br>for a multi-node llama-server cluster</h1>
+    <p>This walkthrough shows how to monitor a Windows 11 multi-node llama.cpp deployment where <strong>NODE-A</strong> runs <code>llama-server</code> in router mode, Prometheus, Grafana, nginx, and Open WebUI, while worker nodes expose RPC and Windows host metrics.</p>
+    <p style="color:var(--muted);font-size:0.9rem;">Assumes: Prometheus port 9090 · Grafana port 3000 · windows_exporter port 9182 · llama-server port 8080 · RPC workers port 50052.</p>
+  </section>
+
+  <!-- Architecture -->
+  <h2 id="architecture">Architecture overview</h2>
+  <div class="card">
+    <table>
+      <tr><th>Component</th><th>Runs where</th><th>Purpose</th></tr>
+      <tr><td>llama-server (router mode)</td><td>NODE-A</td><td>Single inference/control endpoint; routes requests to named model presets via RPC workers.</td></tr>
+      <tr><td>rpc-server</td><td>NODE-B/C/D</td><td>Worker nodes contributing compute to the model loaded by NODE-A.</td></tr>
+      <tr><td>Prometheus</td><td>NODE-A</td><td>Scrapes metrics from windows_exporter, Prometheus itself, and per-model llama-server endpoints.</td></tr>
+      <tr><td>Grafana</td><td>NODE-A</td><td>Builds dashboards for tokens/sec, queue depth, CPU, memory, and host visibility.</td></tr>
+      <tr><td>windows_exporter</td><td>NODE-A/B/C/D</td><td>Exports CPU, memory, disk, and OS metrics from each Windows machine.</td></tr>
+      <tr><td>nginx</td><td>NODE-A</td><td>Reverse proxy for Open WebUI only. Does not distribute RPC workers.</td></tr>
+    </table>
+    <div class="callout">In router mode, Prometheus scrapes <code>/metrics?model=&lt;model-id&gt;</code> on NODE-A per named model preset. Grafana panels for Nemotron, Mistral, and Llama 3.1 should each use a separate Prometheus job.</div>
+  </div>
+
+  <!-- Prerequisites -->
+  <h2 id="prerequisites">Prerequisites</h2>
+  <div class="grid">
+    <div class="card">
+      <h3 id="prereq-nodea">On NODE-A</h3>
+      <ul>
+        <li>Windows 11 administrative access</li>
+        <li><code>llama-server.exe</code> already working manually</li>
+        <li>NSSM at <code>C:\tools\nssm.exe</code></li>
+        <li>Prometheus extracted to <code>C:\Prometheus</code></li>
+        <li>Grafana installed via MSI or extracted to <code>C:\Grafana</code></li>
+        <li><code>C:\logs</code> folder created</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 id="prereq-workers">On NODE-B/C/D</h3>
+      <ul>
+        <li>RPC service reachable on port <code>50052</code></li>
+        <li><code>windows_exporter</code> installed on port <code>9182</code></li>
+        <li>Firewall allows NODE-A to scrape port <code>9182</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Windows exporter -->
+  <h2 id="windows-exporter">Install windows_exporter on all nodes</h2>
+  <div class="card">
+    <p><span class="step">1</span>Download the latest <code>windows_exporter</code> MSI from GitHub and install on NODE-A, B, C, and D.</p>
+    <p><span class="step">2</span>Confirm it is reachable locally on each node:</p>
+    <pre>http://localhost:9182/metrics</pre>
+    <p><span class="step">3</span>From NODE-A, confirm each worker is reachable over the network:</p>
+    <pre>Test-NetConnection 192.168.7.28 -Port 9182
+Test-NetConnection 192.168.7.45 -Port 9182
+Test-NetConnection 192.168.7.181 -Port 9182</pre>
+    <div class="callout warn">If port 9182 is blocked, Prometheus will mark the target DOWN. Fix Windows Firewall on each worker before configuring Prometheus scrape jobs.</div>
+  </div>
+
+  <!-- Prometheus install -->
+  <h2 id="prometheus-install">Install Prometheus on NODE-A</h2>
+  <div class="card">
+    <p><span class="step">1</span>Download Prometheus for Windows from prometheus.io and extract to <code>C:\Prometheus</code>.</p>
+    <p><span class="step">2</span>Create <code>C:\Prometheus\prometheus.yml</code>:</p>
+    <h3 id="prometheus-yml">prometheus.yml</h3>
+    <pre>global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+
+scrape_configs:
+  - job_name: "AI_Nodes"
+    static_configs:
+      - targets:
+          - 192.168.7.27:9182
+          - 192.168.7.28:9182
+          - 192.168.7.45:9182
+          - 192.168.7.181:9182
+
+  - job_name: "llamacpp_nemotron3"
+    metrics_path: /metrics
+    params:
+      model: [ "nemotron3" ]
+    static_configs:
+      - targets:
+          - 192.168.7.27:8080
+
+  - job_name: "llamacpp_mistral"
+    metrics_path: /metrics
+    params:
+      model: [ "mistral-medium" ]
+    static_configs:
+      - targets:
+          - 192.168.7.27:8080
+
+  - job_name: "llamacpp_llama31_8b"
+    metrics_path: /metrics
+    params:
+      model: [ "llama31-8b" ]
+    static_configs:
+      - targets:
+          - 192.168.7.27:8080
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets:
+          - 127.0.0.1:9090</pre>
+    <h3 id="prometheus-test">Test the config</h3>
+    <pre>cd C:\Prometheus
+.\prometheus.exe --config.file="C:\Prometheus\prometheus.yml" --config.check</pre>
+    <div class="callout">If <code>--config.check</code> is not supported, run Prometheus normally and check for YAML errors on startup. Every <code>- job_name</code> block must have its children indented under it with 2-space indentation.</div>
+  </div>
+
+  <!-- Prometheus service -->
+  <h2 id="prometheus-service">Install Prometheus as a Windows service (NSSM)</h2>
+  <div class="card">
+    <pre>$svcArgs = '--config.file="C:\Prometheus\prometheus.yml"'
+
+C:\tools\nssm.exe install Prometheus `
+  "C:\Prometheus\prometheus.exe" $svcArgs
+
+C:\tools\nssm.exe set Prometheus AppDirectory C:\Prometheus
+C:\tools\nssm.exe set Prometheus Start SERVICE_AUTO_START
+C:\tools\nssm.exe set Prometheus AppStdout C:\logs\prometheus.log
+C:\tools\nssm.exe set Prometheus AppStderr C:\logs\prometheus-err.log
+
+Start-Service Prometheus</pre>
+    <p>To apply any future changes to <code>prometheus.yml</code>:</p>
+    <pre>Restart-Service Prometheus</pre>
+  </div>
+
+  <!-- Grafana install -->
+  <h2 id="grafana-install">Install Grafana on NODE-A</h2>
+  <div class="card">
+    <p><span class="step">1</span>Download the Grafana Windows MSI from grafana.com and run it. The MSI automatically creates and starts a <strong>Grafana Windows service</strong>.</p>
+    <p><span class="step">2</span>Open <code>http://localhost:3000</code>. Grafana should be accessible immediately after MSI installation.</p>
+    <h3 id="grafana-port">Change the default port</h3>
+    <p>Edit <code>C:\Program Files\GrafanaLabs\grafana\conf\custom.ini</code> (create it by copying <code>sample.ini</code> if it does not exist):</p>
+    <pre>[server]
+http_port = 3001</pre>
+    <pre>Restart-Service grafana</pre>
+    <div class="callout">Always use <code>custom.ini</code>, not <code>defaults.ini</code>. This ensures Grafana upgrades do not overwrite your settings.</div>
+  </div>
+
+  <!-- User management -->
+  <h2 id="user-management">Grafana user management and access control</h2>
+
+  <div class="card">
+    <h3 id="first-login">First login and mandatory password change</h3>
+    <p>On first visit to <code>http://localhost:3000</code>, log in with the default credentials:</p>
+    <ul>
+      <li><strong>Username:</strong> <code>admin</code></li>
+      <li><strong>Password:</strong> <code>admin</code></li>
+    </ul>
+    <p>Grafana immediately prompts you to change the admin password. Set a strong password and click <strong>Save</strong>. This must be completed before proceeding.</p>
+    <div class="callout warn">Never leave the default <code>admin</code>/<code>admin</code> credentials in a multi-user or network-accessible environment.</div>
+  </div>
+
+  <div class="card">
+    <h3 id="roles">Grafana roles explained</h3>
+    <table>
+      <tr><th>Role</th><th>Permissions</th></tr>
+      <tr><td><strong>Grafana Admin (Server Admin)</strong></td><td>Create/delete users, manage all organizations, configure plugins and data sources server-wide. Only the initial <code>admin</code> account has this.</td></tr>
+      <tr><td><strong>Organization Admin</strong></td><td>Manage data sources, teams, and users within one organization. Assign roles to members.</td></tr>
+      <tr><td><strong>Editor</strong></td><td>Create, edit, and delete dashboards, panels, and alert rules. Cannot manage users.</td></tr>
+      <tr><td><strong>Viewer</strong></td><td>View dashboards only. Cannot edit any content.</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 id="create-user">Create a new user</h3>
+    <ol>
+      <li>Sign in as <code>admin</code>.</li>
+      <li>Go to <strong>Administration → Users and access → Users</strong>.</li>
+      <li>Click <strong>New user</strong>.</li>
+      <li>Fill in <strong>Name</strong>, <strong>Email</strong>, <strong>Username</strong>, and <strong>Password</strong>.</li>
+      <li>Click <strong>Create user</strong>.</li>
+    </ol>
+    <p>The new user is automatically assigned <strong>Viewer</strong> in the default organization.</p>
+  </div>
+
+  <div class="card">
+    <h3 id="change-role">Change a user's role</h3>
+    <ol>
+      <li>Go to <strong>Administration → Users and access → Users</strong>.</li>
+      <li>Click the user to update.</li>
+      <li>Scroll to the <strong>Organizations</strong> section at the bottom.</li>
+      <li>Click the <strong>role dropdown</strong> (Viewer / Editor / Admin) and select the desired role.</li>
+      <li>The change takes effect on the user's next page load.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3 id="server-admin">Grant or remove Server Admin privileges</h3>
+    <ol>
+      <li>Go to <strong>Administration → Users and access → Users</strong>.</li>
+      <li>Click the user.</li>
+      <li>In the <strong>Permissions</strong> section, next to <strong>Grafana Admin</strong>, click <strong>Change</strong>.</li>
+      <li>Select <strong>Yes</strong> to grant or <strong>No</strong> to revoke, then confirm.</li>
+    </ol>
+    <div class="callout warn">Grant Server Admin only to trusted accounts. Server Admins bypass all dashboard and folder permission rules.</div>
+  </div>
+
+  <div class="card">
+    <h3 id="disable-delete">Disable or delete a user</h3>
+    <ol>
+      <li>Go to <strong>Administration → Users and access → Users</strong>.</li>
+      <li>Click the user.</li>
+      <li><strong>Disable:</strong> click <strong>Disable user</strong>. The account is retained but the user cannot sign in.</li>
+      <li><strong>Delete:</strong> click <strong>Delete user</strong>. This is permanent and irreversible.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3 id="reset-password">Reset the admin password (CLI)</h3>
+    <p>If the admin password is lost, use <code>grafana-cli</code> from an elevated PowerShell:</p>
+    <pre>cd "C:\Program Files\GrafanaLabs\grafana\bin"
+grafana-cli admin reset-admin-password NEW_PASSWORD_HERE</pre>
+    <pre>Restart-Service grafana</pre>
+    <div class="callout">If Grafana is installed to a custom path, prefix the command with <code>--homepath "C:\your\grafana\path"</code> before the <code>admin</code> subcommand.</div>
+  </div>
+
+  <div class="card">
+    <h3 id="teams">Create teams and assign team permissions</h3>
+    <ol>
+      <li>Go to <strong>Administration → Users and access → Teams</strong>.</li>
+      <li>Click <strong>New team</strong>, give it a name (e.g., <code>llm-ops</code>), and click <strong>Create</strong>.</li>
+      <li>On the team page click <strong>Add member</strong> and add users.</li>
+      <li>Go to a dashboard folder → <strong>Manage permissions → Add permission → Team</strong> → select your team → set role → click <strong>Save</strong>.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3 id="dashboard-perms">Dashboard and folder permissions</h3>
+    <ol>
+      <li>In the left sidebar click <strong>Dashboards</strong>.</li>
+      <li>Hover over a folder or dashboard and click its kebab menu (⋮) or the gear icon.</li>
+      <li>Select <strong>Manage permissions</strong>.</li>
+      <li>Click <strong>Add permission</strong>, choose User, Team, or a role, set the access level, and click <strong>Save</strong>.</li>
+    </ol>
+    <div class="callout warn">The most permissive rule always wins. Removing a default role from a folder does not restrict a Server Admin.</div>
+  </div>
+
+  <div class="card">
+    <h3 id="anon-access">Disable anonymous access</h3>
+    <p>Confirm no anonymous access is allowed in <code>custom.ini</code>:</p>
+    <pre>[auth.anonymous]
+enabled = false</pre>
+    <p>If <code>enabled = true</code> is present, any browser on your LAN can view dashboards without a password.</p>
+    <pre>Restart-Service grafana</pre>
+  </div>
+
+  <!-- Data source -->
+  <h2 id="datasource">Add Prometheus as a Grafana data source</h2>
+  <div class="card">
+    <ol>
+      <li>Open Grafana at <code>http://localhost:3000</code>.</li>
+      <li>Go to <strong>Connections → Data sources</strong>.</li>
+      <li>Click <strong>Add data source</strong> and select <strong>Prometheus</strong>.</li>
+      <li>Set <strong>URL</strong> to <code>http://localhost:9090</code>.</li>
+      <li>Leave authentication off unless you added a reverse proxy or auth layer.</li>
+      <li>Click <strong>Save &amp; test</strong>.</li>
+    </ol>
+    <div class="callout">If Grafana cannot reach Prometheus, verify <code>http://localhost:9090</code> works in a browser on NODE-A first, then check the Prometheus service state and firewall.</div>
+  </div>
+
+  <!-- Dashboard layout -->
+  <h2 id="dashboard-layout">Recommended dashboard layout</h2>
+  <div class="card">
+    <p>Organize the dashboard into three logical rows:</p>
+    <ul>
+      <li><strong>Row 1 — Cluster health:</strong> target count, Prometheus health, RPC node reachability.</li>
+      <li><strong>Row 2 — Model activity:</strong> tokens/sec, requests, queue depth per preset.</li>
+      <li><strong>Row 3 — Host resources:</strong> CPU and memory per node.</li>
+    </ul>
+    <table>
+      <tr><th>Panel</th><th>Type</th><th>Purpose</th></tr>
+      <tr><td>Prometheus targets up</td><td>Stat</td><td>Quick signal all scrape jobs are healthy.</td></tr>
+      <tr><td>NODE-A CPU usage</td><td>Time series</td><td>Control-plane load on the master node.</td></tr>
+      <tr><td>NODE-A memory usage</td><td>Time series</td><td>RAM pressure on the router machine.</td></tr>
+      <tr><td>Nemotron request activity</td><td>Time series</td><td>Model-specific traffic from router mode.</td></tr>
+      <tr><td>Mistral request activity</td><td>Time series</td><td>Compare load between models.</td></tr>
+      <tr><td>All nodes CPU by instance</td><td>Time series</td><td>See whether all workers are under load.</td></tr>
+      <tr><td>All nodes memory used</td><td>Bar gauge</td><td>Which worker has highest RAM pressure.</td></tr>
+    </table>
+  </div>
+
+  <!-- Panel creation -->
+  <h2 id="panels">Step-by-step panel creation</h2>
+
+  <div class="card">
+    <h3 id="panel-targets">Panel 1 — Prometheus target health</h3>
+    <ol>
+      <li>Create a new dashboard and click <strong>Add visualization</strong>.</li>
+      <li>Select your Prometheus data source.</li>
+      <li>Choose a <strong>Stat</strong> panel type.</li>
+      <li>Enter the query and click <strong>Run query</strong>:</li>
+    </ol>
+    <pre>sum(up)</pre>
+    <p>Rename the panel to <strong>Targets Up</strong>. A value equal to your total job count means all scrape targets are healthy.</p>
+  </div>
+
+  <div class="card">
+    <h3 id="panel-cpu">Panel 2 — Node CPU usage (%)</h3>
+    <p>Create a <strong>Time series</strong> panel with:</p>
+    <pre>100 - (avg by (instance) (rate(windows_cpu_time_total{mode="idle"}[5m])) * 100)</pre>
+    <p>Set legend to <code>{{instance}}</code>. Unit: <strong>Percent (0–100)</strong>.</p>
+  </div>
+
+  <div class="card">
+    <h3 id="panel-memory">Panel 3 — Node memory usage (%)</h3>
+    <pre>(1 - (windows_os_physical_memory_free_bytes / windows_cs_physical_memory_bytes)) * 100</pre>
+    <p>Unit: <strong>Percent (0–100)</strong>. Legend: <code>{{instance}}</code>.</p>
+  </div>
+
+  <div class="card">
+    <h3 id="panel-model">Panel 4 — Per-model metrics</h3>
+    <p>Filter by Prometheus job label. In Grafana Explore, browse metric names beginning with <code>llama_</code> to confirm the exact names your build exports:</p>
+    <pre>{job="llamacpp_nemotron3"}</pre>
+    <div class="callout warn">llama.cpp metric names can change between builds. Always verify exact names by opening <code>http://192.168.7.27:8080/metrics?model=nemotron3</code> directly before writing panel queries.</div>
+  </div>
+
+  <div class="card">
+    <h3 id="panel-requests">Panel 5 — Request rate per model</h3>
+    <pre>rate(llama_requests_total{job="llamacpp_nemotron3"}[5m])</pre>
+    <p>Duplicate this panel for each model, changing only the job label. Unit: <strong>ops/sec</strong>.</p>
+  </div>
+
+  <div class="card">
+    <h3 id="panel-tokens">Panel 6 — Tokens per second</h3>
+    <pre>rate(llama_tokens_total{job="llamacpp_nemotron3"}[5m])</pre>
+    <p>Format as <strong>ops/sec</strong> or a custom unit. Duplicate for each model preset.</p>
+  </div>
+
+  <!-- Raw metrics -->
+  <h2 id="raw-metrics">Inspect raw metrics before building panels</h2>
+  <div class="card">
+    <p>Open these URLs in a browser on NODE-A to see every metric name available:</p>
+    <pre>http://192.168.7.27:8080/metrics?model=nemotron3
+http://192.168.7.27:8080/metrics?model=mistral-medium
+http://192.168.7.27:8080/metrics?model=llama31-8b
+http://192.168.7.27:9182/metrics
+http://127.0.0.1:9090/metrics</pre>
+  </div>
+
+  <!-- Troubleshooting -->
+  <h2 id="troubleshooting">Troubleshooting</h2>
+
+  <div class="card">
+    <h3 id="ts-prom-down">Prometheus target is DOWN</h3>
+    <ul>
+      <li>Check Windows Firewall on the target machine.</li>
+      <li>Confirm the exporter service is running.</li>
+      <li>Open the target URL directly in a browser from NODE-A.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3 id="ts-no-data">Grafana shows no data</h3>
+    <ul>
+      <li>Open Grafana Explore and browse metric names to confirm they exist.</li>
+      <li>Verify the job label in your query matches exactly what is in prometheus.yml.</li>
+      <li>Confirm the Prometheus scrape target is UP.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3 id="ts-model-empty">llama-server model panels are empty</h3>
+    <ul>
+      <li>Confirm <code>params.model</code> in prometheus.yml exactly matches the section name in your <code>Ollama_models.ini</code>.</li>
+      <li>Open <code>/metrics?model=&lt;name&gt;</code> directly and verify metrics are returned.</li>
+      <li>Ensure <code>--metrics</code> is enabled in the llama-server service definition.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3 id="ts-yaml">prometheus.yml config errors</h3>
+    <ul>
+      <li>Use two-space indentation throughout the file.</li>
+      <li>Every <code>- job_name</code> entry needs its child keys indented under it.</li>
+      <li>Each job name must be unique across the entire file.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3 id="ts-login">Grafana login / password issues</h3>
+    <ul>
+      <li>Use <code>grafana-cli admin reset-admin-password NEWPASS</code> from an elevated prompt in the <code>bin</code> folder, then restart the Grafana service.</li>
+      <li>If the Grafana service fails to start after installation, check <code>C:\logs\grafana.log</code> for the cause.</li>
+    </ul>
+  </div>
+
+  <!-- Maintenance -->
+  <h2 id="maintenance">Maintenance workflow</h2>
+  <div class="card">
+    <ol>
+      <li>Add or change a model preset in <code>Ollama_models.ini</code>.</li>
+      <li>Add a matching Prometheus scrape job using <code>params.model</code>.</li>
+      <li>Run <code>.\prometheus.exe --config.file=... --config.check</code>.</li>
+      <li>Restart the Prometheus service: <code>Restart-Service Prometheus</code>.</li>
+      <li>Add or duplicate a Grafana panel for the new job.</li>
+      <li>Verify new time series appear in Grafana Explore.</li>
+    </ol>
+  </div>
+
+  <p class="footer">This guide covers a Windows 11 multi-node llama-server deployment using router mode with per-model Prometheus scrapes, Grafana dashboards, and user access management.</p>
+</main>
+</div><!-- /.layout -->
+
+<script>
+// ── Theme toggle ──
+(function () {
+  var html = document.documentElement;
+  var btn = document.getElementById('themeToggle');
+  var label = document.getElementById('themeLabel');
+  var icon = document.getElementById('themeIcon');
+  var moonPath = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  var sunPath = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+  var theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  applyTheme(theme);
+  btn.addEventListener('click', function () {
+    theme = theme === 'light' ? 'dark' : 'light';
+    applyTheme(theme);
+  });
+  function applyTheme(t) {
+    html.setAttribute('data-theme', t);
+    if (t === 'dark') { icon.innerHTML = sunPath; label.textContent = 'Light mode'; }
+    else { icon.innerHTML = moonPath; label.textContent = 'Dark mode'; }
+  }
+})();
+
+// ── Mobile hamburger ──
+(function () {
+  var hamburger = document.getElementById('hamburger');
+  var sidebar = document.getElementById('sidebar');
+  hamburger.addEventListener('click', function () {
+    sidebar.classList.toggle('open');
+  });
+  document.getElementById('mainContent').addEventListener('click', function () {
+    sidebar.classList.remove('open');
+  });
+})();
+
+// ── Active nav highlight on scroll ──
+(function () {
+  var headings = document.querySelectorAll('h2[id], h3[id]');
+  var navLinks = document.querySelectorAll('.sidebar a[href^="#"]');
+
+  function setActive() {
+    var scrollY = window.scrollY + 80;
+    var current = '';
+    headings.forEach(function (h) {
+      if (h.offsetTop <= scrollY) current = h.id;
+    });
+    navLinks.forEach(function (a) {
+      a.classList.remove('active');
+      var h2 = a.closest('.nav-section').querySelector('.nav-h2');
+      if (h2) h2.classList.remove('active');
+      if (a.getAttribute('href') === '#' + current) {
+        a.classList.add('active');
+        if (h2) h2.classList.add('active');
+      }
+    });
+    // Also highlight h2 links themselves
+    document.querySelectorAll('.nav-h2[href^="#"]').forEach(function(a){
+      a.classList.remove('active');
+      if(a.getAttribute('href') === '#' + current) a.classList.add('active');
+    });
+  }
+  window.addEventListener('scroll', setActive, { passive: true });
+  setActive();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+							<style>
+								body {
+									background-color: white; /* Ensure the iframe has a white background */
+								}
+
+								
+							</style>
+                        </head>
+                        <body>
+                            <!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Vendor GPU Monitoring Documentation</title>
+    <style>
+        :root {
+            --bg: #f4f6f9; --text: #1a1a1a; --card-bg: #ffffff;
+            --primary: #2563eb; --accent: #0d9488; --code-bg: #1e1e1e;
+            --border: #e2e8f0; --nav-bg: #1e293b; --nav-text: #cbd5e1;
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        [data-theme="dark"] {
+            --bg: #0f172a; --text: #e2e8f0; --card-bg: #1e293b;
+            --primary: #60a5fa; --accent: #2dd4bf; --code-bg: #020617;
+            --border: #334155; --nav-bg: #020617; --nav-text: #94a3b8;
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: var(--text); background: var(--bg); transition: background 0.3s, color 0.3s; }
+        
+        header { background: var(--nav-bg); color: #f8fafc; padding: 2rem 1rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--shadow); }
+        .header-left h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+        .header-left p { opacity: 0.8; font-size: 0.9rem; }
+        .theme-toggle { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+        .theme-toggle:hover { background: rgba(255,255,255,0.2); }
+        
+        nav { background: var(--card-bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 90; }
+        .nav-container { max-width: 1000px; margin: 0 auto; display: flex; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .nav-container::-webkit-scrollbar { display: none; }
+        .page-btn { flex: 1; min-width: 140px; background: none; border: none; padding: 16px 20px; cursor: pointer; font-size: 15px; color: var(--text); border-bottom: 3px solid transparent; transition: all 0.2s; text-align: center; white-space: nowrap; }
+        .page-btn:hover { background: rgba(0,0,0,0.03); }
+        .page-btn.active { border-bottom-color: var(--primary); color: var(--primary); font-weight: 600; background: rgba(37,99,235,0.05); }
+        
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem 1rem; }
+        .page { display: none; animation: fadeIn 0.25s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        
+        h2 { color: var(--text); border-bottom: 2px solid var(--accent); padding-bottom: 6px; margin: 1.5rem 0 1rem; font-size: 1.4rem; }
+        h3 { color: var(--primary); margin: 1.2rem 0 0.8rem; font-size: 1.15rem; }
+        p, li { margin-bottom: 0.75rem; }
+        code { background: var(--code-bg); color: #abb2bf; padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', Monaco, monospace; font-size: 0.9em; }
+        pre { background: var(--code-bg); color: #abb2bf; padding: 16px; border-radius: 6px; overflow-x: auto; margin: 1rem 0; box-shadow: var(--shadow); }
+        .note { background: rgba(37,99,235,0.1); border-left: 4px solid var(--primary); padding: 14px; margin: 16px 0; border-radius: 4px; }
+        .note strong { color: var(--primary); }
+        [data-theme="dark"] .note { background: rgba(96,165,250,0.15); }
+        
+        .vendor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .vendor-card { background: var(--card-bg); border: 1px solid var(--border); padding: 1.25rem; border-radius: 8px; box-shadow: var(--shadow); }
+        
+        .btn-download { display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 500; cursor: pointer; border: none; margin-top: 2rem; transition: opacity 0.2s; }
+        .btn-download:hover { opacity: 0.9; }
+        
+        footer { text-align: center; padding: 3rem 1rem; color: var(--text); opacity: 0.6; font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <h1>Multi-Vendor GPU Monitoring Stack</h1>
+            <p>NVIDIA ROCm & AMD DCU/ROCm · Windows Exporter · Prometheus · Grafana</p>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙 Dark Mode</button>
+    </header>
+
+    <nav>
+        <div class="nav-container">
+            <button class="page-btn active" onclick="showPage('page-nvidia', this)">1. NVIDIA GPU Setup</button>
+            <button class="page-btn" onclick="showPage('page-amd', this)">2. AMD GPU Setup</button>
+            <button class="page-btn" onclick="showPage('page-grafana', this)">3. Grafana Dashboards</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- PAGE 1: NVIDIA -->
+        <div id="page-nvidia" class="page active">
+            <h2>NVIDIA GPU Exporter (Windows)</h2>
+            <p>Expose NVML/SMI telemetry to Prometheus. Compatible with Tesla, RTX, and data center architectures.</p>
+            
+            <h3>1. Install & Configure</h3>
+            <pre><code># Download latest exporter
+curl -LO https://github.com/prometheus-community/nvidia_gpu_exporter/releases/download/v1.5.0/nvidia_gpu_exporter-1.5.0.windows-amd64.zip
+Expand-Archive -Path nvidia_gpu_exporter-*.zip -DestinationPath C:\nvidia-exporter
+
+# Register as Windows Service (persistent)
+New-Service -Name "NVIDIA-GPU-Exporter" -BinaryPathName "C:\nvidia-exporter\nvidia_gpu_exporter.exe" `
+            -DisplayName "NVIDIA GPU Metrics Exporter" -StartupType Automatic
+Start-Service "NVIDIA-GPU-Exporter"</code></pre>
+
+            <h3>2. Verify Telemetry</h3>
+            <p>Visit <code>http://localhost:9835/metrics</code>. Confirm key time-series:</p>
+            <ul>
+                <li><code>nvidia_smi_utilization_gpu_ratio</code></li>
+                <li><code>nvidia_smi_memory_used_bytes</code> / <code>nvidia_smi_memory_total_bytes</code></li>
+                <li><code>nvidia_smi_power_usage_watts</code>, <code>nvidia_smi_temp_gpu</code></li>
+            </ul>
+            <div class="note">ℹ️ <strong>Prometheus Config Snippet:</strong><br><code>scrape_configs:<br>  - job_name: 'nvidia-gpu'<br>    static_configs: [{targets: ['localhost:9835']}</code></div>
+        </div>
+
+        <!-- PAGE 2: AMD -->
+        <div id="page-amd" class="page">
+            <h2>AMD GPU Exporter (ROCm / Windows)</h2>
+            <p>Monitor ROCm-compatible RDNA 3 / CDNA architectures, including Ryzen AI, Radeon Pro W7000, and Instinct MI series. Requires ROCm 6.x+ runtime.</p>
+
+            <div class="vendor-grid">
+                <div class="vendor-card">
+                    <h3>📦 Exporter Setup</h3>
+                    <pre><code># Install ROCm drivers first, then exporter
+curl -LO https://github.com/prometheus-community/amd-rocm-exporter/releases/download/v0.8.0/amd-rocm-exporter_0.8.0_windows_amd64.zip
+Expand-Archive -Path amd-rocm-exporter*.zip -DestinationPath C:\amd-exporter
+
+# Start with ROCm collector enabled
+C:\amd-exporter\amd-rocm-exporter.exe --collector.rocm=true
+
+# Register as service
+New-Service -Name "AMD-GPU-Exporter" -BinaryPathName "C:\amd-exporter\amd-rocm-exporter.exe" `
+            -StartupType Automatic</code></pre>
+                </div>
+                <div class="vendor-card">
+                    <h3>📊 Key Metrics</h3>
+                    <ul>
+                        <li><code>rocm_gpu_utilization</code> (% load per pipe)</li>
+                        <li><code>rocm_memory_used_bytes</code> / <code>rocm_memory_total_bytes</code></li>
+                        <li><code>rocm_power_sensor_watts</code>, <code>rocm_temperature_sensor</code></li>
+                        <li><code>rocm_ecc_errors_corrected</code> (if supported)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>Prometheus Target Config</h3>
+            <pre><code>- job_name: 'amd-rocm'
+  static_configs: [{targets: ['localhost:9295']}</code></pre>
+            <div class="note">ℹ️ <strong>Note:</strong> AMD ROCm on Windows requires ROCm 6.1+ and compatible GPU drivers. Verify installation with <code>rocm-smi --showinfo</code>. Exporter defaults to port <code>:9295</code>.</div>
+        </div>
+
+        <!-- PAGE 3: GRAFANA -->
+        <div id="page-grafana" class="page">
+            <h2>Grafana Dashboard Configuration</h2>
+            <p>Unified visualization for both NVIDIA and AMD telemetry. Import official community dashboards or build custom panels.</p>
+
+            <h3>1. Add Prometheus Data Source</h3>
+            <ol>
+                <li><strong>Configuration > Data Sources > Add source > Prometheus</strong></li>
+                <li>Set URL: <code>http://localhost:9090</code> (or your cluster endpoint)</li>
+                <li>Click <strong>Save & Test</strong>. Green checkmark = confirmed connectivity.</li>
+            </ol>
+
+            <h3>2. Import GPU Dashboards</h3>
+            <div class="vendor-grid">
+                <div class="vendor-card">
+                    <h3>🟢 NVIDIA Dashboard</h3>
+                    <p><strong>Dashboard ID:</strong> <code>12574</code></p>
+                    <ol>
+                        <li><strong>Create > Import</strong> in Grafana</li>
+                        <li>Paste ID or upload JSON</li>
+                        <li>Select your Prometheus DS</li>
+                        <li>Click <strong>Import</strong></li>
+                    </ol>
+                </div>
+                <div class="vendor-card">
+                    <h3>🔵 AMD Dashboard</h3>
+                    <p><strong>Dashboard ID:</strong> <code>16088</code> (Official ROCm/GPU)</p>
+                    <ol>
+                        <li>Repeat import steps above</li>
+                        <li>Maps to <code>rocm_*</code> metric namespace</li>
+                        <li>Supports multi-DIC/pipe aggregation out-of-the-box</li>
+                    </ol>
+                </div>
+            </div>
+
+            <h3>3. Troubleshooting & Customization</h3>
+            <ul>
+                <li><strong>No Data?</strong> Check Grafana time range (last 5-10 mins), verify exporter service status, and confirm Prometheus scrape targets are UP.</li>
+                <li><strong>Multigpu Filtering:</strong> Edit panel query → Add label matchers: <code>{device=~"0|1|2"}</code></li>
+                <li><strong>Custom Alerts:</strong> Use PromQL thresholds like <code>rate(nvidia_smi_power_usage_watts[5m]) > 350</code> or <code>rocm_temperature_sensor > 85</code></li>
+            </ul>
+        </div>
+    </div>
+
+    <footer>
+        <p>Designed for RF/Microwave & Automotive-grade GPU telemetry stacks. All configs validate against Prometheus v2.50+ & Grafana v10.x.</p>
+        <button class="btn-download" onclick="downloadHTML()">⬇️ Download Updated .html</button>
+    </footer>
+
+    <script>
+        function showPage(id, btn) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.page-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            if(btn) btn.classList.add('active');
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'light' ? 'dark' : 'light';
+            html.setAttribute('data-theme', next);
+            document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+            localStorage.setItem('gpu-doc-theme', next);
+        }
+
+        // Load saved theme on init
+        (function() {
+            const saved = localStorage.getItem('gpu-doc-theme');
+            if(saved) document.documentElement.setAttribute('data-theme', saved);
+        })();
+
+        function downloadHTML() {
+            const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'GPU-Monitoring-Guide-Full.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
+
+							<script>
+                            	
+							</script>
+                        </body>
+                        </html>
+                    

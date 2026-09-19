@@ -1,0 +1,458 @@
+cd C:\llama.cpp
+rmdir /s /q build
+
+cmake -B build ^
+  -DGGML_VULKAN=ON ^
+  -DGGML_CUDA=ON ^
+  -DGGML_RPC=ON ^
+  -DGGML_CCACHE=OFF ^
+  -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_C_COMPILER="C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.39.33519\bin\Hostx64\x64\cl.exe" ^
+  -DCMAKE_CXX_COMPILER="C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.39.33519\bin\Hostx64\x64\cl.exe" ^
+  -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\bin\nvcc.exe" ^
+  -DCMAKE_CUDA_ARCHITECTURES=61
+  
+  C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA
+  C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\BuildCustomizations
+  C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\BuildCustomizations
+  
+  cmake -B build ^
+  -DGGML_VULKAN=ON ^
+  -DGGML_CUDA=ON ^
+  -DGGML_RPC=ON ^
+  -DGGML_CCACHE=OFF ^
+  -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_C_COMPILER="C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64\cl.exe" ^
+  -DCMAKE_CXX_COMPILER="C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64\cl.exe" ^
+  -DCMAKE_CUDA_COMPILER="C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.6\bin\nvcc.exe" ^
+  -DCMAKE_CUDA_ARCHITECTURES=61
+  
+  
+  # On NODE-A — adjust -ngl for your actual VRAM total
+C:\llama.cpp\build\bin\Release\llama-server.exe `
+  --model "C:\models\mistral-medium-3.5-q4_k_m.gguf" `
+  --metrics `
+  --rpc "192.168.7.28:50052,192.168.7.45:50052,192.168.7.181:50052" `
+  --host 0.0.0.0 `
+  --port 8080 `
+  --ctx-size 8192 `
+  --n-predict 2048 `
+  -ngl 70 `
+  -t 8 `
+  --parallel 4 `
+  --cont-batching
+
+# Key flags:
+# --rpc         Workers: B=.11, C=.12, D=.13 all port 50052
+# -ngl 70       Offload 70/80 layers to GPU (tune this!)
+# -t 8          CPU threads on NODE-A for remaining layers
+# --parallel 2  Allow 2 concurrent inference sessions
+# --cont-batching Better throughput for multi-user
+
+C:\llama.cpp\build\bin\Release\llama-server.exe `
+  --models-dir C:\Users\wwallace\.ollama\models `
+  --rpc "192.168.7.28:50052,192.168.7.45:50052,192.168.7.181:50052" `
+  --metrics `
+  --host 0.0.0.0 `
+  --port 8080 `
+  --ctx-size 8192 `
+  --n-predict 2048 `
+  -ngl 70 `
+  -t 8 `
+  --parallel 4 `
+  --log-file "C:\logs\llamam-server.log" `
+  --log-timestamps `
+  --log-verbosity 3 `
+  --log-colors on `
+  --cont-batching
+  
+  
+  # PowerShell as Administrator on NODE-A
+# Build the arguments string
+$svcArgs = '--models-dir "C:\Users\wwallace\.ollama\models" ' +
+		   '--metrics ' +
+           '--rpc "192.168.7.28:50052,192.168.7.45:50052,192.168.7.181:50052" ' +
+           '--host 0.0.0.0 --port 8080 --ctx-size 8192 ' +
+		   '--log-timestamps --log-verbosity 3 --log-colors auto ' +
+           '-ngl 70 -t 8 --parallel 4 --cont-batching --log-file "C:\logs\llamam-server-service.log"'
+
+C:\tools\nssm.exe install LlamaCppServer `
+  "C:\llama.cpp\build\bin\Release\llama-server.exe" $svcArgs
+
+C:\tools\nssm.exe set LlamaCppServer AppDirectory C:\llama.cpp\build\bin\Release
+C:\tools\nssm.exe set LlamaCppServer Start SERVICE_AUTO_START
+C:\tools\nssm.exe set LlamaCppServer AppStdout C:\logs\llama-server.log
+
+Start-Service LlamaCppServer
+
+# PowerShell — quick chat test
+curl http://localhost:11434/api/chat `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"model":"nemotron3:33b","messages":[{"role":"user","content":"Say hi"}],"stream":false}'
+
+curl http://localhost:11434/api/chat `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"model":"kimi-k2.6:cloud","messages":[{"role":"user","content":"Say hi"}],"stream":false}'  
+  
+# Open-WebUI pointing to Ollama on localhost
+docker run -d `
+  -p 3000:8080 `
+  -e OLLAMA_BASE_URL=http://host.docker.internal:11434 `
+  -v open-webui:/app/backend/data `
+  --name open-webui `
+  --restart unless-stopped `
+  ghcr.io/open-webui/open-webui:main
+
+# Access: http://192.168.7.27:3000
+# First user to sign up becomes admin
+
+docker ps | findstr open-webui    # check status
+docker logs -f open-webui         # live logs
+docker stop open-webui            # stop
+docker start open-webui           # start
+
+# Update to latest:
+docker pull ghcr.io/open-webui/open-webui:main
+docker stop open-webui && docker rm open-webui
+# Re-run the docker run command — data volume is preserved
+
+http://192.168.7.27:3000
+
+
+New-NetFirewallRule -DisplayName "llama.cpp RPC Worker" `
+  -Direction Inbound -Protocol TCP `
+  -LocalPort 50052 `
+  -RemoteAddress 192.168.7.27 `
+  -Action Allow -Profile Private
+  
+  
+New-NetFirewallRule -DisplayName "Ollama API" `
+  -Direction Inbound -Protocol TCP -LocalPort 11434 `
+  -RemoteAddress 192.168.7.0/24 -Action Allow -Profile Private
+
+New-NetFirewallRule -DisplayName "NGINX Ollama Proxy" `
+  -Direction Inbound -Protocol TCP -LocalPort 11435 `
+  -RemoteAddress 192.168.7.0/24 -Action Allow -Profile Private
+
+New-NetFirewallRule -DisplayName "Open-WebUI" `
+  -Direction Inbound -Protocol TCP -LocalPort 3000 `
+  -RemoteAddress 192.168.7.0/24 -Action Allow -Profile Private
+  
+
+# PowerShell as Administrator on NODE-A
+# Build the arguments string
+$svcArgs = '--models-preset C:\llama.cpp\Ollama_models.ini ' +
+		   '--metrics ' +
+           '--rpc "192.168.7.28:50052,192.168.7.45:50052,192.168.7.181:50052" ' +
+           '--log-timestamps --log-verbosity 3 --log-colors auto --log-prefix ' +
+           '-ngl 50 -t 8 --parallel 2 --cont-batching --log-file "C:\logs\llama-server-service.log"'
+
+C:\tools\nssm.exe install LlamaCppServer `
+  "C:\llama.cpp\build\bin\Release\llama-server.exe" $svcArgs
+
+C:\tools\nssm.exe set LlamaCppServer AppDirectory C:\llama.cpp\build\bin\Release
+C:\tools\nssm.exe set LlamaCppServer Start SERVICE_AUTO_START
+C:\tools\nssm.exe set LlamaCppServer AppStdout C:\logs\llama-server-nssm.log
+
+Start-Service LlamaCppServer
+
+# Similar to Above but on command line in PowerShell
+C:\llama.cpp\build\bin\Release\llama-server.exe `
+  --models-preset C:\llama.cpp\Ollama_models.ini `
+  --rpc "192.168.7.28:50052,192.168.7.45:50052,192.168.7.181:50052" `
+  --metrics `
+  --host 0.0.0.0 `
+  --port 8080 `
+  --ctx-size 8192 `
+  --n-predict 2048 `
+  -ngl 50 `
+  -t 8 `
+  --parallel 2 `
+  --log-file "C:\logs\llamam-server.log" `
+  --log-timestamps `
+  --log-verbosity 3 `
+  --log-colors auto `
+  --cont-batching
+
+# Stop and Remove a service
+Stop-Service -Name "LlamaCppServer" -Force
+sc.exe delete "LlamaCppServer"
+
+# Promethius as a service
+$svcArgs = '--config.file="C:\Prometheus\prometheus.yml"'
+
+C:\tools\nssm.exe install Prometheus `
+  "C:\Prometheus\prometheus.exe" $svcArgs
+
+C:\tools\nssm.exe set Prometheus AppDirectory C:\Prometheus
+C:\tools\nssm.exe set Prometheus Start SERVICE_AUTO_START
+
+# Check Promethius
+127.0.0.1:9090
+
+# See if the yaml will work
+.\prometheus.exe `
+  --config.file="C:\Prometheus\prometheus.yml" `
+  --config.check
+  
+# OR
+.\prometheus.exe --config.file="C:\Prometheus\prometheus.yml"
+
+# Promethius Optional: log to a file
+New-Item -ItemType Directory -Force -Path C:\logs | Out-Null
+C:\tools\nssm.exe set Prometheus AppStdout C:\logs\prometheus.log
+C:\tools\nssm.exe set Prometheus AppStderr C:\logs\prometheus-err.log
+
+# Test the server with ini and rpc from PowerShell
+& "C:\llama.cpp\build\bin\Release\llama-server.exe" `
+   --models-preset C:\llama.cpp\Ollama_models.ini `
+   --rpc "192.168.7.28:50052,192.168.7.45:50052,192.168.7.181:50052"
+   
+
+# nVidia GPU Exporter Setup (assume git and nssm already on system) 
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+
+scoop bucket add nvidia_gpu_exporter https://github.com/utkuozdemir/scoop_nvidia_gpu_exporter.git
+scoop install nvidia_gpu_exporter/nvidia_gpu_exporter --global
+
+# Puts nVidia exporter here: C:\ProgramData\scoop\apps\nvidia_gpu_exporter\current\nvidia_gpu_exporter.exe
+
+# Add firewall exceptions
+New-NetFirewallRule `
+  -DisplayName "Nvidia GPU Exporter" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 9835
+  
+# Create service
+C:\tools\nssm.exe install nvidia_gpu_exporter "C:\ProgramData\scoop\apps\nvidia_gpu_exporter\current\nvidia_gpu_exporter.exe"
+Start-Service nvidia_gpu_exporter
+
+# Check service
+Invoke-WebRequest http://localhost:9835/metrics | Select-Object -ExpandProperty Content
+
+# AMD exporter build
+Compiling  natively for Windows is not possible because the underlying AMD SMI (System Management Interface) and ROCm libraries only support Linux. To scrape AMD GPU/CPU metrics for Prometheus on Windows, deploy a containerized Linux environment using WSL2. [1, 2, 3]  
+Step 1: Set up the Windows Environment 
+
+1. Enable WSL and install an Ubuntu distribution by opening PowerShell as an Administrator and running: 
+2. Ensure the official AMD Adrenalin drivers (or ROCm-compatible drivers) are installed on the Windows host. [2]  
+
+Step 2: Set up the Linux Build Environment 
+Launch your Ubuntu WSL terminal and install the prerequisites (Go, Git, and make) to pull and compile the repository: [4]  
+Step 3: Compile  
+Clone the AMD SMI Exporter Repository and build the binary: [4]  
+This process generates the  Go binary executable. [4]  
+Step 4: Alternative (Docker in WSL) 
+To simplify deployment, build a Docker container image inside WSL: [4]  
+To easily visualize these metrics, you can download and import the pre-built AMD GPU Nodes Dashboard into your Grafana instance. [5]  
+
+AI responses may include mistakes.
+
+[1] https://rocm.docs.amd.com/_/downloads/amdsmi/en/docs-7.1.1/pdf/
+[2] https://transformerlab.ai/docs/install/install-on-amd/
+[3] https://rocm.docs.amd.com/projects/amdsmi/en/docs-6.1.1/install/install.html
+[4] https://github.com/amd/amd_smi_exporter
+[5] https://grafana.com/grafana/dashboards/18913-amd-gpu-nodes/
+
+wsl --install ^
+wsl --set-default-version 2 ^
+wsl --install -d Ubuntu ^
+# wsl --set-default Ubuntu
+wsl --list --verbose
+# within Ubuntu WSL
+sudo apt update
+sudo apt install golang git make -y
+sudo apt update
+# Install standard C/C++ build tools and headers
+sudo apt install build-essential g++ libstdc++-12-dev -y
+# Add the key
+sudo mkdir -p /etc/apt/keyrings
+wget https://radeon.com -O - | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+
+# Add the repository for ROCm 6.2 (Current stable)
+# wrong! echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://radeon.com jammy main" | sudo tee /etc/apt/sources.list.d/rocm.list
+
+# Update package lists
+sudo apt update
+
+# wrong! sudo apt install amdsmi -y
+
+
+# 1. Clone the repository
+sudo sudo git clone https://github.com/amd/amd_smi_exporter.git
+cd amd_smi_exporter/src
+
+
+# 2. Clean up any pre-existing modules and build
+cd amd_smi_exporter/src
+make clean
+go clean -cache
+make
+
+
+# Inside amd_smi_exporter/src
+sudo make container
+
+# can linux see my gpu?!
+ls /dev/kfd
+
+C:\tools\nssm.exe install AMD_SMI_Exporter
+# Configure the Application Path: 
+# In the NSSM GUI that appears, set the following:
+# Path: C:\Windows\System32\wsl.exe
+# Startup directory: Your user folder or the location of the compiled binary within WSL.Arguments: -d Ubuntu -u root /path/to/your/amd_smi_exporter(Replace Ubuntu with your distro name and use the full Linux path to the binary).
+# Finalize: Click Install service and then start it by running Start-Service AMD_SMI_Exporter in PowerShell.
+
+netsh interface portproxy add v4tov4 listenport=9101 listenaddress=0.0.0.0 connectport=9101 connectaddress=127.0.0.1
+
+# 1. Identify the WSL 2 IP address
+$wsl_ip = (wsl hostname -I).Trim().Split(" ")[0]
+
+if (-not $wsl_ip) {
+    Write-Host "Error: Could not find WSL IP. Is your Linux distro running?" -ForegroundColor Red
+    exit
+}
+
+# 2. Set the port (9101 is the default for amd_smi_exporter)
+$port = 9835
+
+# 3. Remove existing portproxy rules for this port to avoid conflicts
+netsh interface portproxy delete v4tov4 listenport=$port listenaddress=0.0.0.0
+
+# 4. Create the new portproxy rule
+netsh interface portproxy add v4tov4 listenport=$port listenaddress=0.0.0.0 connectport=$port connectaddress=$wsl_ip
+
+# 5. Add a Firewall rule to allow traffic on that port
+if (!(Get-NetFirewallRule -Name "WSL_AMD_Exporter" -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName "WSL_AMD_Exporter" -Direction Inbound -LocalPort $port -Protocol TCP -Action Allow
+}
+
+Write-Host "Success! Forwarding 0.0.0.0:$port to WSL at $wsl_ip" -ForegroundColor Green
+
+
+
+
+<# git clone https://github.com/amd/amd_smi_exporter.git
+cd amd_smi_exporter
+go build -o amd_smi_exporter.exe .
+
+
+## Step 2: Place exporter binary on the Windows AMD host
+"Copy your built exporter EXE to a stable directory, for example:"
+"C:\Program Files\amd_smi_exporter\amd_smi_exporter.exe"
+"You may also add a config file there if your exporter supports flags (e.g., --listen-address=:9835)."
+
+## Step 3
+C:\tools\nssm.exe install amd_smi_exporter "C:\Program Files\amd_smi_exporter\amd_smi_exporter.exe"
+C:\tools\nssm.exe set amd_smi_exporter AppParameters "--listen-address=:9835"
+Start-Service amd_smi_exporter
+
+## Step 4
+New-NetFirewallRule `
+  -DisplayName "AMD GPU Exporter" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 9835
+   #>
+
+
+
+
+
+# Building amd_smi_exporter in WSL 2 (Ubuntu 24.04 Noble)
+
+This guide fixes the `cstdint` and GPG errors for **Ubuntu 24.04**. It ensures the C++ build tools and AMD ROCm libraries are correctly mapped for the Noble Numbat release.
+
+### 1. Fix DNS and GPG Key
+If you encounter "Something wicked" resolution errors, ensure your `wget` command uses the `repo.` subdomain.
+
+```bash
+# Ensure the keyrings directory exists
+sudo mkdir -p /etc/apt/keyrings
+sudo chmod 0755 /etc/apt/keyrings
+
+# Download the official AMD ROCm GPG key
+wget -qO - https://radeon.com | gpg --dearmor | sudo tee /etc/apt/keyrings/rocm.gpg > /dev/null
+```
+
+### 2. Register Repository & Install Dependencies
+For **Noble (24.04)**, we point specifically to the `noble` distribution. This step also installs `build-essential` to provide the standard C++ headers (like `cstdint`) that caused your previous build failure.
+
+```bash
+# 1. Remove any old/broken rocm.list files
+sudo rm -f /etc/apt/sources.list.d/rocm.list
+
+# 2. Add the ROCm 6.2 repository for NOBLE
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://radeon.com noble main" | sudo tee /etc/apt/sources.list.d/rocm.list
+sudo apt update && sudo apt install dirmngr --install-recommends -y
+sudo mkdir -p /root/.gnupg
+sudo chmod 700 /root/.gnupg
+sudo HOME="$HOME" gpg --no-default-keyring --keyring /etc/apt/keyrings/rocm.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 9386B48A1A693C5C
+sudo gpg --no-default-keyring --keyring /etc/apt/keyrings/rocm.gpg --keyserver hkp://://ubuntu.com --recv-keys 9386B48A1A693C5C
+# 3. Update and Install
+sudo apt update
+sudo apt install python3-setuptools python3-wheel -y
+sudo apt install amd-smi-lib -y
+sudo apt install build-essential -y
+export CGO_CFLAGS="-I/opt/rocm/include"
+export CGO_LDFLAGS="-L/opt/rocm/lib"
+export LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH
+```
+
+### 3. Compile the Exporter
+sudo sudo git clone https://github.com/amd/amd_smi_exporter.git
+cd amd_smi_exporter/src
+sudo apt update
+sudo apt install build-essential g++ libstdc++-12-dev -y
+sudo apt install build-essential g++ g++-12 -y
+sudo apt install -y build-essential g++ libc6-dev
+
+With the `noble` libraries and C++ headers installed, compile the Go binary with the correct environment flags.
+
+```bash
+
+unset CC
+unset CXX
+unset CGO_CFLAGS
+unset CGO_CXXFLAGS
+unset CGO_LDFLAGS
+
+# verify defaults
+go env CC CXX CGO_CFLAGS CGO_CXXFLAGS
+
+# Clear old failed build artifacts
+make clean
+go clean -cache
+
+# Build using explicit paths for the Noble ROCm headers
+sudo CGO_CFLAGS="-I/opt/rocm/include" CGO_LDFLAGS="-L/opt/rocm/lib" make
+
+sudo env CGO_ENABLED=1 \
+         CXX=g++ \
+         CC=gcc \
+         CGO_CFLAGS="-I/opt/rocm/include -I/opt/rocm/include/amd_smi" \
+         CGO_CXXFLAGS="-I/opt/rocm/include -I/opt/rocm/include/amd_smi -std=c++17" \
+         CGO_LDFLAGS="-L/opt/rocm/lib -lstdc++" \
+         go build -o amd_smi_exporter main.go cpu_data.go
+
+
+```
+
+### 4. Verification
+1. **Help Menu**: Run `./amd_smi_exporter --help` to verify the binary is functional.
+2. **GPU Visibility**: Run `amd-smi` to ensure the WSL 2 kernel can communicate with your physical AMD GPU.
+
+
+
+
+
+
+
+chmod +x ./patch_and_wire_amdsmi.sh
+./patch_and_wire_amdsmi.sh /amdsmi /amd_smi_exporter

@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>llama.cpp RPC + Vulkan — 4-Node Home Network Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300..700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+:root {
+  --text-xs:clamp(0.75rem,0.7rem + 0.25vw,0.875rem);--text-sm:clamp(0.875rem,0.8rem + 0.35vw,1rem);
+  --text-base:clamp(1rem,0.95rem + 0.25vw,1.125rem);--text-lg:clamp(1.125rem,1rem + 0.75vw,1.5rem);
+  --text-xl:clamp(1.5rem,1.2rem + 1.25vw,2.25rem);
+  --space-1:.25rem;--space-2:.5rem;--space-3:.75rem;--space-4:1rem;--space-5:1.25rem;
+  --space-6:1.5rem;--space-8:2rem;--space-10:2.5rem;--space-12:3rem;--space-16:4rem;
+  --radius-sm:.375rem;--radius-md:.5rem;--radius-lg:.75rem;--radius-xl:1rem;--radius-full:9999px;
+  --tr:180ms cubic-bezier(.16,1,.3,1);
+  --font-body:'Inter',system-ui,sans-serif;--font-mono:'JetBrains Mono','Courier New',monospace;
+  --cw:960px;
+}
+:root,[data-theme="dark"]{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--off:#21262d;--dyn:#30363d;
+  --div:#21262d;--brd:#30363d;--txt:#e6edf3;--muted:#8b949e;--faint:#484f58;--inv:#0d1117;
+  --pri:#58a6ff;--prih:#79c0ff;--prihlt:#1f3a5f;
+  --ok:#3fb950;--okh:#1a3628;--warn:#e3b341;--warnh:#3d2e0f;
+  --err:#f85149;--errh:#4b1c17;--nvd:#76b900;--amd:#ed1c24;
+  --sh-sm:0 1px 2px rgba(0,0,0,.4);--sh-md:0 4px 12px rgba(0,0,0,.5);--sh-lg:0 12px 32px rgba(0,0,0,.6);
+}
+[data-theme="light"]{
+  --bg:#f6f8fa;--surface:#fff;--surface2:#f6f8fa;--off:#eaeef2;--dyn:#d0d7de;
+  --div:#d0d7de;--brd:#d0d7de;--txt:#1f2328;--muted:#636c76;--faint:#9198a1;--inv:#fff;
+  --pri:#0969da;--prih:#0550ae;--prihlt:#ddf4ff;
+  --ok:#1a7f37;--okh:#dafbe1;--warn:#9a6700;--warnh:#fff8c5;
+  --err:#cf222e;--errh:#ffebe9;--nvd:#5a8a00;--amd:#c41019;
+  --sh-sm:0 1px 2px rgba(31,35,40,.08);--sh-md:0 4px 12px rgba(31,35,40,.12);--sh-lg:0 12px 32px rgba(31,35,40,.16);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:4rem;-webkit-font-smoothing:antialiased}
+body{min-height:100dvh;font-family:var(--font-body);font-size:var(--text-base);color:var(--txt);background:var(--bg);line-height:1.6}
+h1,h2,h3,h4{text-wrap:balance;line-height:1.2}
+p,li{text-wrap:pretty;max-width:72ch}
+code{font-family:var(--font-mono);font-size:.875em;background:var(--off);padding:.15em .4em;border-radius:var(--radius-sm);color:var(--pri)}
+pre{font-family:var(--font-mono);font-size:var(--text-xs);background:var(--surface);border:1px solid var(--brd);border-radius:var(--radius-lg);padding:var(--space-4);overflow-x:auto;line-height:1.6;position:relative}
+pre code{background:none;padding:0;color:var(--txt);font-size:inherit}
+a{color:var(--pri);text-decoration:none;transition:color var(--tr)}
+a:hover{color:var(--prih);text-decoration:underline}
+button{cursor:pointer;background:none;border:none;font:inherit;color:inherit;transition:all var(--tr)}
+table{border-collapse:collapse;width:100%;font-size:var(--text-sm)}
+th,td{padding:var(--space-3) var(--space-4);text-align:left;border-bottom:1px solid var(--brd)}
+th{background:var(--off);font-weight:600;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em}
+tr:hover{background:var(--surface2)}
+:focus-visible{outline:2px solid var(--pri);outline-offset:3px;border-radius:var(--radius-sm)}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Layout */
+.wrap{display:flex;min-height:100dvh}
+.sidebar{width:252px;min-width:252px;background:var(--surface);border-right:1px solid var(--brd);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;overflow-y:auto;z-index:100;transition:transform var(--tr)}
+.slogo{padding:var(--space-5) var(--space-4);border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:var(--space-3)}
+.slogo-txt{font-weight:700;font-size:var(--text-sm);line-height:1.2}
+.slogo-sub{font-size:var(--text-xs);color:var(--muted)}
+.snav{flex:1;padding:var(--space-4) var(--space-2)}
+.nlabel{font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:600;padding:var(--space-4) var(--space-2) var(--space-2)}
+.ni{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);border-radius:var(--radius-md);cursor:pointer;font-size:var(--text-sm);color:var(--muted);width:100%;text-align:left;text-decoration:none;border:none;background:none}
+.ni:hover{background:var(--off);color:var(--txt)}
+.ni.active{background:var(--prihlt);color:var(--pri);font-weight:600}
+.ni i{width:16px;height:16px;flex-shrink:0}
+.nbadge{margin-left:auto;background:var(--dyn);border-radius:var(--radius-full);padding:1px 6px;font-size:10px;font-weight:600}
+.ni.active .nbadge{background:var(--pri);color:var(--inv)}
+.sfooter{padding:var(--space-4);border-top:1px solid var(--brd);font-size:var(--text-xs);color:var(--faint)}
+.main{margin-left:252px;flex:1;min-width:0}
+.topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--brd);padding:var(--space-3) var(--space-6);display:flex;align-items:center;justify-content:space-between}
+.tbar-l{display:flex;align-items:center;gap:var(--space-3)}
+.tbar-bc{font-size:var(--text-sm);color:var(--muted)}
+.tbar-bc span{color:var(--txt);font-weight:600}
+.tbar-r{display:flex;align-items:center;gap:var(--space-3)}
+.pg{display:none;padding:var(--space-8);max-width:var(--cw)}
+.pg.active{display:block}
+.pg-hdr{margin-bottom:var(--space-8)}
+.pg-title{font-size:var(--text-xl);font-weight:700;margin-bottom:var(--space-2)}
+.pg-desc{color:var(--muted)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-4);border-radius:var(--radius-md);font-size:var(--text-sm);font-weight:500;cursor:pointer;border:1px solid transparent;text-decoration:none}
+.btn-pri{background:var(--pri);color:var(--inv);border-color:var(--pri)}
+.btn-pri:hover{background:var(--prih);color:var(--inv);text-decoration:none}
+.btn-ghost{background:transparent;color:var(--muted);border-color:var(--brd)}
+.btn-ghost:hover{background:var(--off);color:var(--txt);text-decoration:none}
+.btn-sm{padding:var(--space-1) var(--space-3);font-size:var(--text-xs)}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--brd);border-radius:var(--radius-lg);padding:var(--space-5);box-shadow:var(--sh-sm)}
+.card-hdr{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-4)}
+.card-title{font-weight:600;font-size:var(--text-base)}
+.cicon{width:36px;height:36px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* Grids */
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-4)}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4)}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-4)}
+@media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--radius-full);font-size:var(--text-xs);font-weight:600;line-height:1.4}
+.b-ok{background:var(--okh);color:var(--ok)}
+.b-warn{background:var(--warnh);color:var(--warn)}
+.b-err{background:var(--errh);color:var(--err)}
+.b-pri{background:var(--prihlt);color:var(--pri)}
+.b-neutral{background:var(--off);color:var(--muted)}
+
+/* Callouts */
+.callout{border-radius:var(--radius-lg);padding:var(--space-4) var(--space-5);margin:var(--space-4) 0;display:flex;gap:var(--space-3);align-items:flex-start;border:1px solid transparent}
+.callout-icon{flex-shrink:0;margin-top:2px;width:18px;height:18px}
+.callout-body{flex:1;min-width:0}
+.callout-title{font-weight:600;font-size:var(--text-sm);margin-bottom:var(--space-1)}
+.callout-text{font-size:var(--text-sm);color:var(--muted)}
+.c-warn{background:var(--warnh);border-color:var(--warn);color:var(--warn)}
+.c-info{background:var(--prihlt);border-color:var(--pri);color:var(--pri)}
+.c-ok{background:var(--okh);border-color:var(--ok);color:var(--ok)}
+.c-err{background:var(--errh);border-color:var(--err);color:var(--err)}
+
+/* Section headings */
+.sh{font-size:var(--text-lg);font-weight:700;margin-bottom:var(--space-4);display:flex;align-items:center;gap:var(--space-2)}
+.sh::after{content:'';flex:1;height:1px;background:var(--brd)}
+.sec{margin-bottom:var(--space-10)}
+
+/* Steps */
+.steps{list-style:none;display:flex;flex-direction:column;gap:var(--space-6)}
+.step{display:flex;gap:var(--space-4)}
+.snum{width:28px;height:28px;border-radius:50%;background:var(--pri);color:var(--inv);display:flex;align-items:center;justify-content:center;font-size:var(--text-xs);font-weight:700;flex-shrink:0;margin-top:2px}
+.scont{flex:1;min-width:0}
+.stitle{font-weight:600;margin-bottom:var(--space-2)}
+.stext{color:var(--muted);font-size:var(--text-sm);margin-bottom:var(--space-3)}
+
+/* Tabs */
+.tabbar{display:flex;gap:var(--space-1);border-bottom:2px solid var(--brd);margin-bottom:var(--space-6);flex-wrap:wrap}
+.tabbtn{padding:var(--space-2) var(--space-4);font-size:var(--text-sm);font-weight:500;color:var(--muted);border-radius:var(--radius-md) var(--radius-md) 0 0;cursor:pointer;border:none;background:none;margin-bottom:-2px;border-bottom:2px solid transparent}
+.tabbtn:hover{color:var(--txt);background:var(--off)}
+.tabbtn.active{color:var(--pri);border-bottom-color:var(--pri);font-weight:600}
+.tabpanel{display:none}.tabpanel.active{display:block}
+
+/* Copy button */
+.cpbtn{position:absolute;top:var(--space-3);right:var(--space-3);background:var(--dyn);border:1px solid var(--brd);border-radius:var(--radius-sm);padding:var(--space-1) var(--space-2);font-size:var(--text-xs);color:var(--muted);cursor:pointer;font-family:var(--font-body);display:flex;align-items:center;gap:4px}
+.cpbtn:hover{background:var(--off);color:var(--txt)}
+.cpbtn.copied{color:var(--ok);border-color:var(--ok)}
+
+/* Theme toggle */
+.tbtn{width:36px;height:36px;border-radius:var(--radius-md);border:1px solid var(--brd);background:var(--surface);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted)}
+.tbtn:hover{background:var(--off);color:var(--txt)}
+
+/* KV list */
+.kv{display:flex;flex-direction:column;gap:var(--space-2)}
+.kvr{display:flex;align-items:baseline;gap:var(--space-3);font-size:var(--text-sm)}
+.kvk{color:var(--muted);min-width:100px;flex-shrink:0;font-family:var(--font-mono);font-size:var(--text-xs)}
+.kvv{color:var(--txt);font-family:var(--font-mono)}
+
+/* Inline ref */
+.iref{font-size:var(--text-xs);color:var(--pri);font-family:var(--font-mono);font-weight:700;vertical-align:super;line-height:0;cursor:pointer}
+.iref:hover{text-decoration:underline}
+
+/* Ref items */
+.refitem{background:var(--surface);border:1px solid var(--brd);border-radius:var(--radius-lg);padding:var(--space-4) var(--space-5);margin-bottom:var(--space-3)}
+.refnum{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--pri);font-weight:700;margin-bottom:var(--space-1)}
+.refcite{font-size:var(--text-sm);color:var(--txt);line-height:1.6}
+.reflink{font-size:var(--text-xs);color:var(--muted);margin-top:4px;font-family:var(--font-mono)}
+
+/* Highlight box */
+.hbox{background:var(--surface);border:1px solid var(--pri);border-radius:var(--radius-lg);padding:var(--space-5);margin:var(--space-4) 0}
+.hbox-title{color:var(--pri);font-weight:700;font-size:var(--text-sm);margin-bottom:var(--space-2);display:flex;align-items:center;gap:var(--space-2)}
+
+/* Divider */
+.divider{height:1px;background:var(--brd);margin:var(--space-6) 0}
+
+/* Mobile */
+.hamburger{display:none;width:36px;height:36px;border-radius:var(--radius-md);border:1px solid var(--brd);background:var(--surface);align-items:center;justify-content:center;cursor:pointer;color:var(--muted)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}
+  .overlay.open{display:block}.main{margin-left:0}
+  .hamburger{display:flex}.topbar{padding:var(--space-3) var(--space-4)}
+  .pg{padding:var(--space-5) var(--space-4)}
+}
+</style>
+</head>
+<body>
+<div class="overlay" id="ov" onclick="closeSidebar()"></div>
+
+<aside class="sidebar" id="sb">
+  <div class="slogo">
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-label="Site logo">
+      <rect width="32" height="32" rx="8" fill="var(--pri)"/>
+      <path d="M7 23L16 7l9 16" stroke="var(--inv)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="16" cy="18" r="2.5" fill="var(--inv)"/>
+    </svg>
+    <div><div class="slogo-txt">llama.cpp RPC</div><div class="slogo-sub">+ Vulkan · 4-Node Guide</div></div>
+  </div>
+  <nav class="snav">
+    <div class="nlabel">Overview</div>
+    <a class="ni active" data-pg="home" onclick="go('home');return false" href="#"><i data-lucide="layout-dashboard"></i>Overview</a>
+    <a class="ni" data-pg="network" onclick="go('network');return false" href="#"><i data-lucide="network"></i>Network Map</a>
+    <div class="nlabel">Setup</div>
+    <a class="ni" data-pg="prereqs" onclick="go('prereqs');return false" href="#"><i data-lucide="package"></i>Prerequisites</a>
+    <a class="ni" data-pg="build" onclick="go('build');return false" href="#"><i data-lucide="hammer"></i>Build llama.cpp</a>
+    <a class="ni" data-pg="nodes" onclick="go('nodes');return false" href="#"><i data-lucide="server"></i>Node Configuration<span class="nbadge">4</span></a>
+    <a class="ni" data-pg="ollama" onclick="go('ollama');return false" href="#"><i data-lucide="download-cloud"></i>Ollama + Model</a>
+    <div class="nlabel">Networking</div>
+    <a class="ni" data-pg="nginx" onclick="go('nginx');return false" href="#"><i data-lucide="shuffle"></i>NGINX Load Balancer</a>
+    <a class="ni" data-pg="gui" onclick="go('gui');return false" href="#"><i data-lucide="monitor"></i>Web GUI (Open-WebUI)</a>
+    <div class="nlabel">Reference</div>
+    <a class="ni" data-pg="trouble" onclick="go('trouble');return false" href="#"><i data-lucide="wrench"></i>Troubleshooting</a>
+    <a class="ni" data-pg="refs" onclick="go('refs');return false" href="#"><i data-lucide="book-open"></i>References</a>
+  </nav>
+  <div class="sfooter">mistral-medium-3.5 · 128B · ~80 GB VRAM</div>
+</aside>
+
+<div class="main">
+  <header class="topbar">
+    <div class="tbar-l">
+      <button class="hamburger" onclick="toggleSb()" aria-label="Menu"><i data-lucide="menu" style="width:18px;height:18px"></i></button>
+      <div class="tbar-bc"><span id="bc">Overview</span></div>
+    </div>
+    <div class="tbar-r">
+      <button class="btn btn-ghost btn-sm" onclick="go('refs')"><i data-lucide="book-open" style="width:14px;height:14px"></i>References</button>
+      <button class="tbtn" onclick="toggleTheme()" aria-label="Toggle theme">
+        <svg id="tico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </header>
+
+<!-- ════════════════════════════════ HOME ════════════════════════════════ -->
+<div class="pg active" id="pg-home">
+  <div class="pg-hdr">
+    <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-3)">
+      <span class="badge b-pri">llama.cpp RPC + Vulkan</span>
+      <span class="badge b-neutral">AMD + NVIDIA Mix</span>
+      <span class="badge b-ok">Windows 10 / 11</span>
+    </div>
+    <h1 class="pg-title">Distributed AI Inference on a Home Network</h1>
+    <p class="pg-desc">A complete guide to splitting <strong>mistral-medium-3.5</strong> (128B, ~80 GB) across four Windows machines using llama.cpp RPC with Vulkan GPU acceleration — covering build, node setup, NGINX, and Open-WebUI access.</p>
+  </div>
+
+  <div class="callout c-info">
+    <i data-lucide="info" class="callout-icon"></i>
+    <div class="callout-body">
+      <div class="callout-title">Why this approach?</div>
+      <div class="callout-text">mistral-medium-3.5 is a dense 128B model requiring ~80 GB VRAM at Q4_K_M quantization <span class="iref" onclick="go('refs')">[1]</span>. No single consumer GPU can hold it. llama.cpp RPC shards layers across all four machines, pooling their VRAM. Vulkan is chosen over ROCm because it works across <em>both</em> AMD and NVIDIA GPUs with a single binary build <span class="iref" onclick="go('refs')">[4]</span>.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Node Summary</h2>
+    <div class="g4">
+      <div class="card">
+        <div class="card-hdr"><div class="cicon" style="background:var(--prihlt)"><i data-lucide="crown" style="width:18px;height:18px;color:var(--pri)"></i></div><div><div class="card-title">NODE-A</div><div style="font-size:var(--text-xs);color:var(--muted)">Master · NGINX · Ollama</div></div></div>
+        <div class="kv">
+          <div class="kvr"><span class="kvk">IP</span><span class="kvv" style="color:var(--nvd)">192.168.1.10</span></div>
+          <div class="kvr"><span class="kvk">OS</span><span class="kvv">Windows 11</span></div>
+          <div class="kvr"><span class="kvk">GPU</span><span class="kvv" style="color:var(--nvd)">NVIDIA (CUDA/Vulkan)</span></div>
+          <div class="kvr"><span class="kvk">Role</span><span class="kvv">Master + Worker</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="cicon" style="background:var(--okh)"><i data-lucide="server" style="width:18px;height:18px;color:var(--ok)"></i></div><div><div class="card-title">NODE-B</div><div style="font-size:var(--text-xs);color:var(--muted)">RPC Worker</div></div></div>
+        <div class="kv">
+          <div class="kvr"><span class="kvk">IP</span><span class="kvv">192.168.1.11</span></div>
+          <div class="kvr"><span class="kvk">OS</span><span class="kvv">Windows 11</span></div>
+          <div class="kvr"><span class="kvk">GPU</span><span class="kvv" style="color:var(--amd)">AMD (Vulkan)</span></div>
+          <div class="kvr"><span class="kvk">Role</span><span class="kvv">RPC Worker</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="cicon" style="background:var(--okh)"><i data-lucide="server" style="width:18px;height:18px;color:var(--ok)"></i></div><div><div class="card-title">NODE-C</div><div style="font-size:var(--text-xs);color:var(--muted)">RPC Worker</div></div></div>
+        <div class="kv">
+          <div class="kvr"><span class="kvk">IP</span><span class="kvv">192.168.1.12</span></div>
+          <div class="kvr"><span class="kvk">OS</span><span class="kvv">Windows 11</span></div>
+          <div class="kvr"><span class="kvk">GPU</span><span class="kvv" style="color:var(--amd)">AMD (Vulkan)</span></div>
+          <div class="kvr"><span class="kvk">Role</span><span class="kvv">RPC Worker</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="cicon" style="background:var(--warnh)"><i data-lucide="server" style="width:18px;height:18px;color:var(--warn)"></i></div><div><div class="card-title">NODE-D</div><div style="font-size:var(--text-xs);color:var(--muted)">RPC Worker · Win10</div></div></div>
+        <div class="kv">
+          <div class="kvr"><span class="kvk">IP</span><span class="kvv">192.168.1.13</span></div>
+          <div class="kvr"><span class="kvk">OS</span><span class="kvv">Windows 10</span></div>
+          <div class="kvr"><span class="kvk">GPU</span><span class="kvv" style="color:var(--amd)">AMD (Vulkan)</span></div>
+          <div class="kvr"><span class="kvk">Role</span><span class="kvv">RPC Worker</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Port &amp; Services Map</h2>
+    <table>
+      <thead><tr><th>Service</th><th>Node</th><th>Port</th><th>Access</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>rpc-server</code> (A–self)</td><td>NODE-A</td><td>50052</td><td>LAN only (NODE-A→itself)</td><td>Local GPU layers</td></tr>
+        <tr><td><code>rpc-server</code></td><td>NODE-B</td><td>50052</td><td>From NODE-A only</td><td>Unauthenticated TCP</td></tr>
+        <tr><td><code>rpc-server</code></td><td>NODE-C</td><td>50052</td><td>From NODE-A only</td><td>Unauthenticated TCP</td></tr>
+        <tr><td><code>rpc-server</code></td><td>NODE-D</td><td>50052</td><td>From NODE-A only</td><td>Unauthenticated TCP</td></tr>
+        <tr><td>llama-server / Ollama API</td><td>NODE-A</td><td>11434</td><td>LAN</td><td>OpenAI-compatible REST</td></tr>
+        <tr><td>NGINX proxy</td><td>NODE-A</td><td>11435</td><td>LAN</td><td>+ Optional Basic Auth</td></tr>
+        <tr><td>Open-WebUI</td><td>NODE-A</td><td>3000</td><td>LAN</td><td>Browser chat interface</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Quick Start Checklist</h2>
+    <ul class="steps">
+      <li class="step"><div class="snum">1</div><div class="scont"><div class="stitle">Install prerequisites on all 4 nodes</div><div class="stext">Git, CMake (via VS2022 Build Tools), Vulkan SDK, GPU drivers.</div><button class="btn btn-ghost btn-sm" onclick="go('prereqs')">Prerequisites →</button></div></li>
+      <li class="step"><div class="snum">2</div><div class="scont"><div class="stitle">Build llama.cpp with Vulkan + RPC on all nodes</div><div class="stext">Same build for workers (Vulkan only) and master (Vulkan + CUDA optional).</div><button class="btn btn-ghost btn-sm" onclick="go('build')">Build Guide →</button></div></li>
+      <li class="step"><div class="snum">3</div><div class="scont"><div class="stitle">Start rpc-server on NODE-B, C, D before NODE-A</div><div class="stext">Workers listen passively on port 50052. Master connects when it starts.</div><button class="btn btn-ghost btn-sm" onclick="go('nodes')">Node Config →</button></div></li>
+      <li class="step"><div class="snum">4</div><div class="scont"><div class="stitle">Install Ollama + pull mistral-medium-3.5 on NODE-A</div><div class="stext">~80 GB download. Configure OLLAMA_HOST and OLLAMA_ORIGINS.</div><button class="btn btn-ghost btn-sm" onclick="go('ollama')">Ollama →</button></div></li>
+      <li class="step"><div class="snum">5</div><div class="scont"><div class="stitle">Configure NGINX reverse proxy on NODE-A</div><div class="stext">Critical streaming settings, long timeouts, optional auth.</div><button class="btn btn-ghost btn-sm" onclick="go('nginx')">NGINX →</button></div></li>
+      <li class="step"><div class="snum">6</div><div class="scont"><div class="stitle">Launch Open-WebUI via Docker on NODE-A</div><div class="stext">Browser UI accessible from any LAN device at http://192.168.1.10:3000</div><button class="btn btn-ghost btn-sm" onclick="go('gui')">GUI →</button></div></li>
+    </ul>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ NETWORK ════════════════════════════════ -->
+<div class="pg" id="pg-network">
+  <div class="pg-hdr"><h1 class="pg-title">Network Map &amp; IP Addressing</h1><p class="pg-desc">Static IP assignments, firewall rules, and port reference for the four-node cluster.</p></div>
+
+  <div class="sec">
+    <h2 class="sh">Static IP Assignment</h2>
+    <div class="callout c-warn"><i data-lucide="alert-triangle" class="callout-icon"></i><div class="callout-body"><div class="callout-title">Set static IPs before building</div><div class="callout-text">llama.cpp RPC uses hardcoded IPs at startup. DHCP reassignment will break the cluster. Use your router's DHCP reservation table (preferred) or set IPs manually in Windows adapter settings.</div></div></div>
+    <table style="margin-top:var(--space-4)">
+      <thead><tr><th>Node</th><th>Hostname</th><th>Static IP</th><th>OS</th><th>GPU</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><strong>NODE-A</strong></td><td><code>LLAMA-MASTER</code></td><td><code>192.168.1.10</code></td><td>Windows 11</td><td><span class="badge b-pri" style="color:var(--nvd)">NVIDIA</span></td><td>Master + NGINX + Ollama</td></tr>
+        <tr><td><strong>NODE-B</strong></td><td><code>LLAMA-WORKER-B</code></td><td><code>192.168.1.11</code></td><td>Windows 11</td><td><span class="badge b-err">AMD</span></td><td>RPC Worker</td></tr>
+        <tr><td><strong>NODE-C</strong></td><td><code>LLAMA-WORKER-C</code></td><td><code>192.168.1.12</code></td><td>Windows 11</td><td><span class="badge b-err">AMD</span></td><td>RPC Worker</td></tr>
+        <tr><td><strong>NODE-D</strong></td><td><code>LLAMA-WORKER-D</code></td><td><code>192.168.1.13</code></td><td>Windows 10</td><td><span class="badge b-err">AMD</span></td><td>RPC Worker</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Set Static IP — Windows (All Nodes)</h2>
+    <ul class="steps">
+      <li class="step"><div class="snum">1</div><div class="scont"><div class="stitle">Open Adapter Settings</div><div class="stext"><code>Settings → Network &amp; Internet → Ethernet → [adapter] → Edit IP assignment → Manual</code></div></div></li>
+      <li class="step"><div class="snum">2</div><div class="scont"><div class="stitle">Enter values (replace IP per node)</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>IP address:   192.168.1.10   ← change for each node
+Subnet:       24             (255.255.255.0)
+Gateway:      192.168.1.1    ← your router
+DNS:          192.168.1.1 / 8.8.8.8</code></pre>
+      </div></li>
+      <li class="step"><div class="snum">3</div><div class="scont"><div class="stitle">Verify connectivity from NODE-A</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>ping 192.168.1.11
+ping 192.168.1.12
+ping 192.168.1.13</code></pre>
+      </div></li>
+      <li class="step"><div class="snum">4</div><div class="scont"><div class="stitle">Optional: set friendly hostname (PowerShell as Admin)</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>Rename-Computer -NewName "LLAMA-MASTER"    # NODE-A
+Rename-Computer -NewName "LLAMA-WORKER-B"  # NODE-B
+# Restart to apply</code></pre>
+      </div></li>
+    </ul>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Windows Firewall Rules (PowerShell as Admin)</h2>
+    <div class="tabbar">
+      <button class="tabbtn active" onclick="swTab(this,'fw')">Workers B, C, D</button>
+      <button class="tabbtn" onclick="swTab(this,'fw')">Master NODE-A</button>
+    </div>
+    <div class="tabpanel active" id="fw-0">
+      <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># On NODE-B, C, D — allow RPC inbound from NODE-A only
+New-NetFirewallRule -DisplayName "llama.cpp RPC Worker" `
+  -Direction Inbound -Protocol TCP `
+  -LocalPort 50052 `
+  -RemoteAddress 192.168.1.10 `
+  -Action Allow -Profile Private</code></pre>
+    </div>
+    <div class="tabpanel" id="fw-1">
+      <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># On NODE-A — open Ollama, NGINX proxy, and Open-WebUI for LAN
+New-NetFirewallRule -DisplayName "Ollama API" `
+  -Direction Inbound -Protocol TCP -LocalPort 11434 `
+  -RemoteAddress 192.168.1.0/24 -Action Allow -Profile Private
+
+New-NetFirewallRule -DisplayName "NGINX Ollama Proxy" `
+  -Direction Inbound -Protocol TCP -LocalPort 11435 `
+  -RemoteAddress 192.168.1.0/24 -Action Allow -Profile Private
+
+New-NetFirewallRule -DisplayName "Open-WebUI" `
+  -Direction Inbound -Protocol TCP -LocalPort 3000 `
+  -RemoteAddress 192.168.1.0/24 -Action Allow -Profile Private</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ PREREQS ════════════════════════════════ -->
+<div class="pg" id="pg-prereqs">
+  <div class="pg-hdr"><h1 class="pg-title">Prerequisites</h1><p class="pg-desc">Install these on <strong>all four nodes</strong> before building llama.cpp.</p></div>
+
+  <div class="callout c-info"><i data-lucide="info" class="callout-icon"></i><div class="callout-body"><div class="callout-title">Windows 10 vs 11 (NODE-D)</div><div class="callout-text">All steps are identical. NODE-D on Windows 10 uses the same Vulkan SDK and AMD Adrenalin driver. Vulkan has full support on Windows 10 version 1903+.</div></div></div>
+
+  <div class="sec">
+    <h2 class="sh">1 · Visual Studio 2022 Build Tools</h2>
+    <ul class="steps">
+      <li class="step"><div class="snum">1</div><div class="scont"><div class="stitle">Download</div><div class="stext"><code>https://visualstudio.microsoft.com/downloads/</code> → "Tools for Visual Studio" → "Build Tools for Visual Studio 2022"</div></div></li>
+      <li class="step"><div class="snum">2</div><div class="scont"><div class="stitle">Select workload: "Desktop development with C++"</div><div class="stext">This installs MSVC, CMake, and Windows SDK automatically.</div></div></li>
+      <li class="step"><div class="snum">3</div><div class="scont"><div class="stitle">Verify CMake</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>cmake --version
+# Expected: cmake version 3.29.x or later</code></pre>
+      </div></li>
+    </ul>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">2 · Vulkan SDK (All Nodes)</h2>
+    <ul class="steps">
+      <li class="step"><div class="snum">1</div><div class="scont"><div class="stitle">Download from LunarG</div><div class="stext"><code>https://vulkan.lunarg.com/sdk/home</code> → Windows → Latest SDK Installer</div></div></li>
+      <li class="step"><div class="snum">2</div><div class="scont"><div class="stitle">Install with defaults</div><div class="stext">Installer sets <code>VULKAN_SDK</code> env var and adds tools to PATH.</div></div></li>
+      <li class="step"><div class="snum">3</div><div class="scont"><div class="stitle">Verify Vulkan sees your GPU</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>vulkaninfo --summary
+# Should list: "GPU id : 0 (AMD Radeon ...)" or "(NVIDIA GeForce ...)"</code></pre>
+      </div></li>
+    </ul>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">3 · GPU Drivers</h2>
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title" style="color:var(--nvd)">NVIDIA — NODE-A</div></div>
+        <ul style="list-style:disc;padding-left:var(--space-5);font-size:var(--text-sm);color:var(--muted);display:flex;flex-direction:column;gap:var(--space-2)">
+          <li>Download Game Ready Driver: <code>nvidia.com/drivers</code></li>
+          <li>Perform Clean Install to clear old driver</li>
+          <li>CUDA Toolkit optional (only if building with <code>-DGGML_CUDA=ON</code>)</li>
+          <li>Verify: <code>nvidia-smi</code> in PowerShell</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title" style="color:var(--amd)">AMD — NODE-B, C, D</div></div>
+        <ul style="list-style:disc;padding-left:var(--space-5);font-size:var(--text-sm);color:var(--muted);display:flex;flex-direction:column;gap:var(--space-2)">
+          <li>Download AMD Adrenalin Edition: <code>amd.com/support</code></li>
+          <li>Vulkan (AMDVLK) is built into Adrenalin — no extra install</li>
+          <li>ROCm is <strong>not needed</strong> for Vulkan backend</li>
+          <li>Verify: <code>vulkaninfo --summary</code> shows AMD GPU</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">4 · Git (All Nodes)</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># Option A: winget (PowerShell as Admin)
+winget install --id Git.Git -e --source winget
+
+# Option B: download installer from https://git-scm.com/download/win
+
+# Verify:
+git --version</code></pre>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ BUILD ════════════════════════════════ -->
+<div class="pg" id="pg-build">
+  <div class="pg-hdr"><h1 class="pg-title">Building llama.cpp (Vulkan + RPC)</h1><p class="pg-desc">Run these commands on all four nodes. The same compiled binary serves as both <code>rpc-server</code> (workers) and <code>llama-server</code> (master).</p></div>
+
+  <div class="sec">
+    <h2 class="sh">Clone Repository</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># Run in PowerShell on every node
+cd C:\
+git clone https://github.com/ggml-org/llama.cpp
+cd llama.cpp</code></pre>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Configure &amp; Build</h2>
+    <div class="callout c-info"><i data-lucide="info" class="callout-icon"></i><div class="callout-body"><div class="callout-title">Why Vulkan for the whole cluster?</div><div class="callout-text">Vulkan is supported by both AMD (RDNA/GCN) and NVIDIA. One build works across all GPUs. On RDNA3+ AMD GPUs, Vulkan often outperforms ROCm for LLM inference due to better driver maturity on Windows <span class="iref" onclick="go('refs')">[4]</span>.</div></div></div>
+
+    <div class="tabbar">
+      <button class="tabbtn active" onclick="swTab(this,'bld')">Workers B, C, D — Vulkan Only</button>
+      <button class="tabbtn" onclick="swTab(this,'bld')">Master NODE-A — Vulkan + CUDA</button>
+    </div>
+    <div class="tabpanel active" id="bld-0">
+      <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># NODE-B, NODE-C, NODE-D (AMD GPU — Vulkan + RPC)
+cd C:\llama.cpp
+
+cmake -B build `
+  -DGGML_VULKAN=ON `
+  -DGGML_RPC=ON `
+  -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build --config Release -j 8
+
+# Resulting binaries:
+#  C:\llama.cpp\build\bin\Release\rpc-server.exe
+#  C:\llama.cpp\build\bin\Release\llama-server.exe</code></pre>
+    </div>
+    <div class="tabpanel" id="bld-1">
+      <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># NODE-A (NVIDIA GPU — CUDA + Vulkan + RPC)
+# Requires CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+cd C:\llama.cpp
+
+cmake -B build `
+  -DGGML_VULKAN=ON `
+  -DGGML_CUDA=ON `
+  -DGGML_RPC=ON `
+  -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build --config Release -j 8
+
+# CUDA handles NODE-A's local GPU; Vulkan handles remote RPC workers</code></pre>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Verify the Build</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># On any node — confirm rpc-server binary exists
+C:\llama.cpp\build\bin\Release\rpc-server.exe --help
+# Expected: lists --host, --port options
+
+# On NODE-A — verify llama-server
+C:\llama.cpp\build\bin\Release\llama-server.exe --help</code></pre>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">AMD Vulkan Device Selection</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># If a machine has multiple GPUs, select the correct Vulkan device:
+# PowerShell — set for current session
+$env:GGML_VULKAN_DEVICE = "0"   # 0 = first GPU, 1 = second, etc.
+
+# Permanent: set GGML_VULKAN_DEVICE as System Environment Variable
+# System Properties → Advanced → Environment Variables → System variables → New</code></pre>
+    <div class="callout c-warn"><i data-lucide="alert-triangle" class="callout-icon"></i><div class="callout-body"><div class="callout-title">RADV_PERFTEST on Windows</div><div class="callout-text">The <code>RADV_PERFTEST=nogttspill</code> env var seen in Linux guides has no effect on Windows — RADV is the Linux Mesa AMD Vulkan driver. On Windows, AMD uses <strong>AMDVLK</strong>. Keep Adrenalin drivers updated for best Vulkan performance.</div></div></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ NODES ════════════════════════════════ -->
+<div class="pg" id="pg-nodes">
+  <div class="pg-hdr"><h1 class="pg-title">Node Configuration</h1><p class="pg-desc">Per-node startup commands, layer allocation, and running as Windows services.</p></div>
+
+  <div class="sec">
+    <h2 class="sh">Layer Allocation Strategy</h2>
+    <div class="hbox">
+      <div class="hbox-title"><i data-lucide="calculator" style="width:16px;height:16px"></i>Example: Distribute 80 Transformer Layers</div>
+      <table>
+        <thead><tr><th>Node</th><th>GPU</th><th>Example VRAM</th><th>Layers (GPU)</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>NODE-A (NVIDIA)</td><td>NVIDIA</td><td>24 GB</td><td>~24</td><td>Also runs Ollama + NGINX overhead (~2 GB reserved)</td></tr>
+          <tr><td>NODE-B (AMD)</td><td>AMD</td><td>16 GB</td><td>~18</td><td>Pure worker</td></tr>
+          <tr><td>NODE-C (AMD)</td><td>AMD</td><td>16 GB</td><td>~18</td><td>Pure worker</td></tr>
+          <tr><td>NODE-D (AMD)</td><td>AMD</td><td>12 GB</td><td>~14</td><td>Older GPU; fewer layers</td></tr>
+          <tr><td><strong>Total GPU</strong></td><td></td><td><strong>68 GB</strong></td><td><strong>74 of 80</strong></td><td>Remaining 6 on CPU RAM (slower)</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:var(--text-xs);color:var(--muted);margin-top:var(--space-3)">⚠ Substitute your actual VRAM figures. Start with <code>-ngl 50</code> and raise by 10 until you hit OOM, then back off by 5.</p>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Step 1 — Start rpc-server on Workers (B, C, D)</h2>
+    <div class="callout c-warn"><i data-lucide="alert-triangle" class="callout-icon"></i><div class="callout-body"><div class="callout-title">Workers must be running BEFORE the master starts</div><div class="callout-text">The master connects to workers at startup. If a worker is offline, its RPC address is skipped and fewer GPU resources are available.</div></div></div>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># On NODE-B, NODE-C, and NODE-D
+C:\llama.cpp\build\bin\Release\rpc-server.exe `
+  --host 0.0.0.0 `
+  --port 50052
+
+# Expected output:
+# Starting RPC server on 0.0.0.0:50052
+# Using Vulkan device: AMD Radeon RX XXXX</code></pre>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Step 2 — Start llama-server on Master (NODE-A)</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># On NODE-A — adjust -ngl for your actual VRAM total
+C:\llama.cpp\build\bin\Release\llama-server.exe `
+  --model "C:\models\mistral-medium-3.5-q4_k_m.gguf" `
+  --rpc "192.168.1.11:50052,192.168.1.12:50052,192.168.1.13:50052" `
+  --host 0.0.0.0 `
+  --port 8080 `
+  --ctx-size 8192 `
+  --n-predict 2048 `
+  -ngl 70 `
+  -t 8 `
+  --parallel 2 `
+  --cont-batching
+
+# Key flags:
+# --rpc         Workers: B=.11, C=.12, D=.13 all port 50052
+# -ngl 70       Offload 70/80 layers to GPU (tune this!)
+# -t 8          CPU threads on NODE-A for remaining layers
+# --parallel 2  Allow 2 concurrent inference sessions
+# --cont-batching Better throughput for multi-user</code></pre>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Run as Windows Services (NSSM)</h2>
+    <p style="color:var(--muted);font-size:var(--text-sm);margin-bottom:var(--space-4)">NSSM (Non-Sucking Service Manager) wraps any .exe as a Windows service with auto-start and logging <span class="iref" onclick="go('refs')">[10]</span>. Download from <code>https://nssm.cc/download</code> → place <code>nssm.exe</code> at <code>C:\tools\nssm.exe</code>.</p>
+    <div class="tabbar">
+      <button class="tabbtn active" onclick="swTab(this,'nssm')">Worker Service (B, C, D)</button>
+      <button class="tabbtn" onclick="swTab(this,'nssm')">Master Service (NODE-A)</button>
+    </div>
+    <div class="tabpanel active" id="nssm-0">
+      <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># PowerShell as Administrator on each worker
+New-Item -ItemType Directory -Force -Path C:\logs
+
+C:\tools\nssm.exe install LlamaCppRPC `
+  "C:\llama.cpp\build\bin\Release\rpc-server.exe" `
+  "--host 0.0.0.0 --port 50052"
+
+C:\tools\nssm.exe set LlamaCppRPC AppDirectory C:\llama.cpp\build\bin\Release
+C:\tools\nssm.exe set LlamaCppRPC Start SERVICE_AUTO_START
+C:\tools\nssm.exe set LlamaCppRPC AppStdout C:\logs\rpc-server.log
+C:\tools\nssm.exe set LlamaCppRPC AppStderr C:\logs\rpc-server-err.log
+
+Start-Service LlamaCppRPC
+Get-Service LlamaCppRPC  # Should show: Running</code></pre>
+    </div>
+    <div class="tabpanel" id="nssm-1">
+      <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># PowerShell as Administrator on NODE-A
+# Build the arguments string
+$svcArgs = '--model "C:\models\mistral-medium-3.5-q4_k_m.gguf" ' +
+           '--rpc "192.168.1.11:50052,192.168.1.12:50052,192.168.1.13:50052" ' +
+           '--host 0.0.0.0 --port 8080 --ctx-size 8192 ' +
+           '-ngl 70 -t 8 --parallel 2 --cont-batching'
+
+C:\tools\nssm.exe install LlamaCppServer `
+  "C:\llama.cpp\build\bin\Release\llama-server.exe" $svcArgs
+
+C:\tools\nssm.exe set LlamaCppServer AppDirectory C:\llama.cpp\build\bin\Release
+C:\tools\nssm.exe set LlamaCppServer Start SERVICE_AUTO_START
+C:\tools\nssm.exe set LlamaCppServer AppStdout C:\logs\llama-server.log
+
+Start-Service LlamaCppServer</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ OLLAMA ════════════════════════════════ -->
+<div class="pg" id="pg-ollama">
+  <div class="pg-hdr"><h1 class="pg-title">Ollama + mistral-medium-3.5</h1><p class="pg-desc">Installing Ollama on NODE-A, pulling the model, and network-exposing the API.</p></div>
+
+  <div class="callout c-info"><i data-lucide="info" class="callout-icon"></i><div class="callout-body"><div class="callout-title">Ollama vs. llama-server direct</div><div class="callout-text">You can use Ollama (adds model management, cleaner API) or point Open-WebUI directly at <code>llama-server</code> port 8080 (fewer moving parts). This page covers Ollama. See the GUI page for the direct option <span class="iref" onclick="go('refs')">[2]</span>.</div></div></div>
+
+  <div class="sec">
+    <h2 class="sh">Install &amp; Configure Ollama on NODE-A</h2>
+    <ul class="steps">
+      <li class="step"><div class="snum">1</div><div class="scont"><div class="stitle">Download and install</div><div class="stext">From <code>https://ollama.com</code> → Windows installer. Ollama installs as a Windows service and tray app.</div></div></li>
+      <li class="step"><div class="snum">2</div><div class="scont"><div class="stitle">Set System Environment Variables</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># System Properties → Advanced → Environment Variables
+# Under "System variables" — NOT user variables
+
+OLLAMA_HOST=0.0.0.0         # listen on all interfaces (LAN access)
+OLLAMA_ORIGINS=*            # allow CORS from any origin (for Open-WebUI)
+OLLAMA_NUM_PARALLEL=2       # max concurrent requests
+OLLAMA_MAX_LOADED_MODELS=1  # 1 model at a time (128B is large)
+OLLAMA_MAX_QUEUE=8          # queue depth before rejecting
+
+# After setting: right-click tray icon → Quit Ollama → relaunch</code></pre>
+      </div></li>
+      <li class="step"><div class="snum">3</div><div class="scont"><div class="stitle">Pull mistral-medium-3.5 (~80 GB)</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>ollama pull mistral-medium-3.5
+
+# Verify:
+ollama list
+# mistral-medium-3.5:latest   80 GB</code></pre>
+      </div></li>
+      <li class="step"><div class="snum">4</div><div class="scont"><div class="stitle">Test the API locally</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># PowerShell — quick chat test
+curl http://localhost:11434/api/chat `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"model":"mistral-medium-3.5","messages":[{"role":"user","content":"Say hi"}],"stream":false}'</code></pre>
+      </div></li>
+      <li class="step"><div class="snum">5</div><div class="scont"><div class="stitle">Verify from another node on the LAN</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># From NODE-B, C, or D
+curl http://192.168.1.10:11434/api/tags
+# Should return JSON listing mistral-medium-3.5</code></pre>
+      </div></li>
+    </ul>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Extract GGUF (for llama-server direct use)</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># Ollama stores downloaded models at:
+# %USERPROFILE%\.ollama\models\blobs\
+
+# Find the largest file (the model weights):
+dir "$env:USERPROFILE\.ollama\models\blobs" | Sort-Object Length -Descending | Select -First 3
+
+# Copy and rename to .gguf:
+Copy-Item "C:\Users\YourUser\.ollama\models\blobs\sha256-XXXX" `
+  -Destination "C:\models\mistral-medium-3.5-q4_k_m.gguf"</code></pre>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ NGINX ════════════════════════════════ -->
+<div class="pg" id="pg-nginx">
+  <div class="pg-hdr"><h1 class="pg-title">NGINX Load Balancer &amp; Reverse Proxy</h1><p class="pg-desc">Configure NGINX on NODE-A as a streaming-capable proxy in front of Ollama — handling token streaming, timeouts, and optional authentication.</p></div>
+
+  <div class="sec">
+    <h2 class="sh">Install NGINX on Windows (NODE-A)</h2>
+    <ul class="steps">
+      <li class="step"><div class="snum">1</div><div class="scont"><div class="stitle">Download NGINX for Windows</div><div class="stext">From <code>https://nginx.org/en/download.html</code> → stable Windows ZIP → extract to <code>C:\nginx</code></div></div></li>
+      <li class="step"><div class="snum">2</div><div class="scont"><div class="stitle">Install as a Windows Service via NSSM</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>C:\tools\nssm.exe install nginx C:\nginx\nginx.exe
+C:\tools\nssm.exe set nginx AppDirectory C:\nginx
+C:\tools\nssm.exe set nginx Start SERVICE_AUTO_START
+Start-Service nginx</code></pre>
+      </div></li>
+      <li class="step"><div class="snum">3</div><div class="scont"><div class="stitle">Create directories</div>
+        <pre><code>New-Item -ItemType Directory -Force C:\nginx\logs
+New-Item -ItemType Directory -Force C:\nginx\conf\conf.d</code></pre>
+      </div></li>
+    </ul>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">nginx.conf — Full Configuration</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>worker_processes auto;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile      on;
+
+    log_format main '$remote_addr [$time_local] "$request" $status $body_bytes_sent rt=$request_time';
+    access_log  C:/nginx/logs/access.log  main;
+    error_log   C:/nginx/logs/error.log   warn;
+
+    # ─── Upstream: Ollama on localhost ────────────────────────
+    upstream ollama_backend {
+        server 127.0.0.1:11434;   # Ollama API
+        keepalive 8;
+    }
+
+    # ─── Server: LAN-accessible proxy on port 11435 ──────────
+    server {
+        listen 11435;
+        server_name _;
+
+        # ── Optional: Basic Authentication ───────────────────
+        # auth_basic "LLM Cluster";
+        # auth_basic_user_file C:/nginx/conf/.htpasswd;
+
+        location / {
+            proxy_pass         http://ollama_backend;
+            proxy_http_version 1.1;
+
+            # Required for streaming (SSE / chunked responses)
+            proxy_set_header   Connection "";
+            proxy_set_header   Host $host;
+            proxy_set_header   X-Real-IP $remote_addr;
+            proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+
+            # Timeouts
+            # CRITICAL: 0 = unlimited; safe for a LAN-only proxy
+            # 128B at ~5 tok/s, 2048 token output = ~7 minutes
+            proxy_connect_timeout   5s;
+            proxy_read_timeout      0;     # ← MUST be 0 or very large
+            proxy_send_timeout      120s;
+
+            # CRITICAL: disable buffering for token-by-token streaming
+            proxy_buffering         off;
+            chunked_transfer_encoding on;
+
+            # CORS — needed for Open-WebUI on a different port
+            add_header Access-Control-Allow-Origin  * always;
+            add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
+
+            if ($request_method = OPTIONS) { return 204; }
+        }
+
+        # Health check
+        location /health {
+            proxy_pass http://ollama_backend/api/tags;
+            proxy_read_timeout 5s;
+        }
+    }
+}</code></pre>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Why proxy_buffering off &amp; proxy_read_timeout 0?</h2>
+    <div class="g2">
+      <div class="card"><div class="card-title" style="margin-bottom:var(--space-3)">Without these settings</div>
+        <ul style="list-style:disc;padding-left:var(--space-4);font-size:var(--text-sm);color:var(--muted);display:flex;flex-direction:column;gap:var(--space-2)">
+          <li>NGINX buffers the entire output before sending</li>
+          <li>User sees a blank screen until generation finishes</li>
+          <li>Default 60s timeout kills long 128B generations</li>
+          <li>2048 tokens at 5 tok/s = ~7 min → guaranteed timeout</li>
+        </ul>
+      </div>
+      <div class="card"><div class="card-title" style="margin-bottom:var(--space-3)">With correct settings</div>
+        <ul style="list-style:disc;padding-left:var(--space-4);font-size:var(--text-sm);color:var(--muted);display:flex;flex-direction:column;gap:var(--space-2)">
+          <li>Tokens appear instantly in Open-WebUI as generated</li>
+          <li>True streaming — no buffering delay</li>
+          <li><code>proxy_read_timeout 0</code> = no timeout limit</li>
+          <li>On internet-facing: use 600s instead of 0</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Adding Basic Authentication</h2>
+    <div class="callout c-warn"><i data-lucide="alert-triangle" class="callout-icon"></i><div class="callout-body"><div class="callout-title">Ollama has no built-in authentication</div><div class="callout-text">Any device on your LAN can query the model without auth. On a fully trusted home network this is acceptable; if any devices are untrusted, add Basic Auth to NGINX <span class="iref" onclick="go('refs')">[9]</span>.</div></div></div>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># Generate .htpasswd using Python (available on most Windows systems):
+python -c "import crypt; print('admin:' + crypt.crypt('yourpassword'))"
+
+# Or use Git Bash (included with Git for Windows):
+#  htpasswd -c C:\nginx\conf\.htpasswd admin
+# Enter your password when prompted
+
+# Then uncomment in nginx.conf:
+#   auth_basic "LLM Cluster";
+#   auth_basic_user_file C:/nginx/conf/.htpasswd;
+
+# Reload NGINX (zero-downtime):
+C:\nginx\nginx.exe -t       # test config first
+C:\nginx\nginx.exe -s reload</code></pre>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">NGINX Management Commands</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># Test configuration syntax:
+C:\nginx\nginx.exe -t
+
+# Reload (zero-downtime, applies conf changes):
+C:\nginx\nginx.exe -s reload
+
+# Graceful stop:
+C:\nginx\nginx.exe -s quit
+
+# Full restart via NSSM:
+Stop-Service nginx; Start-Service nginx
+
+# Temporarily remove a backend (during maintenance):
+# In nginx.conf: server 127.0.0.1:11434 down;
+# Then reload: C:\nginx\nginx.exe -s reload</code></pre>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ GUI ════════════════════════════════ -->
+<div class="pg" id="pg-gui">
+  <div class="pg-hdr"><h1 class="pg-title">Web GUI — Open-WebUI</h1><p class="pg-desc">Full-featured browser chat interface with model management, user accounts, and streaming. Runs via Docker on NODE-A — accessible from any LAN device.</p></div>
+
+  <div class="sec">
+    <h2 class="sh">Install Docker Desktop on NODE-A</h2>
+    <ul class="steps">
+      <li class="step"><div class="snum">1</div><div class="scont"><div class="stitle">Download Docker Desktop</div><div class="stext"><code>https://www.docker.com/products/docker-desktop/</code> — choose WSL2 backend during install.</div></div></li>
+      <li class="step"><div class="snum">2</div><div class="scont"><div class="stitle">Enable WSL2 if needed</div>
+        <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>wsl --install
+wsl --set-default-version 2
+# Restart if prompted</code></pre>
+      </div></li>
+      <li class="step"><div class="snum">3</div><div class="scont"><div class="stitle">Verify Docker</div>
+        <pre><code>docker --version
+docker run hello-world</code></pre>
+      </div></li>
+    </ul>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Launch Open-WebUI</h2>
+    <div class="tabbar">
+      <button class="tabbtn active" onclick="swTab(this,'gui')">→ Ollama (Recommended)</button>
+      <button class="tabbtn" onclick="swTab(this,'gui')">→ llama-server Direct</button>
+      <button class="tabbtn" onclick="swTab(this,'gui')">→ Via NGINX Proxy</button>
+    </div>
+    <div class="tabpanel active" id="gui-0">
+      <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># Open-WebUI pointing to Ollama on localhost
+docker run -d `
+  -p 3000:8080 `
+  -e OLLAMA_BASE_URL=http://host.docker.internal:11434 `
+  -v open-webui:/app/backend/data `
+  --name open-webui `
+  --restart unless-stopped `
+  ghcr.io/open-webui/open-webui:main
+
+# Access: http://192.168.1.10:3000
+# First user to sign up becomes admin</code></pre>
+    </div>
+    <div class="tabpanel" id="gui-1">
+      <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># Open-WebUI pointing to llama-server's OpenAI-compatible API
+docker run -d `
+  -p 3000:8080 `
+  -e OPENAI_API_BASE_URL=http://host.docker.internal:8080/v1 `
+  -e OPENAI_API_KEY=not-needed `
+  -v open-webui:/app/backend/data `
+  --name open-webui `
+  --restart unless-stopped `
+  ghcr.io/open-webui/open-webui:main</code></pre>
+    </div>
+    <div class="tabpanel" id="gui-2">
+      <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># Open-WebUI through NGINX on port 11435 (adds auth layer)
+docker run -d `
+  -p 3000:8080 `
+  -e OLLAMA_BASE_URL=http://host.docker.internal:11435 `
+  -v open-webui:/app/backend/data `
+  --name open-webui `
+  --restart unless-stopped `
+  ghcr.io/open-webui/open-webui:main</code></pre>
+    </div>
+
+    <div class="callout c-ok"><i data-lucide="check-circle" class="callout-icon"></i><div class="callout-body"><div class="callout-title">LAN Access</div><div class="callout-text">Any device on your network — phones, tablets, laptops — can access the chat interface at <code>http://192.168.1.10:3000</code>. No software needed on client devices.</div></div></div>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Key Open-WebUI Features</h2>
+    <div class="g3">
+      <div class="card"><div class="card-hdr"><div class="cicon" style="background:var(--prihlt)"><i data-lucide="message-square" style="width:18px;height:18px;color:var(--pri)"></i></div><div class="card-title">Chat</div></div>
+        <ul style="list-style:disc;padding-left:var(--space-4);font-size:var(--text-sm);color:var(--muted);display:flex;flex-direction:column;gap:var(--space-1)">
+          <li>Streaming token output</li><li>Conversation history</li><li>Markdown + code highlighting</li><li>Image input (vision)</li>
+        </ul>
+      </div>
+      <div class="card"><div class="card-hdr"><div class="cicon" style="background:var(--okh)"><i data-lucide="settings" style="width:18px;height:18px;color:var(--ok)"></i></div><div class="card-title">Model Control</div></div>
+        <ul style="list-style:disc;padding-left:var(--space-4);font-size:var(--text-sm);color:var(--muted);display:flex;flex-direction:column;gap:var(--space-1)">
+          <li>Select any Ollama model</li><li>System prompt presets</li><li>Temperature / top-p sliders</li><li>Context length control</li>
+        </ul>
+      </div>
+      <div class="card"><div class="card-hdr"><div class="cicon" style="background:var(--warnh)"><i data-lucide="users" style="width:18px;height:18px;color:var(--warn)"></i></div><div class="card-title">Multi-User</div></div>
+        <ul style="list-style:disc;padding-left:var(--space-4);font-size:var(--text-sm);color:var(--muted);display:flex;flex-direction:column;gap:var(--space-1)">
+          <li>Individual user accounts</li><li>Admin / user roles</li><li>Private conversation history</li><li>Shareable chats</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Alternative: llama-server Built-in UI</h2>
+    <div class="callout c-info"><i data-lucide="info" class="callout-icon"></i><div class="callout-body"><div class="callout-title">No Docker required</div><div class="callout-text">llama-server serves a lightweight built-in web UI at <code>http://192.168.1.10:8080</code> when it's running. It shows model info, active connections, a simple chat panel, and a <code>/metrics</code> endpoint with tokens/sec, VRAM usage, and queue depth. Useful for monitoring and quick tests <span class="iref" onclick="go('refs')">[5]</span>.</div></div></div>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Manage Open-WebUI Container</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code>docker ps | findstr open-webui    # check status
+docker logs -f open-webui         # live logs
+docker stop open-webui            # stop
+docker start open-webui           # start
+
+# Update to latest:
+docker pull ghcr.io/open-webui/open-webui:main
+docker stop open-webui && docker rm open-webui
+# Re-run the docker run command — data volume is preserved</code></pre>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ TROUBLESHOOT ════════════════════════════════ -->
+<div class="pg" id="pg-trouble">
+  <div class="pg-hdr"><h1 class="pg-title">Troubleshooting</h1><p class="pg-desc">Common issues and fixes for the llama.cpp RPC + Vulkan setup on Windows.</p></div>
+
+  <div class="sec">
+    <h2 class="sh">RPC Connection Problems</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Likely Cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td><code>failed to connect to RPC</code></td><td>Worker not running or firewall blocking 50052</td><td>Start rpc-server on workers first. Verify firewall rule allows inbound 50052 from 192.168.1.10 only.</td></tr>
+        <tr><td>Connection drops mid-generation</td><td>Network timeout / Wi-Fi packet loss</td><td>Use wired Ethernet. Disable "Allow computer to turn off this device" in adapter power settings.</td></tr>
+        <tr><td>Model loads very slowly (&gt;10 min)</td><td>1 GbE bottleneck streaming 80 GB weights</td><td>Normal on first load. Consider 10 GbE switch for &lt;1 min load times. Subsequent loads are faster once cached.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">GPU Not Detected / Falling Back to CPU</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>rpc-server runs on CPU only</td><td>Run <code>vulkaninfo --summary</code>. If error, reinstall Vulkan SDK and GPU driver.</td></tr>
+        <tr><td>NVIDIA GPU not used on NODE-A</td><td>Rebuild with <code>-DGGML_CUDA=ON -DGGML_VULKAN=ON</code>. Ensure CUDA Toolkit is installed.</td></tr>
+        <tr><td>Wrong GPU selected (multi-GPU machine)</td><td>Set <code>GGML_VULKAN_DEVICE=0</code> (or 1) as system env var to pin the GPU.</td></tr>
+        <tr><td>AMD GPU detected but slow</td><td>Update to latest AMD Adrenalin. Close background GPU-heavy apps (gaming, etc).</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Out of VRAM (OOM)</h2>
+    <div class="callout c-err"><i data-lucide="alert-circle" class="callout-icon"></i><div class="callout-body"><div class="callout-title">Most common failure mode</div><div class="callout-text">Unlike CUDA, Vulkan on AMD does not always gracefully overflow excess layers to system RAM. OOM may cause the rpc-server process to crash rather than slow down. Reduce <code>-ngl</code> on the master's startup command by 5 and retry.</div></div></div>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># Strategy: start low, increase until OOM, then back off
+# Start with -ngl 40, increase by 10 each successful run
+
+# Check VRAM usage (PowerShell):
+# NVIDIA:
+nvidia-smi --query-gpu=memory.used,memory.free --format=csv
+
+# AMD: use Task Manager → Performance → GPU
+# Or AMD Adrenalin overlay: Ctrl+Shift+O (in-game overlay)</code></pre>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Ollama / Open-WebUI Issues</h2>
+    <table>
+      <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>Ollama uses CPU not GPU</td><td>Verify OLLAMA_HOST, OLLAMA_ORIGINS are <em>System</em> env vars (not user). Fully quit tray app and relaunch.</td></tr>
+        <tr><td><code>model not found</code></td><td><code>ollama list</code> → verify exact name is <code>mistral-medium-3.5:latest</code>. Re-pull if missing.</td></tr>
+        <tr><td>Open-WebUI can't reach Ollama</td><td><code>docker exec open-webui curl http://host.docker.internal:11434/api/tags</code>. If fails, check OLLAMA_ORIGINS=* is set.</td></tr>
+        <tr><td>NGINX 504 Gateway Timeout</td><td>Ensure <code>proxy_read_timeout 0;</code> is in nginx.conf. Test: <code>nginx -t</code>. Reload: <code>nginx -s reload</code>.</td></tr>
+        <tr><td>Streaming not working (blank until done)</td><td>Verify <code>proxy_buffering off;</code> and <code>chunked_transfer_encoding on;</code> in nginx.conf.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <h2 class="sh">Build Errors</h2>
+    <pre><button class="cpbtn" onclick="cp(this)"><i data-lucide="copy" style="width:12px;height:12px"></i>Copy</button><code># "Vulkan SDK not found"
+echo $env:VULKAN_SDK   # should output: C:\VulkanSDK\1.3.xxx
+
+# "cmake not found" → run from Developer PowerShell for VS2022
+# or add to PATH: C:\Program Files\Microsoft Visual Studio\2022\BuildTools\
+#                 Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin
+
+# "CUDA not found" (NODE-A only)
+nvcc --version   # if fails, install CUDA Toolkit and restart</code></pre>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ REFERENCES ════════════════════════════════ -->
+<div class="pg" id="pg-refs">
+  <div class="pg-hdr"><h1 class="pg-title">References</h1><p class="pg-desc">All sources cited in this guide, formatted in IEEE style. Inline superscripts [N] throughout the guide navigate to this page.</p></div>
+
+  <div class="callout c-info"><i data-lucide="info" class="callout-icon"></i><div class="callout-body"><div class="callout-title">IEEE Citation Format</div><div class="callout-text">Format: [N] Author(s), "Title," <em>Source</em>, Publisher, Year. [Online]. Available: URL. [Accessed: Date].</div></div></div>
+
+  <div style="margin-top:var(--space-6)">
+    <div class="refitem"><div class="refnum">[1]</div><div class="refcite">Mistral AI, "mistral-medium-3.5," <em>Ollama Model Library</em>, Ollama, Inc., 2025. [Online]. Available: <a href="https://ollama.com/library/mistral-medium-3.5" target="_blank" rel="noopener">https://ollama.com/library/mistral-medium-3.5</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Overview, Ollama + Model</div></div>
+
+    <div class="refitem"><div class="refnum">[2]</div><div class="refcite">Ollama, Inc., "FAQ — Frequently Asked Questions," <em>Ollama Documentation</em>, 2026. [Online]. Available: <a href="https://docs.ollama.com/faq" target="_blank" rel="noopener">https://docs.ollama.com/faq</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Ollama + Model, GUI</div></div>
+
+    <div class="refitem"><div class="refnum">[3]</div><div class="refcite">KiteMetric, "Remote Ollama Access: A Comprehensive Guide," <em>KiteMetric Blog</em>, 2025. [Online]. Available: <a href="https://kitemetric.com/blogs/remote-ollama-access-a-comprehensive-guide" target="_blank" rel="noopener">https://kitemetric.com/blogs/remote-ollama-access-a-comprehensive-guide</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Overview, Network Map</div></div>
+
+    <div class="refitem"><div class="refnum">[4]</div><div class="refcite">Reddit contributors, "2x AMD GPUs: Is llama.cpp still a good option?" <em>r/LocalLLaMA</em>, Reddit, Oct. 2025. [Online]. Available: <a href="https://www.reddit.com/r/LocalLLaMA/comments/1o78vh7/2x_amd_gpus_is_llamacpp_still_a_good_option/" target="_blank" rel="noopener">https://www.reddit.com/r/LocalLLaMA/comments/1o78vh7/</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Overview, Build Guide, Prerequisites</div></div>
+
+    <div class="refitem"><div class="refnum">[5]</div><div class="refcite">ggml-org, "llama.cpp RPC Backend README," <em>GitHub — ggml-org/llama.cpp</em>, 2025. [Online]. Available: <a href="https://github.com/ggml-org/llama.cpp/blob/master/examples/rpc/README.md" target="_blank" rel="noopener">https://github.com/ggml-org/llama.cpp/blob/master/examples/rpc/README.md</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Overview, Node Configuration, GUI</div></div>
+
+    <div class="refitem"><div class="refnum">[6]</div><div class="refcite">Open-WebUI, "Getting Started: Starting with Ollama," <em>Open-WebUI Documentation</em>, 2025. [Online]. Available: <a href="https://docs.openwebui.com/getting-started/quick-start/connect-a-provider/starting-with-ollama/" target="_blank" rel="noopener">https://docs.openwebui.com/getting-started/quick-start/connect-a-provider/starting-with-ollama/</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Overview, GUI</div></div>
+
+    <div class="refitem"><div class="refnum">[7]</div><div class="refcite">Seeed Studio, "Distributed llama.cpp on reComputer Jetson (RPC Mode)," <em>Seeed Studio Wiki</em>, Jan. 2026. [Online]. Available: <a href="https://wiki.seeedstudio.com/ai_robotics_distributed_llama_cpp_rpc_jetson/" target="_blank" rel="noopener">https://wiki.seeedstudio.com/ai_robotics_distributed_llama_cpp_rpc_jetson/</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Network Map</div></div>
+
+    <div class="refitem"><div class="refnum">[8]</div><div class="refcite">A. Lancer, "Making an Ollama Mesh with Nginx," <em>DEV Community</em>, Feb. 2026. [Online]. Available: <a href="https://dev.to/lancer1977/ollama-mesh-3l5j" target="_blank" rel="noopener">https://dev.to/lancer1977/ollama-mesh-3l5j</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: NGINX Load Balancer</div></div>
+
+    <div class="refitem"><div class="refnum">[9]</div><div class="refcite">R. Bhooteshwar, "Running Ollama Remotely in a Secure Way," <em>Medium — LearnWithRahul</em>, Jun. 2025. [Online]. Available: <a href="https://medium.com/learnwithrahul/running-ollama-remotely-in-a-secure-way-d14ba13c8d77" target="_blank" rel="noopener">https://medium.com/learnwithrahul/running-ollama-remotely-in-a-secure-way-d14ba13c8d77</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Node Configuration, NGINX</div></div>
+
+    <div class="refitem"><div class="refnum">[10]</div><div class="refcite">ATLASSC.NET, "Configuring Your Ollama Server," <em>ATLASSC.NET Technical Blog</em>, Jan. 2025. [Online]. Available: <a href="https://atlassc.net/2025/01/15/configuring-your-ollama-server" target="_blank" rel="noopener">https://atlassc.net/2025/01/15/configuring-your-ollama-server</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Node Configuration</div></div>
+
+    <div class="refitem"><div class="refnum">[11]</div><div class="refcite">Reddit contributors, "Running llama.cpp large models between multiple nodes via RPC," <em>r/LocalLLaMA</em>, Reddit, Feb. 2026. [Online]. Available: <a href="https://www.reddit.com/r/LocalLLaMA/comments/1qvz315/running_llamacpp_large_models_between_multiple/" target="_blank" rel="noopener">https://www.reddit.com/r/LocalLLaMA/comments/1qvz315/</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Node Configuration</div></div>
+
+    <div class="refitem"><div class="refnum">[12]</div><div class="refcite">AMD, "Llama.cpp Pre-built Binaries — ROCm on Radeon and Ryzen," <em>AMD ROCm Documentation</em>, AMD Inc., 2025. [Online]. Available: <a href="https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/advanced/advancedrad/windows/llm/llamacpp.html" target="_blank" rel="noopener">https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Prerequisites</div></div>
+
+    <div class="refitem"><div class="refnum">[13]</div><div class="refcite">ggml-org, "Build llama.cpp from source — docs/build.md," <em>GitHub — ggml-org/llama.cpp</em>, 2025. [Online]. Available: <a href="https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md" target="_blank" rel="noopener">https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Build Guide</div></div>
+
+    <div class="refitem"><div class="refnum">[14]</div><div class="refcite">ggml-org, "Performance of llama.cpp with Vulkan, Discussion #10879," <em>GitHub Discussions — ggml-org/llama.cpp</em>, Dec. 2024. [Online]. Available: <a href="https://github.com/ggml-org/llama.cpp/discussions/10879" target="_blank" rel="noopener">https://github.com/ggml-org/llama.cpp/discussions/10879</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Build Guide</div></div>
+
+    <div class="refitem"><div class="refnum">[15]</div><div class="refcite">Ollama, Inc., "Hardware Support (GPU)," <em>Ollama Documentation</em>, 2026. [Online]. Available: <a href="https://docs.ollama.com/gpu" target="_blank" rel="noopener">https://docs.ollama.com/gpu</a>. [Accessed: May 18, 2026].</div><div class="reflink">↳ Used on: Overview</div></div>
+  </div>
+
+  <div class="divider"></div>
+  <div style="font-size:var(--text-xs);color:var(--faint)">
+    <strong style="color:var(--muted)">Cross-Page Reference Index</strong>
+    <div style="margin-top:var(--space-3);display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--space-2)">
+      <div>[1] → <a onclick="go('home');return false" href="#">Overview</a>, <a onclick="go('ollama');return false" href="#">Ollama</a></div>
+      <div>[2] → <a onclick="go('ollama');return false" href="#">Ollama</a>, <a onclick="go('gui');return false" href="#">GUI</a></div>
+      <div>[3] → <a onclick="go('home');return false" href="#">Overview</a>, <a onclick="go('network');return false" href="#">Network</a></div>
+      <div>[4] → <a onclick="go('home');return false" href="#">Overview</a>, <a onclick="go('build');return false" href="#">Build</a>, <a onclick="go('prereqs');return false" href="#">Prereqs</a></div>
+      <div>[5] → <a onclick="go('home');return false" href="#">Overview</a>, <a onclick="go('nodes');return false" href="#">Nodes</a>, <a onclick="go('gui');return false" href="#">GUI</a></div>
+      <div>[6] → <a onclick="go('home');return false" href="#">Overview</a>, <a onclick="go('gui');return false" href="#">GUI</a></div>
+      <div>[7] → <a onclick="go('network');return false" href="#">Network</a></div>
+      <div>[8] → <a onclick="go('nginx');return false" href="#">NGINX</a></div>
+      <div>[9] → <a onclick="go('nodes');return false" href="#">Nodes</a>, <a onclick="go('nginx');return false" href="#">NGINX</a></div>
+      <div>[10] → <a onclick="go('nodes');return false" href="#">Nodes</a></div>
+      <div>[11] → <a onclick="go('nodes');return false" href="#">Nodes</a></div>
+      <div>[12] → <a onclick="go('prereqs');return false" href="#">Prereqs</a></div>
+      <div>[13][14] → <a onclick="go('build');return false" href="#">Build</a></div>
+      <div>[15] → <a onclick="go('home');return false" href="#">Overview</a></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end main -->
+
+<script>
+const pgNames={home:'Overview',network:'Network Map',prereqs:'Prerequisites',build:'Build llama.cpp',nodes:'Node Configuration',ollama:'Ollama + Model',nginx:'NGINX Load Balancer',gui:'Web GUI (Open-WebUI)',trouble:'Troubleshooting',refs:'References'};
+
+function go(id){
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
+  const pg=document.getElementById('pg-'+id);
+  if(pg)pg.classList.add('active');
+  const ni=document.querySelector(`[data-pg="${id}"]`);
+  if(ni)ni.classList.add('active');
+  document.getElementById('bc').textContent=pgNames[id]||id;
+  window.scrollTo({top:0,behavior:'smooth'});
+  closeSidebar();
+  lucide.createIcons();
+}
+
+let theme='dark';
+function toggleTheme(){
+  theme=theme==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',theme);
+  const ic=document.getElementById('tico');
+  ic.innerHTML=theme==='dark'?'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>':'<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+}
+
+function toggleSb(){
+  document.getElementById('sb').classList.toggle('open');
+  document.getElementById('ov').classList.toggle('open');
+}
+function closeSidebar(){
+  document.getElementById('sb').classList.remove('open');
+  document.getElementById('ov').classList.remove('open');
+}
+
+function swTab(btn,group){
+  const bar=btn.parentElement;
+  const tabs=[...bar.querySelectorAll('.tabbtn')];
+  const idx=tabs.indexOf(btn);
+  tabs.forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  let panels=[],el=bar.nextElementSibling;
+  while(el&&el.classList.contains('tabpanel')){panels.push(el);el=el.nextElementSibling;}
+  panels.forEach((p,i)=>p.classList.toggle('active',i===idx));
+}
+
+function cp(btn){
+  const code=btn.parentElement.querySelector('code');
+  if(!code)return;
+  navigator.clipboard.writeText(code.innerText).then(()=>{
+    btn.classList.add('copied');
+    btn.innerHTML='<i data-lucide="check" style="width:12px;height:12px"></i>Copied!';
+    lucide.createIcons();
+    setTimeout(()=>{btn.classList.remove('copied');btn.innerHTML='<i data-lucide="copy" style="width:12px;height:12px"></i>Copy';lucide.createIcons();},2000);
+  });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  lucide.createIcons();
+  if(window.matchMedia('(prefers-color-scheme:light)').matches){
+    theme='light';document.documentElement.setAttribute('data-theme','light');
+    document.getElementById('tico').innerHTML='<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+  }
+});
+</script>
+</body>
+</html>

@@ -772,7 +772,7 @@ streaming page-by-page. `--report-memory` logs RSS every ten files.
 
 ---
 
-## 9. Thirty-six defects found by testing — eighteen of them silent
+## 9. Thirty-eight defects found by testing — eighteen of them silent
 
 This is the section worth reading. Every one of these produced a *plausible
 looking* result, and six produced a wrong PDF with **no error anywhere**.
@@ -1792,21 +1792,68 @@ traded one failure mode for a worse one (§9.23 was the first). Immunity
 to X is not the same as correctness, and the check is always "what does
 the *other* party see now?"
 
-### 9.36 ⚠️ `--layouts` defaulted to `model` *(fixed)*
+### 9.36 ⚠️ `--layouts` default changed to `auto` — **and that was wrong** *(reverted in 9.37)*
+
+`nothing to render for --layouts 'model': Model (empty)` appeared often
+in the field log, so 0.5.0 flipped the default to `auto`. Read §9.37
+before acting on this section: the change was a regression and it
+shipped. `model` is the default again.
+
+### 9.37 ⚠️ `--layouts auto` produced blank pages *(fixed)*
+
+0.5.0's new default, measured on the very next run:
+
+| | Sheet 1 (`121009_02_C - Feed Arm Elevation, View Z-Z.dwg`) |
+|---|---|
+| 0.4.x, `--layouts model` | **94.5 KiB**, 1.0 s |
+| 0.5.0, `--layouts auto` | **1.5 KiB**, 0.3 s |
+
+1.5 KiB is a blank page. Faster, and empty.
+
+`auto` yielded any paperspace layout holding at least one drawable
+(non-`VIEWPORT`) entity. A GBT sheet's paperspace holds **a border and a
+title block** — tens of entities — around a viewport this renderer cannot
+draw; its modelspace holds the actual drawing, thousands of entities. So
+"has something drawable" selected the title block and discarded the
+drawing.
+
+Two corrections:
+
+| | |
+|---|---|
+| Default | back to **`model`**, which is what this set needs and what 0.4.x used |
+| `auto` | now **weighs** the two spaces. Paperspace is preferred only when its best layout carries at least `EzdxfBackend.AUTO_PAPER_SHARE` (default 1.0) of the modelspace entity count, or modelspace is empty |
+
+Any rule that does not compare the two picks the title block.
+
+**The process failure is the more useful finding.** The default was
+changed on the strength of *one error string in a log*, without checking
+what `auto` actually selects on the drawings in question — and it was
+announced as the biggest expected win. A default that changes what every
+sheet *contains* needs a before/after on real sheets, not an inference
+from a failure message. The regression suite now builds that exact shape
+(400 modelspace entities, 9 paperspace) and asserts `auto` picks Model,
+while a paperspace-rich drawing and an empty-modelspace drawing both
+still pick paper.
+
+### 9.38 ⚠️ A docstring shipped an invalid escape, for the second time *(fixed)*
 
 ```
-nothing to render for --layouts 'model': Model (empty)
+dwg2pdf.py:131: SyntaxWarning: invalid escape sequence '\.'
 ```
 
-A large share of the field run's 956 pass-1 failures. Those sheets have
-their content in **paper space**, and the default sent every one of them
-through to the AutoCAD passes — the slow serial ones — for no reason at
-all.
+Once per worker, on every run. 0.5.0's own revision note quoted the
+viewer's error — `\.dwg2pdf_plot\<sheet>.pdf` — inside a **non-raw**
+docstring.
 
-`model` was a sensible default for a single drawing and never a sensible
-one for a drawing set. The default is now `auto`, which renders paper
-space when model space is empty. `--layouts model` still selects the old
-behaviour.
+This is the second time. 0.4.1 did it with `\U`, which is a hard
+`SyntaxError` and so was caught immediately; `\.` is only a warning, so
+it passed an import check and shipped. **A docstring is not a comment; it
+is a string literal**, and a Windows path in one needs doubling or a raw
+prefix.
+
+The suite now compiles both modules under `-W error::SyntaxWarning`,
+which is the check that would have caught either.
 
 ---
 
@@ -1853,7 +1900,7 @@ Qt, so it runs in CI with no display:
 | **threaded parallel conversion of 8 drawings through the worker** | 1 ✅ 8/8 |
 | progress bar, PDFs on disk, manifest, mirrored structure, 7z, thread cleanup | 6 ✅ |
 
-**AutoCAD backends — 173 of 173 passing** (`python test_autocad.py`). Runs
+**AutoCAD backends — 181 of 181 passing** (`python test_autocad.py`). Runs
 anywhere: it exercises the parts of the AutoCAD path that are pure Python —
 the generated `.scr`, the plot-device calibration, the console fault
 detection, the COM busy and context predicates, the window-state escalation,
@@ -1879,7 +1926,8 @@ Windows, but every defect in §9.13, §9.14, §9.16, §9.17, §9.20, §9.21 and
 | answers bound to prompts, not positions; unknown prompt takes default | 10 ✅ |
 | never attaches to the operator's AutoCAD; COM session recycled | 7 ✅ |
 | plots straight to the deliverable; scratch only when it is locked | 7 ✅ |
-| `--layouts` defaults to `auto`, so paper-space sheets convert | 3 ✅ |
+| `auto` weighs model against paper; the blank-page shape is a fixture | 8 ✅ |
+| both modules compile under `-W error::SyntaxWarning` | 2 ✅ |
 | `?` device listing parsed out of a core-console transcript | 4 ✅ |
 | calibration finds the working device, caches it, stops looking | 4 ✅ |
 | calibration gives up after N drawings, with an actionable message | 5 ✅ |

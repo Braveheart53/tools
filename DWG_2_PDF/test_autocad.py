@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Engine-side checks for the AutoCAD backends (dwg2pdf 0.5.0).
+"""Engine-side checks for the AutoCAD backends (dwg2pdf 0.5.1).
 
 These run anywhere -- they exercise the parts of the AutoCAD path that are
 pure Python: the generated ``.scr`` text, the plot-device calibration, the
@@ -1226,19 +1226,104 @@ def test_plot_straight_to_destination() -> None:
 
 
 def test_layouts_default() -> None:
-    """Paper-space-only sheets must not fail pass 1 for nothing.
+    """'auto' must WEIGH the two spaces, not merely detect paperspace.
 
-    "nothing to render for --layouts 'model': Model (empty)" accounted
-    for a large share of the field run's 956 pass-1 failures -- sheets
-    whose content is in paper space, sent to the AutoCAD passes by a
-    default that never suited a drawing set.
+    0.5.0 changed the default to 'auto' on the strength of one error
+    string in a log, and it was a regression that shipped:
+
+        0.4.x (model): ... View Z-Z.dwg -> 94.5 KiB
+        0.5.0 (auto):  ... View Z-Z.dwg ->  1.5 KiB
+
+    A GBT sheet's paperspace holds a border and a title block round a
+    viewport the renderer cannot draw; its modelspace holds the drawing.
+    "Any drawable entity wins" picks the title block.
     """
-    chk("PageSpec defaults to 'auto' (0.5.0)",
-        engine.PageSpec(paper="AUTO").layouts == "auto")
+    import tempfile
+
+    chk("PageSpec defaults back to 'model' (0.5.1)",
+        engine.PageSpec(paper="AUTO").layouts == "model")
     chk("the CLI default matches the dataclass",
-        engine.build_parser().get_default("layouts") == "auto")
-    chk("'model' is still selectable",
-        engine.PageSpec(paper="AUTO", layouts="model").layouts == "model")
+        engine.build_parser().get_default("layouts") == "model")
+    chk("'auto' is still selectable",
+        engine.PageSpec(paper="AUTO", layouts="auto").layouts == "auto")
+    chk("the paper/model weighting is a documented tunable",
+        engine.EzdxfBackend.AUTO_PAPER_SHARE >= 1.0)
+
+    try:
+        import ezdxf
+    except Exception:                                      # noqa: BLE001
+        return
+
+    backend = engine.EzdxfBackend(timeout=60)
+    spec = engine.PageSpec(paper="AUTO", layouts="auto")
+
+    def picked(doc):
+        return [name for name, _, _ in backend._iter_layouts(doc, spec)]
+
+    # The exact shape that regressed: rich modelspace, title-block-only
+    # paperspace round a viewport.
+    doc = ezdxf.new(setup=True)
+    for i in range(400):
+        doc.modelspace().add_line((i, 0), (i, 100))
+    psp = doc.layout("Layout1")
+    for i in range(8):
+        psp.add_line((0, i * 5), (200, i * 5))
+    psp.add_text("TITLE BLOCK", height=4).set_placement((5, 5))
+    psp.add_viewport(center=(100, 100), size=(180, 120),
+                     view_center_point=(200, 50), view_height=120)
+    drawable = sum(1 for x in psp if x.dxftype() != "VIEWPORT")
+    chk("the fixture reproduces the shape (few paper, many model)",
+        0 < drawable < 50 and sum(1 for _ in doc.modelspace()) > 300)
+    chk("the pre-0.5.1 rule WOULD have chosen paperspace", drawable > 0)
+    chk("auto now chooses model space, not the title block",
+        picked(doc) == ["Model"])
+
+    # A genuine paperspace sheet must still win.
+    doc2 = ezdxf.new(setup=True)
+    for i in range(5):
+        doc2.modelspace().add_line((i, 0), (i, 1))
+    p2 = doc2.layout("Layout1")
+    for i in range(300):
+        p2.add_line((i, 0), (i, 80))
+    chk("a paperspace-rich drawing still selects paper space",
+        picked(doc2) == ["Layout1"])
+
+    # And an empty modelspace must still fall through.
+    doc3 = ezdxf.new(setup=True)
+    p3 = doc3.layout("Layout1")
+    for i in range(20):
+        p3.add_line((i, 0), (i, 10))
+    chk("an empty model space still falls through to paper space",
+        picked(doc3) == ["Layout1"])
+
+
+def test_no_syntax_warnings() -> None:
+    """The module must compile clean under -W error::SyntaxWarning.
+
+    Twice now a Windows path quoted inside a NON-RAW docstring has
+    shipped an invalid escape -- 0.4.1's "\\U" (which is a hard
+    SyntaxError) and 0.5.0's "\\." (a warning, printed once per worker
+    on every run of a 1762-drawing batch).  A docstring is not a
+    comment; it is a string literal.
+    """
+    import subprocess
+    import sys
+
+    for module in ("dwg2pdf.py", "dwg2pdf_gui.py"):
+        path = Path(module)
+        if not path.is_file():
+            continue
+        proc = subprocess.run(
+            [sys.executable, "-W", "error::SyntaxWarning", "-c",
+             "import pathlib,sys; p=pathlib.Path(sys.argv[1]); "
+             "compile(p.read_text(encoding='utf-8'), sys.argv[1], 'exec')",
+             module],
+            capture_output=True, text=True,
+        )
+        chk("%s compiles with no SyntaxWarning" % module,
+            proc.returncode == 0)
+        if proc.returncode != 0:
+            print("        " + proc.stderr.strip().splitlines()[-1][:120])
 
 
 # %% Entry point
@@ -1257,6 +1342,7 @@ def run_test() -> int:
     test_no_hijacking_autocad()
     test_plot_straight_to_destination()
     test_layouts_default()
+    test_no_syntax_warnings()
     test_cancel_hook()
     test_log_noise()
     test_decoder_warning()

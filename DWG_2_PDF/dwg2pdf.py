@@ -71,6 +71,48 @@ Revision history
 ----------------
 Semantic versioning, newest first: External.Internal.Working.
 
+0.5.1
+    **0.5.0's --layouts default was a regression, and it shipped.**  The
+    first sheet of the next run said so::
+
+        0.4.x (--layouts model):  ... View Z-Z.dwg -> 94.5 KiB (1.0s)
+        0.5.0 (--layouts auto):   ... View Z-Z.dwg ->  1.5 KiB (0.3s)
+
+    Same drawing.  1.5 KiB is a blank page.
+
+    ``auto`` yielded any paperspace layout holding at least one drawable
+    (non-VIEWPORT) entity, and a GBT sheet's paperspace holds a border
+    and a title block -- tens of entities -- around a viewport the
+    renderer cannot draw, while its modelspace holds the drawing itself,
+    thousands of entities.  "Has something drawable" therefore selected
+    the title block and threw the drawing away, faster than before and
+    empty.
+
+    Two corrections, and the second is the one that matters:
+
+    1. **The default goes back to ``model``**, which is what this set
+       actually needs and what 0.4.x used.
+    2. **``auto`` now WEIGHS the two spaces instead of detecting them.**
+       Paperspace is preferred only when its best layout carries at
+       least :attr:`EzdxfBackend.AUTO_PAPER_SHARE` (default 1.0) of the
+       modelspace entity count, or modelspace is empty.  Any rule that
+       does not compare the two picks the title block.
+
+    The process failure is worth recording with the defect: the default
+    was changed on the strength of ONE error string in a log
+    (``nothing to render for --layouts 'model': Model (empty)``) without
+    checking what ``auto`` selects on the drawings in question -- and it
+    was announced as the biggest expected win.  A default that changes
+    what every sheet contains needs a before/after on real sheets, not
+    an inference from a failure message.
+
+    Also fixed: ``SyntaxWarning: invalid escape sequence '\\.'`` from
+    0.5.0's own revision note, which quoted a Windows path inside a
+    non-raw docstring -- printed once per worker on every run.  The
+    regression suite now compiles this module under
+    ``-W error::SyntaxWarning``, because this is the second time a
+    docstring path has done it.
+
 0.5.0
     **A complete 1762-drawing run, and four more defects -- one of which
     means the plot device was never the problem at all.**  Major version
@@ -128,7 +170,7 @@ Semantic versioning, newest first: External.Internal.Working.
        handed the *scratch* path and the rename moves the file first, so
        it reports::
 
-           Cannot open the document ... \.dwg2pdf_plot\<sheet>.pdf
+           Cannot open the document ... \\.dwg2pdf_plot\\<sheet>.pdf
            Error [Operating system]: The system cannot find the path specified.
 
        Once per sheet, modal, in a serial run -- strictly worse than the
@@ -870,7 +912,7 @@ from typing import Any, Callable, Iterable, Iterator, Optional, Sequence
 __author__ = "William W. Wallace"
 __email__ = "naval.antennas@gmail.com"
 __phone__ = "(304) 456-2216"
-__revision__ = "0.5.0"
+__revision__ = "0.5.1"
 __all__ = [
     "PageSpec",
     "ConversionResult",
@@ -1562,7 +1604,7 @@ class PageSpec:
     #: (empty)" and fall through to the AutoCAD passes for no reason --
     #: a large share of the 956 failures on the field run.  "auto"
     #: renders paper space when model space is empty.
-    layouts: str = "auto"
+    layouts: str = "model"
     monochrome: bool = True
     lineweight_scale: float = 1.0
     background: str = "white"
@@ -2432,6 +2474,18 @@ class EzdxfBackend(Backend):
     for, that limitation costs nothing.
     """
 
+    #: How much of the drawing paperspace must carry before ``--layouts
+    #: auto`` prefers it over modelspace, as a fraction of the modelspace
+    #: entity count.
+    #:
+    #: 1.0 means "at least as much as model space".  It is not a
+    #: threshold plucked from nowhere: the case that forced it is a sheet
+    #: whose paperspace holds a border and title block (tens of entities)
+    #: and whose modelspace holds the drawing (thousands).  Any rule that
+    #: does not compare the two picks the title block.
+    AUTO_PAPER_SHARE: float = 1.0
+
+
     name = "ezdxf"
     rank = 7
     reads_dwg = False
@@ -2906,6 +2960,21 @@ class EzdxfBackend(Backend):
             # yields an empty bounding box -- entities present, nothing
             # renderable.  Counting raw entities picks those layouts and then
             # fails; counting non-viewport entities does not.
+            #
+            # 0.5.1: "has SOMETHING drawable" is not enough either, and
+            # that mistake shipped.  A GBT sheet carries a border and a
+            # title block in paperspace -- a few dozen entities -- and
+            # its actual drawing, thousands of entities, in modelspace.
+            # "Any drawable entity wins" therefore chose the title block
+            # and produced a 1.5 KiB page where model space gives 94.5 KiB.
+            # Faster, and empty.
+            #
+            # So AUTO now WEIGHS the two spaces instead of merely
+            # detecting them.  Paperspace has to carry a real share of
+            # the drawing, not just a frame around a viewport it cannot
+            # render.
+            model = doc.modelspace()
+            model_entities = sum(1 for _ in model)
             with_content = []
             for name in paper_names:
                 psp = doc.paperspace(name)
@@ -2913,11 +2982,25 @@ class EzdxfBackend(Backend):
                     1 for e in psp if e.dxftype() not in ("VIEWPORT",)
                 )
                 if drawable > 0:
-                    with_content.append((name, psp))
-            if with_content:
-                for name, psp in with_content:
+                    with_content.append((name, psp, drawable))
+
+            paper_best = max((d for _, _, d in with_content), default=0)
+            paper_wins = bool(with_content) and (
+                model_entities == 0
+                or paper_best >= model_entities * self.AUTO_PAPER_SHARE
+            )
+            if paper_wins:
+                for name, psp, _ in with_content:
                     yield name, psp, psp.dxf_layout
             else:
+                if with_content:
+                    _LOG.debug(
+                        "%s: auto chose model space (%d entities) over "
+                        "paper space (best layout has %d drawable) -- "
+                        "paperspace looks like a title block around an "
+                        "unrenderable viewport",
+                        getattr(doc, "filename", "drawing"),
+                        model_entities, paper_best)
                 yield "Model", doc.modelspace(), None
             return
 
@@ -7010,10 +7093,13 @@ def build_parser() -> argparse.ArgumentParser:
              "0 means fit to page (default: 0)",
     )
     group.add_argument(
-        "--layouts", default="auto",
-        help="'auto' (paper space where it has content, else model space -- "
-             "the safe choice for an uncatalogued archive), 'model', "
-             "'paper', 'all', or an explicit layout name (default: model)",
+        "--layouts", default="model",
+        help="'model' (default -- most 2D engineering drawings live there), "
+             "'auto' (paper space only where it carries at least as much of "
+             "the drawing as model space, else model space), 'paper', 'all', "
+             "or an explicit layout name. 'auto' is for a mixed archive; on "
+             "a set whose sheets draw in model space with a title block in "
+             "paper space, 'model' is what you want",
     )
     group.add_argument(
         "--colour", dest="colour", action="store_true",

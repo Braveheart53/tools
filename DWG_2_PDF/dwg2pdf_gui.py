@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+r"""
 =============================================================================
 dwg2pdf_gui.py
 -----------------------------------------------------------------------------
@@ -63,6 +63,49 @@ Semantic versioning: External Release.Internal Release.Working version
 #              re-run separately.
 #              Companion to engine 0.3.16, which fixes AutoCAD never being
 #              quit (the "AutoCAD Error Aborting" dialog at the end of a
+# 0.2.21       In step with engine 0.5.2.  EIGHT new controls, and a GATE
+#              that stops this list drifting again.
+#
+#              NEW on the Engine tab: "AutoCAD plot device"
+#              (--acad-device) pins the plot-device answer and skips
+#              calibration, which under 'spawn' was paid again by every
+#              respawned worker -- 20 x 60 s each on a machine with 20
+#              plotters.  "Plot-device probe limit"
+#              (--acad-probe-timeout) bounds the device LISTING
+#              separately from plotting; it used to inherit the
+#              per-drawing timeout and burn 300 s before calibration
+#              tried anything.  "ODA File Converter" (--oda-exe), with a
+#              Browse button -- NOT bundled, proprietary, and
+#              non-commercial use only for ODA non-members, so absence is
+#              never an error.  "AutoCAD command" (--accore-command).
+#
+#              NEW on Files & Output: image resolution cap
+#              (--image-max-dpi) and lossless image pages
+#              (--image-lossless).
+#
+#              NEW on Performance: "Show library detail in the log"
+#              (--verbose-libs) and "Log file" (--log-file).  Both now
+#              TAKE EFFECT rather than only appearing in the command
+#              preview -- a control that decorates the preview and does
+#              nothing is worse than a missing one, because it reads as
+#              applied.
+#
+#              THE GATE: test_gui.check_cli_gui_parity() reads argparse
+#              out of the engine and the flag strings out of this file
+#              and FAILS THE SUITE on any option with no control.  Three
+#              flags are exempt with stated reasons (--version, --probe,
+#              --dry-run).  test_gui.check_setting_keys_cover_gui()
+#              asserts every backend attribute this window assigns is
+#              registered in engine.BACKEND_SETTING_KEYS, so it survives
+#              the 'spawn' process boundary -- that is the 0.4.x defect
+#              where settings chosen here silently reverted to defaults
+#              in every worker, and it is now impossible to repeat
+#              quietly.
+#
+#              The module docstring is a RAW string.  Three invalid
+#              escapes have shipped from Windows paths quoted in this
+#              revision history; raw makes the class impossible.
+#
 # 0.2.20       In step with engine 0.5.0, whose four fixes all need a
 #              surface here: --accore-mode (answer the prompts AutoCAD
 #              actually asks, rather than a fixed list that broke on
@@ -355,7 +398,7 @@ import dwg2pdf as engine   # noqa: E402
 __author__ = "William W. Wallace"
 __email__ = "naval.antennas@gmail.com"
 __phone__ = "(304) 456-2216"
-__revision__ = "0.2.20"
+__revision__ = "0.2.21"
 
 #: Percent of logical cores used by the "Automatic (by CPU cores)" mode.
 DEFAULT_CORE_PERCENT = 75
@@ -1011,6 +1054,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dxf_cb = QtWidgets.QCheckBox("Include .dxf")
         self.dxf_cb.setChecked(True)
         self.dxf_cb.stateChanged.connect(self._rescan)
+        self.imgdpi_spin = QtWidgets.QSpinBox()
+        self.imgdpi_spin.setRange(0, 2400)
+        self.imgdpi_spin.setValue(0)
+        self.imgdpi_spin.setSpecialValueText("engine default")
+        self.imgdpi_spin.setSuffix(" dpi")
+        self.imgdpi_spin.setToolTip(
+            "Cap the resolution of converted images (--image-max-dpi).\n"
+            "Lower values shrink the PDF; 0 leaves the engine default."
+        )
+        self.imgdpi_spin.valueChanged.connect(self._update_command)
+
+        self.imglossless_cb = QtWidgets.QCheckBox("Lossless image pages")
+        self.imglossless_cb.setToolTip(
+            "Embed converted images without re-encoding them as JPEG\n"
+            "(--image-lossless). Larger files, no generation loss."
+        )
+        self.imglossless_cb.stateChanged.connect(self._update_command)
+
         self.images_cb = QtWidgets.QCheckBox("Also convert image files")
         self.images_cb.setToolTip(
             "Also convert any image files found in the selected folders:\n"
@@ -1166,6 +1227,19 @@ class MainWindow(QtWidgets.QMainWindow):
         f.addRow("AutoCAD script", self._with_browse(
             self.accscript_edit, self._pick_accscript))
 
+        self.acccmd_edit = QtWidgets.QLineEdit()
+        self.acccmd_edit.setPlaceholderText("blank = -PLOT (the default)")
+        self.acccmd_edit.setToolTip(
+            "Override the AutoCAD command accoreconsole is driven with.\n"
+            "\n"
+            "Leave blank unless your release names it differently. -PLOT is\n"
+            "answered prompt by prompt, so a different command will not be\n"
+            "understood by the answer table and the run will fail cleanly\n"
+            "rather than plot the wrong thing."
+        )
+        self.acccmd_edit.textChanged.connect(self._update_command)
+        f.addRow("AutoCAD command", self.acccmd_edit)
+
         self.acclang_edit = QtWidgets.QLineEdit()
         self.acclang_edit.setPlaceholderText("blank = do not pass /l")
         self.acclang_edit.setToolTip(
@@ -1201,6 +1275,62 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pc3_warn.setStyleSheet("color: #b45309;")
         self.pc3_warn.hide()
         f.addRow("", self.pc3_warn)
+
+        # -- 0.5.2 additions ------------------------------------------------
+        self.device_edit = QtWidgets.QLineEdit()
+        self.device_edit.setPlaceholderText("blank = measure it (calibrate)")
+        self.device_edit.setToolTip(
+            "Pin the accoreconsole plot-device answer and SKIP calibration.\n"
+            "\n"
+            "Calibration measures the answer by trying each plotter in turn.\n"
+            "The winner is cached on a class attribute, so on Windows -- where\n"
+            "the pool uses 'spawn' -- every respawned worker pays for it\n"
+            "again. Measured on a machine with 20 plotters: 20 x 60 s per\n"
+            "worker process.\n"
+            "\n"
+            "Once a run has reported which device won, put it here and the\n"
+            "cost disappears."
+        )
+        self.device_edit.textChanged.connect(self._update_command)
+        f.addRow("AutoCAD plot device", self.device_edit)
+
+        self.probe_spin = QtWidgets.QSpinBox()
+        self.probe_spin.setRange(5, 600)
+        self.probe_spin.setValue(30)
+        self.probe_spin.setSuffix(" s")
+        self.probe_spin.setToolTip(
+            "Time limit for LISTING accoreconsole's plot devices, as\n"
+            "distinct from plotting one.\n"
+            "\n"
+            "Separate from 'Timeout per drawing' because a listing that\n"
+            "hangs used to burn the whole per-drawing budget before\n"
+            "calibration had tried a single device -- 300 s of nothing,\n"
+            "then the calibration on top."
+        )
+        self.probe_spin.valueChanged.connect(self._update_command)
+        f.addRow("Plot-device probe limit", self.probe_spin)
+
+        oda_row = QtWidgets.QWidget()
+        oda_lay = QtWidgets.QHBoxLayout(oda_row)
+        oda_lay.setContentsMargins(0, 0, 0, 0)
+        self.oda_edit = QtWidgets.QLineEdit()
+        self.oda_edit.setPlaceholderText("blank = auto-detect, or unused")
+        self.oda_edit.setToolTip(
+            "Path to ODAFileConverter for the oda+ezdxf engine.\n"
+            "\n"
+            "NOT BUNDLED. ODA File Converter is proprietary, and for ODA\n"
+            "non-members it is licensed for NON-COMMERCIAL USE ONLY --\n"
+            "confirm your own position before installing it.\n"
+            "\n"
+            "Leaving this blank is never an error: the engine simply\n"
+            "reports the backend as unavailable and carries on."
+        )
+        self.oda_edit.textChanged.connect(self._update_command)
+        oda_browse = QtWidgets.QPushButton("Browse...")
+        oda_browse.clicked.connect(self._browse_oda)
+        oda_lay.addWidget(self.oda_edit, 1)
+        oda_lay.addWidget(oda_browse)
+        f.addRow("ODA File Converter", oda_row)
 
         self.exclude_edit = QtWidgets.QLineEdit()
         self.exclude_edit.setPlaceholderText("Achive; */Backup/*")
@@ -1572,6 +1702,28 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.recycle_spin.valueChanged.connect(self._update_command)
         f2.addRow("Recycle worker after", self.recycle_spin)
+
+        self.verboselibs_cb = QtWidgets.QCheckBox(
+            "Show library detail in the log")
+        self.verboselibs_cb.setToolTip(
+            "Let ezdxf and the other libraries log at full detail\n"
+            "(--verbose-libs). OFF by default: ezdxf's recover pass emits\n"
+            "one line per repaired structure irregularity, dozens per\n"
+            "drawing, which buries the engine's own progress."
+        )
+        self.verboselibs_cb.stateChanged.connect(self._update_command)
+        f2.addRow("", self.verboselibs_cb)
+
+        self.logfile_edit = QtWidgets.QLineEdit()
+        self.logfile_edit.setPlaceholderText("blank = log pane only")
+        self.logfile_edit.setToolTip(
+            "Also write the full DEBUG log to this file (--log-file).\n"
+            "\n"
+            "The file gets everything with no de-duplication, so it is the\n"
+            "place to look when the pane has collapsed repeats."
+        )
+        self.logfile_edit.textChanged.connect(self._update_command)
+        f2.addRow("Log file", self.logfile_edit)
 
         self.mem_cb = QtWidgets.QCheckBox(
             "Log resident memory every ten drawings")
@@ -2129,6 +2281,64 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.pc3_warn.hide()
 
+    def _apply_log_settings(self) -> None:
+        """Make the 'library detail' and 'log file' controls take effect.
+
+        Both reconfigure logging, which the window does once at start-up, so
+        they are re-applied here immediately before a run.  A control that
+        only changes the command preview is worse than no control at all: it
+        reads as applied and is not.
+
+        The file handler is attached to the ROOT logger at DEBUG with no
+        de-duplication filter, matching the engine's own --log-file: the pane
+        wants quiet, the file wants everything.
+        """
+        import logging as _logging
+
+        level = _logging.DEBUG if self.verboselibs_cb.isChecked() \
+            else _logging.INFO
+        for h in list(_logging.getLogger().handlers):
+            if isinstance(h, _logging.FileHandler):
+                _logging.getLogger().removeHandler(h)
+                try:
+                    h.close()
+                except Exception:       # noqa: BLE001 - closing is advisory
+                    pass
+        path = self.logfile_edit.text().strip()
+        if path:
+            try:
+                target = Path(path)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                fh = _logging.FileHandler(target, mode="w", encoding="utf-8")
+                fh.setLevel(_logging.DEBUG)
+                fh.setFormatter(_logging.Formatter(
+                    "%(asctime)s %(levelname)-7s %(name)s: %(message)s"))
+                _logging.getLogger().addHandler(fh)
+                _logging.getLogger().setLevel(_logging.DEBUG)
+            except OSError as exc:
+                _logging.getLogger("dwg2pdf_gui").warning(
+                    "cannot write log file %s: %s", path, exc)
+        if self.verboselibs_cb.isChecked():
+            # Drop the library cap from the pane handler so ezdxf detail
+            # reaches it, which is the whole point of the checkbox.
+            for h in list(_logging.getLogger().handlers):
+                for filt in list(getattr(h, "filters", [])):
+                    if isinstance(filt, engine._LibraryCapFilter):
+                        h.removeFilter(filt)
+        _logging.getLogger().setLevel(min(level, _logging.INFO))
+
+    def _browse_oda(self) -> None:
+        """Pick ODAFileConverter from disk.
+
+        A file chooser rather than a free-text path only: the executable name
+        differs between platforms and installs, and a typo here produces a
+        backend that is quietly unavailable rather than an error.
+        """
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Locate ODAFileConverter", self.oda_edit.text().strip() or "")
+        if path:
+            self.oda_edit.setText(path)
+
     def _update_command(self) -> None:
         """Show the command line equivalent to the current settings."""
         if not hasattr(self, "command_view"):
@@ -2205,6 +2415,24 @@ class MainWindow(QtWidgets.QMainWindow):
             parts += ["--recycle-after", str(self.recycle_spin.value())]
         if self.timeout_spin.value() != 300:
             parts += ["--timeout", str(self.timeout_spin.value())]
+        if self.device_edit.text().strip():
+            parts += ["--acad-device",
+                      '"%s"' % self.device_edit.text().strip()]
+        if self.probe_spin.value() != 30:
+            parts += ["--acad-probe-timeout", str(self.probe_spin.value())]
+        if self.oda_edit.text().strip():
+            parts += ["--oda-exe", '"%s"' % self.oda_edit.text().strip()]
+        if self.acccmd_edit.text().strip():
+            parts += ["--accore-command",
+                      '"%s"' % self.acccmd_edit.text().strip()]
+        if self.imgdpi_spin.value():
+            parts += ["--image-max-dpi", str(self.imgdpi_spin.value())]
+        if self.imglossless_cb.isChecked():
+            parts.append("--image-lossless")
+        if self.verboselibs_cb.isChecked():
+            parts.append("--verbose-libs")
+        if self.logfile_edit.text().strip():
+            parts += ["--log-file", '"%s"' % self.logfile_edit.text().strip()]
         if self.accscript_edit.text().strip():
             parts += ["--accore-script",
                       '"%s"' % self.accscript_edit.text().strip()]
@@ -2288,6 +2516,19 @@ class MainWindow(QtWidgets.QMainWindow):
         engine.AcCoreConsoleBackend.mode = self.accoremode_combo.currentData()
         engine.AcadComBackend.attach = self.attach_cb.isChecked()
         engine.AcadComBackend.recycle_after = self.recycle_spin.value()
+        # 0.5.2.  These three must also appear in engine.BACKEND_SETTING_KEYS
+        # or they will not survive the 'spawn' boundary into the workers --
+        # test_gui.check_setting_keys_cover_gui() enforces that.
+        device = self.device_edit.text().strip()
+        engine.AcCoreConsoleBackend._device = device or None
+        engine.AcCoreConsoleBackend.PROBE_TIMEOUT = float(
+            self.probe_spin.value())
+        oda = self.oda_edit.text().strip()
+        engine.OdaEzdxfBackend.exe_override = oda or None
+        cmd = self.acccmd_edit.text().strip()
+        if cmd:
+            engine.AcCoreConsoleBackend.command = cmd
+        self._apply_log_settings()
 
         out_root = Path(out_text).expanduser().resolve()
         archive = None

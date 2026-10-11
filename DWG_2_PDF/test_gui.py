@@ -49,7 +49,7 @@ def _ensure_fixtures() -> None:
 import dwg2pdf_gui as gui                    # noqa: E402
 
 # %% State
-RESULTS = {"pass": 0, "fail": 0}
+RESULTS = {"pass": 0, "fail": 0, "skip": 0}
 
 
 # %% Helpers
@@ -57,6 +57,39 @@ def chk(label: str, cond: bool) -> None:
     """Record and print one assertion."""
     print(("  PASS  " if cond else "  FAIL  ") + label)
     RESULTS["pass" if cond else "fail"] += 1
+
+
+def skip(label: str, why: str) -> None:
+    """Record an assertion that could not be run HERE, and say why.
+
+    A skip is counted and printed, never silent.  0.5.2 added this after
+    ``test_no_syntax_warnings`` was found to ``continue`` past a module that
+    was not on disk: it printed nothing, recorded nothing, and reported PASS
+    for a file it had never compiled -- which is how the ``\\A`` invalid
+    escape shipped in 0.5.1 with a green suite.  A test that cannot run must
+    say so in the summary line, or it is indistinguishable from one that
+    passed.
+    """
+    print("  SKIP  %s -- %s" % (label, why))
+    RESULTS["skip"] += 1
+
+
+def dwg_backend_available() -> bool:
+    """Can this HOST decode DWG at all?
+
+    The vendor tree ships Windows x86-64 LibreDWG binaries, so a Linux test
+    host legitimately has no DWG decoder (0.5.2 stopped _find_tool handing
+    back a .exe that cannot execute).  The conversion tests are then skipped
+    rather than aborting the suite: everything that does not need a decoder
+    is still worth checking.
+    """
+    try:
+        for cls in engine.available_backends():
+            if getattr(cls, "reads_dwg", False):
+                return True
+    except Exception:       # noqa: BLE001 - availability probing is best-effort
+        pass
+    return False
 
 
 # %% Test body
@@ -200,6 +233,106 @@ def check_log_noise_is_filtered() -> None:
         "a real ezdxf warning" in text)
     chk("the log pane stays readable",
         len([ln for ln in captured if ln.strip()]) < 8)
+
+
+# %% 0.5.2 parity gates
+#: Engine flags that deliberately have no GUI control, with the reason.
+#: An entry here is a DECISION, not a backlog item -- anything not listed
+#: fails check_cli_gui_parity() and blocks the release.
+CLI_ONLY_FLAGS = {
+    "--version": "the window shows the revision in its title bar",
+    "--probe": "the Engine tab has a live backend probe panel instead",
+    "--dry-run": "the output preview pane is a continuous dry run",
+}
+
+
+def check_cli_gui_parity() -> None:
+    """Every engine option must be reachable from the window.
+
+    Enforced mechanically rather than by review.  Parity has been broken
+    silently before -- an option added to argparse and not to the window is
+    invisible to a GUI operator, and nothing fails -- so this reads both
+    sources and compares them.  The exemption list above is the only escape,
+    and it requires a stated reason.
+
+    Deliberately a SOURCE comparison, not a runtime one: a control that is
+    built but never consulted would still pass a runtime check, and the flag
+    string appearing in the GUI is what proves the control is wired into the
+    command the engine is actually given.
+    """
+    import re
+
+    eng_src = Path("dwg2pdf.py").read_text(encoding="utf-8")
+    gui_src = Path("dwg2pdf_gui.py").read_text(encoding="utf-8")
+    flags = sorted(set(re.findall(
+        r'add_argument\(\s*\n?\s*"(--[a-z0-9-]+)"', eng_src)))
+    chk("engine exposes a plausible number of options", len(flags) >= 40)
+
+    missing = [f for f in flags
+               if f not in gui_src and f not in CLI_ONLY_FLAGS]
+    for f in missing:
+        print("     no GUI control for %s" % f)
+    chk("every engine option is reachable from the GUI (%d checked)"
+        % len(flags), not missing)
+
+    stale = [f for f in CLI_ONLY_FLAGS if f not in flags]
+    chk("no stale entries in CLI_ONLY_FLAGS", not stale)
+
+
+def check_setting_keys_cover_gui() -> None:
+    """Anything the GUI assigns to a backend must survive 'spawn'.
+
+    On Windows the pool re-imports the engine in each worker, so a class
+    attribute set by the window exists ONLY in the parent unless it is listed
+    in engine.BACKEND_SETTING_KEYS and therefore travels in the
+    backend_settings() snapshot.
+
+    This is not hypothetical.  It is the 0.4.x defect: settings chosen in the
+    window silently reverted to their defaults in every worker, so a whole run
+    used a configuration nobody had selected, and nothing anywhere said so.
+    Every attribute added since is a fresh opportunity to repeat it, which is
+    why this is a gate and not a comment.
+    """
+    import re
+
+    gui_src = Path("dwg2pdf_gui.py").read_text(encoding="utf-8")
+    by_class = {cls.__name__: name
+                for name, cls in engine.BACKENDS_BY_NAME.items()}
+
+    assigned = re.findall(
+        r"engine\.([A-Za-z_]+Backend)\.([A-Za-z_][A-Za-z0-9_]*)\s*=", gui_src)
+    chk("the GUI assigns backend settings at all", len(assigned) >= 5)
+
+    unregistered = []
+    for class_name, attr in sorted(set(assigned)):
+        backend = by_class.get(class_name)
+        if backend is None:
+            continue
+        if attr not in engine.BACKEND_SETTING_KEYS.get(backend, ()):
+            unregistered.append("%s.%s (backend %r)"
+                                % (class_name, attr, backend))
+    for u in unregistered:
+        print("     not in BACKEND_SETTING_KEYS: %s" % u)
+    chk("every GUI-set backend attribute survives spawn (%d checked)"
+        % len(set(assigned)), not unregistered)
+
+
+def check_new_controls_present() -> None:
+    """The 0.5.2 controls exist and are wired to the command the engine gets."""
+    gui_src = Path("dwg2pdf_gui.py").read_text(encoding="utf-8")
+    for widget, flag in (
+        ("device_edit", "--acad-device"),
+        ("probe_spin", "--acad-probe-timeout"),
+        ("oda_edit", "--oda-exe"),
+        ("acccmd_edit", "--accore-command"),
+        ("imgdpi_spin", "--image-max-dpi"),
+        ("imglossless_cb", "--image-lossless"),
+        ("verboselibs_cb", "--verbose-libs"),
+        ("logfile_edit", "--log-file"),
+    ):
+        chk("%s exists and emits %s" % (widget, flag),
+            ("self.%s = " % widget) in gui_src and flag in gui_src)
+
 
 
 def run_test() -> int:
@@ -365,26 +498,46 @@ def run_test() -> int:
                 print("     failure:", w.table.item(r, 0).text(),
                       "->", w.table.item(r, 4).text()[:160])
 
-    chk("parallel run converted 8 of 8", statuses.count("ok") == 8)
-    chk("progress bar completed", w.progress.value() == 8)
-    chk("8 PDFs on disk",
-        len(list(Path("gui_out2").rglob("*.pdf"))) == 8)
+    # The 5 DWG fixtures need a DWG decoder; the 3 generated DXF ones do not.
+    # On a host with no decoder the DWG rows legitimately fail, so assert what
+    # this host can actually prove and SKIP the rest, loudly.
+    if dwg_backend_available():
+        chk("parallel run converted 8 of 8", statuses.count("ok") == 8)
+        chk("progress bar completed", w.progress.value() == 8)
+        chk("8 PDFs on disk",
+            len(list(Path("gui_out2").rglob("*.pdf"))) == 8)
+    else:
+        why = "no DWG decoder on this host (vendor/ ships win64 binaries)"
+        chk("every DXF fixture converted", statuses.count("ok") >= 3)
+        chk("progress bar completed", w.progress.value() == 8)
+        skip("parallel run converted 8 of 8", why)
+        skip("8 PDFs on disk", why)
     chk("manifest written", Path("gui_out2/manifest.csv").is_file())
     # Two input roots, so their common parent is the mirror root: the tree
     # becomes gui_out2/<folder name>/...  A single root would give
     # gui_out2/sub directly.  Assert the real shape, not a guess at it.
-    chk("source structure mirrored under each root",
-        Path("gui_out2/dwg_samples").is_dir()
-        and Path("gui_out2/test_drawings/sub").is_dir())
+    if dwg_backend_available():
+        chk("source structure mirrored under each root",
+            Path("gui_out2/dwg_samples").is_dir()
+            and Path("gui_out2/test_drawings/sub").is_dir())
+    else:
+        # Nothing under dwg_samples converted, so no mirror directory is
+        # created for it.  The DXF half still proves the mirroring logic.
+        chk("source structure mirrored under each root",
+            Path("gui_out2/test_drawings/sub").is_dir())
     archive = Path("gui_archive_test.7z")
     chk("7z archive created",
         archive.is_file() and archive.stat().st_size > 1000)
     chk("worker thread cleaned up", w._thread is None)
     check_engine_fix_coverage()
+    check_cli_gui_parity()
+    check_setting_keys_cover_gui()
+    check_new_controls_present()
     check_log_noise_is_filtered()
     w.grab().save("gui2_results.png")
 
-    print("\n  %d passed, %d failed" % (RESULTS["pass"], RESULTS["fail"]))
+    print("\n  %d passed, %d failed, %d skipped"
+          % (RESULTS["pass"], RESULTS["fail"], RESULTS["skip"]))
     return 0 if RESULTS["fail"] == 0 else 1
 
 
@@ -393,4 +546,11 @@ if __name__ == "__main__":
     import multiprocessing
 
     multiprocessing.freeze_support()
-    sys.exit(run_test())
+    # os._exit, not sys.exit: PySide6 running offscreen segfaults in its own
+    # teardown AFTER run_test() has printed its summary, which turns a green
+    # suite into exit 139 and makes the exit code useless for gating a
+    # release.  The verdict is already computed; leave before Qt unwinds.
+    _code = run_test()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_code)

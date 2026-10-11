@@ -1,94 +1,85 @@
-dwg2pdf 0.5.1 / GUI 0.2.20 -- COMPLETE release, 2026-09-18
+dwg2pdf 0.5.2 / GUI 0.2.21 -- COMPLETE release, 2026-10-06
 ================================================================
 
 Everything needed to run, test and rebuild. Nothing omitted.
 
-  dwg2pdf.py                 engine, revision 0.5.1
-  dwg2pdf_gui.py             Qt GUI (qt.py -> PySide6), revision 0.2.20
-  test_autocad.py            181 checks, runs anywhere
-  test_gui.py                 79 checks, needs a Qt platform
-  test_images.py              23 checks
+  dwg2pdf.py                 engine, revision 0.5.2
+  dwg2pdf_gui.py             Qt GUI (qtpy -> PySide6), revision 0.2.21
+  test_autocad.py            186 checks, runs anywhere
+  test_gui.py                 91 checks (+2 skipped without a DWG decoder),
+                             needs a Qt platform
+  test_images.py              21 checks
   make_test_drawings.py      generates test_drawings/ and test_images/
   README.md                  the whole record, including section 9
   environment-dwg2pdf.yml    mamba/conda environment
   build_libredwg.sh          rebuilds the bundled decoder from source
-  vendor/libredwg-win64/     LibreDWG 0.14.8593, Windows x86-64
+  vendor/libredwg-win64/     LibreDWG 0.14.8593, Windows x86-64 (GPL-3)
   dwg_samples/               real DWGs, five source versions
   docs/                      screenshots referenced by the README
 
-0.5.1 FIXES A REGRESSION 0.5.0 SHIPPED -- READ THIS
----------------------------------------------------
-0.5.0 changed --layouts to default to 'auto'. That was WRONG for a set
-whose sheets draw in model space with a title block in paper space:
+NOT BUNDLED: ODA File Converter.  It is proprietary, ODA do not distribute
+it as a redistributable component, and for ODA non-members it is licensed
+for NON-COMMERCIAL USE ONLY.  Point --oda-exe (or the GUI's "ODA File
+Converter" field) at your own installation.  Its absence is never an error.
 
-    0.4.x --layouts model : ... View Z-Z.dwg -> 94.5 KiB
-    0.5.0 --layouts auto  : ... View Z-Z.dwg ->  1.5 KiB   (blank)
+0.5.2 -- WHAT THIS FIXES
+------------------------
+The accoreconsole -PLOT driver was desynchronised in TWO places, and
+neither was the plot device name:
 
-'auto' took any paperspace layout with a drawable entity in it, so it
-chose the title block and discarded the drawing. In 0.5.1:
-  * the default is 'model' again;
-  * 'auto' WEIGHS the two spaces -- paperspace wins only when it
-    carries at least as much as model space (AUTO_PAPER_SHARE).
-Also gone: the 'invalid escape sequence' SyntaxWarning that printed
-once per worker. Both modules now compile under -W error::SyntaxWarning
-as part of the suite.
+  1. the setup burst fed FILEDIA/CMDDIA/BACKGROUNDPLOT and -PLOT in one
+     go, so the "Enter new value for X" prompts it generated were matched
+     against the -PLOT answer table, missed, and were each answered with a
+     BARE NEWLINE that later shifted every plot answer by one;
 
-STILL FROM 0.5.0 (all good)
----------------------------
-  * accoreconsole ANSWERS THE PROMPTS AutoCAD actually asks. The old
-    fixed .scr assumed an order; 'Enter paper units' appears for some
-    devices and not others, and one missing prompt shifted everything.
-    The plot device was never the problem. --accore-mode script reverts.
-  * acad-com no longer attaches to a RUNNING AutoCAD (--acad-attach
-    opts back in), and recycles its own every 50 drawings.
-  * the plot goes STRAIGHT TO THE DELIVERABLE -- the 0.4.0 scratch
-    rename made the viewer report a missing file once per sheet.
+  2. a prompt was recognised by a trailing ":" OR ">", and the console is
+     read one byte at a time, so "<Model>" fired the test BEFORE the colon
+     arrived -- the prompt was read twice and the phantom second read got
+     another stray newline.
 
-INSTALL
+Every accoreconsole attempt failed for these reasons, including all 20
+plot-device calibration candidates at 60 s each.
+
+VERIFIED HERE / NOT VERIFIED HERE
+---------------------------------
+Verified by the suites below on this build: the phase machine against a
+simulated console replaying the field transcript (plus a control that
+replays the 0.5.1 order and asserts it still FAILS), worker logging under
+a forced spawn, CLI/GUI parity across all 50 options, settings coverage
+for the spawn boundary, raw docstrings, the platform guard, and the
+layout/extent classification.
+
+NOT verified here -- no AutoCAD on the build host: the phase machine
+against real accoreconsole, --acad-device, --acad-probe-timeout and the
+system-variable restore.  Those are unit-tested only.  Treat the first
+real run as the test.
+
+SHA-256
 -------
-Unpack so that dwg2pdf.py and vendor/ are SIBLINGS. Verify:
-
-    python dwg2pdf.py --probe
-
-    LibreDWG dwg2dxf 0.14.8593 at ...\vendor\libredwg-win64\dwg2dxf.exe [bundled]
-
-TEST
-----
-    python test_autocad.py        # 181, no AutoCAD needed
-    python test_gui.py            #  79
-    python test_images.py         #  23
-
-Fixtures are generated on first run.
-
-SHA-256                                                                     bytes  path
-57645a274ceaa9485847bc839b9c04b5251e06922101efa2a2728afc07c84678     108096  README.md
-94f65a73450e3b3f5900d8f2ad6021ea42f86e4b493c77dfbe8e88d7bd4d7244     346431  __pycache__/dwg2pdf.cpython-311.pyc
-ae9e615c899751c58f41db9113824cb7b2acf8ce19c25694e97e5cfffe99cb8f     157505  __pycache__/dwg2pdf_gui.cpython-311.pyc
-e90a6fb41ff339e33a8d68af2ecf8ed8135707eabdc50893c0c104dbdd8a7bfd       1515  build_libredwg.sh
-dbdd58d576f49b992d4fb01f95441c4457afa005f4c6e073111c9b0af6686dbf     111954  docs/gui-dark.png
-e68f31ffc11e01af9a9b5c299d8c180e7b789a8549b1d18c9dbad147f6c77bda     112042  docs/gui-images.png
-afd82e8c31c479de74a08521b5b3b081e3be2329f40f20d7a097fdcdec9ae7b4     113823  docs/gui-light.png
-ab7cb41a150dbffc9178a023377a54f71d2bd5c877ed2f5f242ef3a34c4f29bd     135485  docs/gui-results.png
-77a32ea9249d2d81d9b3bb1b1dce60e72eb73ca0f1ff4a20a5b73f96156f1e71     204858  docs/trim-outliers-after.png
-656cca64b902ffb469ffb1c24837e31dae303aad0a83c000acd70bb2fe2029f6     109443  docs/trim-outliers-before.png
-c530561a5d63405254ef52c2e02f3224af6c965de0b178f524e4bdf620e8fe62     340127  dwg2pdf.py
-0a3f71804abcf9b5e4ffd1df282ff9d365330ed4a6d3eca156346fe4a058daec     115601  dwg2pdf_gui.py
-f9b372579812de9867961f12a842898c27a7dff763a71f41ea10335964b877d4       5416  dwg_samples/entities-2d.dwg
-34574244d7556d1ef7b437443d9b3d1ad8662e1c669c42d80cff6a8a19799be9     582572  dwg_samples/example_2000.dwg
-e72d5e86d5d36d64b08822fb25a46079f592fd895a6157b1b8d9b07775e06108     187890  dwg_samples/example_2004.dwg
-ce80953e4881899cde8c42b97919feb2697259554ca54dc4005b19068a12c18f     146906  dwg_samples/example_2013.dwg
-e296ca50f237abb9eec1a8bdab77aa16fd59518e246df812aa4dd4f859bd12d3      26840  dwg_samples/v.dwg
-c3b2dcbe93e0d89511f264265fa98187195fd64b7258b934204dd6cf5134c37b       2240  environment-dwg2pdf.yml
-61dca6456ea2f6f88b2bdf45a102afd751c4e98e56cc1a31d2e539e2258013bd       5490  make_test_drawings.py
-20a9fb6c94a4b894d8a23f641dacca2a33f5c5c329f83ed7982c9aeca46ebc20      57076  test_autocad.py
-feb8dff9aa54b844bfe03b853a0427fb35584edf8694fc74dcf2d9b97b9df69b      16599  test_gui.py
-c72231002e8d2adbfeceadecfe190deb768ddcdec5e642484646434034f814b7       8837  test_images.py
-8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903      35147  vendor/libredwg-win64/COPYING-LibreDWG-GPL3.txt
-0afa1ed184281bda5bad267f7180e6f7851c9e372f4ca586714081e7bd2b6a29       1938  vendor/libredwg-win64/README-VENDOR.txt
-2adb324ed5835799af2a11477e386d3dc2816eeb515dd6f12788c53e71cdb134     297884  vendor/libredwg-win64/dwg2dxf.exe
-4fb0edad6e6291c6287472908c57c598b926dfd6681b6d4aed84ea3f691d1672     280803  vendor/libredwg-win64/dwglayers.exe
-31b799f81a957326aad337ef00bf63214a68f2bf27468afed0182283a9a32219     284833  vendor/libredwg-win64/dwgread.exe
-5c7e30acca82ccba685feab142b469b76d74fb55ee6e14365718900327c5ada5   20375118  vendor/libredwg-win64/libredwg.dll
-38961d71f2f4f01fb59d5204ee126baecf05e79bbb7c9e2a306b8ee1ae925d0e     131367  vendor/libredwg-win64/libssp-0.dll
-
-29 files, 24303836 bytes.
+59682a335b98a6a6296838fef9303a64dec6f51ca9ac55f15dbd66b01b6e7120  README.md
+e90a6fb41ff339e33a8d68af2ecf8ed8135707eabdc50893c0c104dbdd8a7bfd  build_libredwg.sh
+dbdd58d576f49b992d4fb01f95441c4457afa005f4c6e073111c9b0af6686dbf  docs/gui-dark.png
+e68f31ffc11e01af9a9b5c299d8c180e7b789a8549b1d18c9dbad147f6c77bda  docs/gui-images.png
+afd82e8c31c479de74a08521b5b3b081e3be2329f40f20d7a097fdcdec9ae7b4  docs/gui-light.png
+ab7cb41a150dbffc9178a023377a54f71d2bd5c877ed2f5f242ef3a34c4f29bd  docs/gui-results.png
+77a32ea9249d2d81d9b3bb1b1dce60e72eb73ca0f1ff4a20a5b73f96156f1e71  docs/trim-outliers-after.png
+656cca64b902ffb469ffb1c24837e31dae303aad0a83c000acd70bb2fe2029f6  docs/trim-outliers-before.png
+b08a5aa311b6aea2e2cb13906c94c8520c7ed6cb00d564ae92db37b692f87aea  dwg2pdf.py
+e217ea57e2d23f6f6ddbb17b6ed774186331a88508c6907354aab23e736608e4  dwg2pdf_gui.py
+f9b372579812de9867961f12a842898c27a7dff763a71f41ea10335964b877d4  dwg_samples/entities-2d.dwg
+34574244d7556d1ef7b437443d9b3d1ad8662e1c669c42d80cff6a8a19799be9  dwg_samples/example_2000.dwg
+e72d5e86d5d36d64b08822fb25a46079f592fd895a6157b1b8d9b07775e06108  dwg_samples/example_2004.dwg
+ce80953e4881899cde8c42b97919feb2697259554ca54dc4005b19068a12c18f  dwg_samples/example_2013.dwg
+e296ca50f237abb9eec1a8bdab77aa16fd59518e246df812aa4dd4f859bd12d3  dwg_samples/v.dwg
+c3b2dcbe93e0d89511f264265fa98187195fd64b7258b934204dd6cf5134c37b  environment-dwg2pdf.yml
+61dca6456ea2f6f88b2bdf45a102afd751c4e98e56cc1a31d2e539e2258013bd  make_test_drawings.py
+cfdc6970d28f9e5087bb631b0a884f64242d03c2a779ec0acfda606b2630f9a6  test_autocad.py
+aed69fed0205609b5f9c8b3492303832578b7ae9b63bb9379b6e3ddc7383220c  test_gui.py
+c72231002e8d2adbfeceadecfe190deb768ddcdec5e642484646434034f814b7  test_images.py
+8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903  vendor/libredwg-win64/COPYING-LibreDWG-GPL3.txt
+0afa1ed184281bda5bad267f7180e6f7851c9e372f4ca586714081e7bd2b6a29  vendor/libredwg-win64/README-VENDOR.txt
+2adb324ed5835799af2a11477e386d3dc2816eeb515dd6f12788c53e71cdb134  vendor/libredwg-win64/dwg2dxf.exe
+4fb0edad6e6291c6287472908c57c598b926dfd6681b6d4aed84ea3f691d1672  vendor/libredwg-win64/dwglayers.exe
+31b799f81a957326aad337ef00bf63214a68f2bf27468afed0182283a9a32219  vendor/libredwg-win64/dwgread.exe
+5c7e30acca82ccba685feab142b469b76d74fb55ee6e14365718900327c5ada5  vendor/libredwg-win64/libredwg.dll
+38961d71f2f4f01fb59d5204ee126baecf05e79bbb7c9e2a306b8ee1ae925d0e  vendor/libredwg-win64/libssp-0.dll

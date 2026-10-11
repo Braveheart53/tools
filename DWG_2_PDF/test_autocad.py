@@ -50,7 +50,9 @@ Fixed in 0.4.0, from a 1876-drawing run in which all three engines failed:
 
 # %% Imports
 import os
+import shutil
 import sys
+import tempfile
 
 from pathlib import Path                      # noqa: E402
 
@@ -1312,6 +1314,15 @@ def test_no_syntax_warnings() -> None:
     for module in ("dwg2pdf.py", "dwg2pdf_gui.py"):
         path = Path(module)
         if not path.is_file():
+            # NOT a silent `continue`.  That is exactly how this test
+            # reported PASS for dwg2pdf_gui.py in the 0.5.1 round while the
+            # file carried an invalid "\\A" escape: run from a directory
+            # where the module was absent, the loop skipped it, recorded
+            # nothing, and the summary line was indistinguishable from a
+            # genuine pass.  A check that cannot run is a FAILURE here --
+            # the suite gates a release, and a test that silently does
+            # nothing is worse than no test at all.
+            chk("%s is present to be compiled" % module, False)
             continue
         proc = subprocess.run(
             [sys.executable, "-W", "error::SyntaxWarning", "-c",
@@ -1324,6 +1335,228 @@ def test_no_syntax_warnings() -> None:
             proc.returncode == 0)
         if proc.returncode != 0:
             print("        " + proc.stderr.strip().splitlines()[-1][:120])
+
+        # The structural guarantee, not just the symptom.  Three invalid
+        # escapes have shipped in Windows paths quoted inside these
+        # docstrings ("\\U", "\\.", "\\A"); 0.5.2 made both module
+        # docstrings RAW, which makes the whole class impossible rather than
+        # merely absent today.  Assert the prefix so a future edit cannot
+        # quietly drop it.
+        import tokenize
+        with open(module, "rb") as fh:
+            first = next(tok for tok in tokenize.tokenize(fh.readline)
+                         if tok.type == tokenize.STRING)
+        chk("%s module docstring is a raw string" % module,
+            first.string[:2].lower().startswith("r"))
+
+
+# %% Fake AutoCAD console
+class _FakeConsole:
+    """A stand-in for accoreconsole that behaves like the real -PLOT dialogue.
+
+    Built from the transcript captured on bracca, 2026-10-06, which is the
+    only real -PLOT conversation this project has ever seen::
+
+        unrecognised -PLOT prompt, taking the default: Command:
+        (the previous message repeated 2 more times)
+        unrecognised -PLOT prompt, taking the default: Enter new value for FILEDIA <0>
+
+    The point of the simulation is the SETUP phase.  Sending a setvar name
+    makes AutoCAD ask for its value and then return to ``Command:``; a driver
+    that fires all three names and values at once, as 0.5.1 did, leaves those
+    prompts to be answered by the -PLOT table, which replies with a bare
+    newline each time.  Those newlines then queue on stdin and are eaten by
+    -PLOT, shifting every answer by one.
+
+    This fake therefore records EVERY line it is given, in order, and the
+    tests below assert on that order -- not merely on whether a PDF appeared.
+    """
+
+    #: (prompt, answer-consuming) for -PLOT, in the order AutoCAD asks them.
+    PLOT_PROMPTS = (
+        "Detailed plot configuration? [Yes/No] <No>:",
+        "Enter a layout name or [?] <Model>:",
+        "Enter an output device name or [?] <None>:",
+        "Enter paper size or [?] <ANSI A (11.00 x 8.50 Inches)>:",
+        "Enter paper units [Inches/Millimeters] <Inches>:",
+        "Enter drawing orientation [Portrait/Landscape] <Landscape>:",
+        "Plot upside down? [Yes/No] <No>:",
+        "Enter plot area [Display/Extents/Limits/View/Window] <Extents>:",
+        "Enter plot scale (Plotted Inches=Drawing Units) or [Fit] <Fit>:",
+        "Enter plot offset (x,y) or [Center] <Center>:",
+        "Plot with plot styles? [Yes/No] <Yes>:",
+        "Enter plot style table name or [?] (enter . for none) <>:",
+        "Plot with lineweights? [Yes/No] <Yes>:",
+        "Enter shade plot setting [As displayed/Wireframe/Hidden] <As displayed>:",
+        "Write the plot to a file [Yes/No] <N>:",
+        "Enter file name <plot.pdf>:",
+        "Save changes to page setup? [Yes/No] <N>:",
+        "Proceed with plot [Yes/No] <Y>:",
+    )
+
+    def __init__(self, target, write_pdf_if_ordered=True):
+        self.target = target
+        self.write_pdf_if_ordered = write_pdf_if_ordered
+        self.received = []                 # every line the driver sent
+        self.answers = {}                   # prompt -> answer it was given
+        self._out = bytearray()
+        self._vars = {"FILEDIA": "1", "CMDDIA": "1", "BACKGROUNDPLOT": "2"}
+        self._await_var = None
+        self._plot_ix = None
+        self._alive = True
+        self._emit("AutoCAD Core Engine Console\n\nCommand: ")
+        self.stdout = self
+        self.stdin = self
+
+    # -- stream plumbing ----------------------------------------------------
+    def _emit(self, text):
+        self._out.extend(text.encode("ascii", "replace"))
+
+    def read(self, n=1):
+        if self._out:
+            b = bytes(self._out[:n]); del self._out[:n]; return b
+        return b""
+
+    def flush(self):
+        pass
+
+    def close(self):
+        self._alive = False
+
+    def poll(self):
+        return None if self._alive else 0
+
+    def kill(self):
+        self._alive = False
+
+    def communicate(self, timeout=None):
+        return (bytes(self._out), None)
+
+    # -- the conversation ---------------------------------------------------
+    def write(self, data):
+        line = data.decode("ascii", "replace").rstrip("\r\n")
+        self.received.append(line)
+
+        if self._plot_ix is not None:
+            prompt = self.PLOT_PROMPTS[self._plot_ix]
+            self.answers[prompt] = line
+            self._plot_ix += 1
+            if self._plot_ix < len(self.PLOT_PROMPTS):
+                self._emit("\n" + self.PLOT_PROMPTS[self._plot_ix] + " ")
+            else:
+                self._plot_ix = None
+                if self.write_pdf_if_ordered and self._ordered():
+                    self.target.parent.mkdir(parents=True, exist_ok=True)
+                    self.target.write_bytes(b"%PDF-1.4\n% fake plot\n")
+                self._emit("\nCommand: ")
+            return len(data)
+
+        if self._await_var is not None:
+            # AutoCAD takes the value and returns to the command prompt.
+            self._vars[self._await_var] = line
+            self._await_var = None
+            self._emit("\nCommand: ")
+            return len(data)
+
+        up = line.strip().upper()
+        if up in self._vars:
+            self._await_var = up
+            self._emit("\nEnter new value for %s <%s>: "
+                       % (up, self._vars[up]))
+        elif up in ("-PLOT", "PLOT"):
+            self._plot_ix = 0
+            self._emit("\n" + self.PLOT_PROMPTS[0] + " ")
+        elif up == "":
+            # A bare newline at the command prompt.  Harmless in real AutoCAD,
+            # but its ARRIVAL is the bug signature, so it is recorded above and
+            # asserted on by the tests.
+            self._emit("\nCommand: ")
+        else:
+            self._emit("\nUnknown command \"%s\".\n\nCommand: " % up)
+        return len(data)
+
+    def _ordered(self):
+        """True when the device answer reached the device prompt."""
+        return self.answers.get(
+            "Enter an output device name or [?] <None>:") == "DWG To PDF.pc3"
+
+
+def test_plot_phase_machine() -> None:
+    """The setup prompts must never be answered from the -PLOT table.
+
+    This is the 0.5.2 fix for the defect that made every accoreconsole attempt
+    on the 1762-drawing GBT archive fail, including all 20 plot-device
+    calibration candidates.
+    """
+    import subprocess as sp
+
+    tmp = Path(tempfile.mkdtemp(prefix="dwg2pdf_phase_"))
+    try:
+        target = tmp / "sheet.pdf"
+        fake = _FakeConsole(target)
+        real_popen = sp.Popen
+        sp.Popen = lambda *a, **k: fake
+        try:
+            ok, _transcript = engine.AcCoreConsoleBackend._plot_interactive(
+                Path("accoreconsole.exe"), Path("x.dwg"), target,
+                engine.PageSpec(), "DWG To PDF.pc3", 20.0,
+            )
+        finally:
+            sp.Popen = real_popen
+
+        chk("the plot produced a PDF", ok and target.is_file())
+
+        # The core assertion: each setvar NAME is immediately followed by its
+        # VALUE, with nothing in between.  A stray newline here is the bug.
+        seq = fake.received
+        for name, value in engine.AcCoreConsoleBackend._SETUP_VARS:
+            if name not in seq:
+                chk("setup drove %s" % name, False)
+                continue
+            i = seq.index(name)
+            chk("%s is followed directly by its value" % name,
+                i + 1 < len(seq) and seq[i + 1] == value)
+
+        # No bare newline may be sent before -PLOT is issued.
+        pre = seq[:seq.index("-PLOT")] if "-PLOT" in seq else seq
+        chk("no stray blank line before -PLOT", "" not in pre)
+
+        # The device answer must land on the device prompt, not one adrift.
+        chk("device answer reached the device prompt", fake._ordered())
+
+        # And the system variables must be put back, not left suppressed.
+        chk("FILEDIA restored to its prior value",
+            fake._vars.get("FILEDIA") == "1")
+        chk("CMDDIA restored to its prior value",
+            fake._vars.get("CMDDIA") == "1")
+        chk("BACKGROUNDPLOT restored to its prior value",
+            fake._vars.get("BACKGROUNDPLOT") == "2")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_plot_phase_machine_detects_shift() -> None:
+    """The fake console must itself be able to FAIL, or it proves nothing.
+
+    Replays the 0.5.1 behaviour -- the whole setup burst at the first prompt,
+    then a bare newline for every unrecognised prompt -- and asserts the
+    device answer ends up on the wrong prompt.  Without this, a fake that
+    always passes would be indistinguishable from a working driver.
+    """
+    tmp = Path(tempfile.mkdtemp(prefix="dwg2pdf_shift_"))
+    try:
+        fake = _FakeConsole(tmp / "sheet.pdf")
+        # 0.5.1: name, value, name, value, name, value, -PLOT, all at once...
+        for token in ("FILEDIA", "0", "CMDDIA", "0", "BACKGROUNDPLOT", "0",
+                      "-PLOT"):
+            fake.write((token + "\r\n").encode())
+        # ...then a bare newline for each prompt it did not recognise.
+        for _ in range(3):
+            fake.write(b"\r\n")
+        chk("the 0.5.1 answer order does NOT reach the device prompt",
+            not fake._ordered())
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 # %% Entry point
@@ -1339,6 +1572,8 @@ def run_test() -> int:
     test_system_printers()
     test_calibration_timeout_budget()
     test_prompt_answers()
+    test_plot_phase_machine()
+    test_plot_phase_machine_detects_shift()
     test_no_hijacking_autocad()
     test_plot_straight_to_destination()
     test_layouts_default()

@@ -1,6 +1,6 @@
 # dwg2pdf — batch 2D AutoCAD drawing (and image) → PDF conversion
 
-**Engine `dwg2pdf.py` rev 0.3.18 · GUI `dwg2pdf_gui.py` rev 0.2.14**
+**Engine `dwg2pdf.py` rev 0.5.2 · GUI `dwg2pdf_gui.py` rev 0.2.21**
 Python 3.12 · QtPy/PySide6 · MIT-licensed tooling around GPL-3 LibreDWG
 
 Converts a tree of 2D AutoCAD drawings (`.dwg`, `.dxf`) into a mirrored tree of
@@ -25,7 +25,61 @@ the big batch, GUI for everything else.
 > which is just as invisible. All fixed: nineteen in §9, the two size
 > defects in §6.2.
 
-## What changed in this release
+## What changed in 0.5.2
+
+Driven entirely by one field run: 1762 GBT drawings, 2026-10-06, which produced
+the first real `-PLOT` transcript this project has had.
+
+| Item | Change |
+|---|---|
+| **The `-PLOT` driver was desynchronised in two places** | Neither was the device name. (1) The setup burst — `FILEDIA 0 CMDDIA 0 BACKGROUNDPLOT 0 -PLOT` was fired at the first `Command:` prompt and the driver switched straight to the `-PLOT` answer table, so the three `Enter new value for X` prompts it generated were answered with bare newlines that then queued on stdin and shifted every plot answer by one. (2) A prompt was recognised by a trailing `:` **or `>`** — and the console is read a byte at a time, so `<Model>` fired the test before the colon arrived, the prompt was read twice, and the phantom second read got another stray newline. Both fixed; `:` alone is now the test. This is why all 20 calibration candidates failed, at 60 s each. |
+| **System variables restored** | `FILEDIA`, `CMDDIA`, `BACKGROUNDPLOT` persist in the AutoCAD profile. A run used to leave an operator's interactive session with dialogs suppressed. The prior value is read from AutoCAD's own `<1>` prompt and put back. |
+| **Workers configure their own logging** | Under `spawn` a worker never runs `main()`, so it had no handler and fell back to `logging.lastResort` (stderr, level WARNING, no formatter). ezdxf noise bypassed both the cap and the dedup filter; everything below WARNING — including `calibrating the accoreconsole plot device` and `plot device attempt n/N` — was **discarded**. The most informative diagnostic the engine produces was invisible in every parallel run. |
+| **The drawing is named before the attempt** | A stalled drawing used to be anonymous. That turned "which sheet is it on?" into a day of inference from CPU counters. |
+| **`--acad-probe-timeout`** *(new, 30 s)* | The device **listing** had the per-drawing `--timeout`, so on a machine where it hangs it burned 300 s before calibration tried anything. |
+| **`--acad-device`** *(new)* | Pins the plot-device answer, skipping calibration. `_device` is cached per class, so under `spawn` every respawned worker re-measured it. |
+| **`--oda-exe`** *(new)* | ODA File Converter is **not bundled** — proprietary, not a redistributable component, and non-commercial use only for ODA non-members. Absence is never an error; the backend now reports *why* it is unavailable instead of silently vanishing. |
+| **A missing DWG decoder degrades, not aborts** | A mixed tree used to be refused outright, discarding the DXF sheets that would have converted. DWG sheets now fail individually, in the manifest, with a reason. |
+| **`_find_tool` platform guard on the fallback loop** | It could return `vendor/libredwg-win64/*.exe` on Linux → `OSError: [Errno 8] Exec format error`, which reads like a corrupt drawing rather than a missing decoder. |
+| **Non-finite extents are a layout problem** | `cannot convert float NaN to integer` was 105 of 956 failures. `--layouts auto` converted 84 of them unchanged, because it picked a different layout — the correct behaviour was already there, just unreachable behind the escaping exception. |
+| **Empty drawings report a census** | Modelspace entity count and types, paper space layout count and per-layout counts. Deliberately *not* a selection-rule change: `drawable` already counts TEXT and MTEXT, so the obvious hypothesis is wrong, and changing a default on a guess is how 0.5.0 regressed. |
+| **Raw module docstrings** | Three invalid escapes have shipped from Windows paths quoted in the revision histories (`\U`, `\.`, `\A`). Raw makes the class impossible. The test now asserts the prefix — and a module it cannot find is a **failure**, not a silent `continue`, which is how `\A` passed a green suite in 0.5.1. |
+| **CLI/GUI parity is a gate** | `check_cli_gui_parity` fails the suite on any engine option with no GUI control (3 CLI-only flags exempt, with reasons). `check_setting_keys_cover_gui` asserts every backend attribute the GUI sets is registered in `BACKEND_SETTING_KEYS` and so survives `spawn` — the 0.4.x defect, now impossible to repeat quietly. |
+| **Eight new GUI controls** | Plot device, probe limit, ODA path (with Browse), AutoCAD command, image DPI cap, lossless images, library detail, log file. All 50 engine options are now reachable from the window. |
+
+**Not in this release, deliberately:** `--passes per-backend` (staged
+one-backend-at-a-time runs) and a watchdog giving `--timeout` force over
+in-process backends. Both restructure `run_batch` and the backend call path,
+and rushing either is how 0.5.0's regression happened. Staged passes work
+today as three commands with `--backend` and `--skip-existing` — see §5.
+
+### Field results that drove this
+
+| Pass | `--layouts` | Converted | Cumulative | Remaining |
+|---|---|---|---|---|
+| 1 | `model` | 806 | 806 (45.7 %) | 956 |
+| 1b | `auto`, `--skip-existing` | +84 | 890 (50.5 %) | 872 |
+
+Failure taxonomy of the 872, measured from `manifest.csv`:
+
+| Count | Share | Cause | Side |
+|---|---|---|---|
+| 551 | 63.2 % | `Invalid EED size` | decoder |
+| 248 | 28.4 % | `Invalid obj->size` | decoder |
+| 21 | 2.4 % | `NaN -> int` | engine |
+| 17 | 1.9 % | `Model (empty)` under `auto` | engine |
+| 17 | 1.9 % | `Duplicate handle` | decoder |
+| 16 | 1.8 % | `Invalid tag` | decoder |
+| 2 | 0.2 % | `DXFStructureError` | ezdxf |
+
+The decoder is **LibreDWG 0.14.8593** — the bundled one, confirmed by
+`dwg2dxf --version` — so those 832 are not a PATH-order problem and need a
+different decoder (AutoCAD, or ODA).
+
+ezdxf failures cost **0.08 s mean**, so a `libredwg+ezdxf`-only pass partitions
+the whole archive in about six minutes. That makes it a permanent triage step.
+
+## What changed in the previous release
 
 | Item | Change |
 |---|---|

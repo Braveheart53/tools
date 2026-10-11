@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Batch conversion of 2D AutoCAD drawings (DWG/DXF) to PDF.
+r"""Batch conversion of 2D AutoCAD drawings (DWG/DXF) to PDF.
 
 Written for the case where a directory tree of 2D AutoCAD drawings has to
 become a directory tree of PDFs, repeatably, without a human clicking through
@@ -71,6 +71,137 @@ Revision history
 ----------------
 Semantic versioning, newest first: External.Internal.Working.
 
+0.5.2
+    **The accoreconsole plot driver was desynchronised in two places, and
+    neither was the device name.**  A 1762-drawing GBT archive run on
+    2026-10-06 produced the first real ``-PLOT`` transcript this project has
+    seen, and it showed both at once::
+
+        unrecognised -PLOT prompt, taking the default: Command:
+        (the previous message repeated 2 more times)
+        unrecognised -PLOT prompt, taking the default: Enter new value for FILEDIA <0>
+        unrecognised -PLOT prompt, taking the default: :
+
+    1. **The setup burst.**  ``_plot_interactive`` fired ``FILEDIA 0 CMDDIA 0
+       BACKGROUNDPLOT 0 -PLOT`` at the first ``Command:`` prompt and switched
+       straight into the ``-PLOT`` answer table.  The ``Enter new value for X``
+       prompts that burst generated were then matched against that table,
+       found nothing, and were each answered with a BARE NEWLINE.  Those
+       newlines queued on stdin and were consumed by ``-PLOT``, shifting every
+       answer by one -- the same desynchronisation the prompt matching was
+       built to prevent, relocated from the ``.scr`` file into the setup
+       phase.  Replaced by an explicit phase machine: banner, setup (one
+       variable at a time, each name followed by its own value and nothing
+       else), plot, restore.
+
+    2. **The ``>`` terminator.**  A prompt was recognised by a trailing ``":"``
+       OR ``">"``.  The console is read one byte at a time, so::
+
+           Enter a layout name or [?] <Model>:
+
+       satisfied the ``>`` test when the default marker closed, BEFORE the
+       colon arrived.  The driver answered there, cleared its buffer, and the
+       trailing ``": "`` then accumulated alone and was read as a second,
+       anonymous prompt -- the bare ``:`` in the transcript above -- whose
+       answer was another stray newline.  ``":"`` alone is now the test.
+
+    Every accoreconsole attempt failed for these two reasons, including all
+    20 plot-device calibration candidates: 20 x 60 s per drawing to learn
+    nothing about a problem that was never the device.  Covered by
+    ``test_plot_phase_machine``, which replays the field transcript through a
+    simulated console, plus ``test_plot_phase_machine_detects_shift``, which
+    replays the 0.5.1 order and asserts it still fails -- a fake that cannot
+    fail proves nothing.
+
+    **The system variables are now restored.**  ``FILEDIA``, ``CMDDIA`` and
+    ``BACKGROUNDPLOT`` persist in the AutoCAD profile, so a run used to leave
+    an operator's interactive session with its dialogs suppressed.  The prior
+    value is captured from AutoCAD's own prompt (``<1>``) and put back.
+
+    **Workers configure their own logging.**  ``_configure_logging()`` is
+    called only from ``main()``, which a spawned worker never runs, so workers
+    had no handler and fell back to ``logging.lastResort`` -- a bare stderr
+    handler at level WARNING.  Two consequences, both measured: ezdxf's
+    recover messages reached the console past both the cap and the dedup
+    filter, which live on the parent's handler; and everything a worker
+    logged below WARNING was DISCARDED, including ``calibrating the
+    accoreconsole plot device`` and ``plot device attempt n/N``.  The single
+    most informative diagnostic the engine produces was invisible in every
+    parallel run.  The console decision now travels in the
+    ``backend_settings()`` snapshot and each worker installs its own handler
+    with both filters.  The log FILE stays parent-only: four workers opening
+    it ``mode="w"`` would truncate each other.
+
+    **The drawing is named BEFORE the attempt, not only on completion.**  A
+    stalled drawing used to be anonymous -- the console showed the previous
+    drawing's success and then nothing.  That turned "which sheet is it on?"
+    into a day of inference from process CPU counters and three wrong
+    diagnoses.
+
+    **The device probe has its own budget** (``--acad-probe-timeout``,
+    default 30 s).  It only LISTS plotters, but it was given the per-drawing
+    ``--timeout``, so on a machine where the listing hangs it burned 300 s
+    before calibration tried a single device.
+
+    **New ``--acad-device``** pins the plot-device answer and skips
+    calibration entirely.  ``_device`` is cached on the class, so under
+    ``spawn`` every respawned worker re-calibrated from scratch.
+
+    **New ``--oda-exe``**, and the ODA backend now reports WHY it is
+    unavailable instead of silently vanishing.  ODA File Converter is
+    deliberately NOT bundled: it is proprietary, ODA do not distribute it as
+    a redistributable component, and for non-members it is licensed for
+    non-commercial use only.  Absence is never an error.
+
+    **A missing DWG decoder degrades instead of aborting.**  A mixed input
+    tree used to be refused outright, throwing away the DXF sheets that would
+    have converted.  The DWG sheets now fail individually, in the manifest,
+    with a reason.
+
+    **``_find_tool`` applies the platform guard to its fallback loop too.**
+    It could hand back ``vendor/libredwg-win64/*.exe`` on Linux, producing
+    ``OSError: [Errno 8] Exec format error`` at conversion time -- which
+    reads like a corrupt drawing rather than a missing decoder.
+
+    **Non-finite extents are a layout problem, not a drawing failure.**
+    ``ValueError: cannot convert float NaN to integer`` was 105 of 956
+    failures on the GBT archive.  Re-running with ``--layouts auto`` converted
+    84 of them unchanged, because ``auto`` picked a different, well-formed
+    layout -- so the correct behaviour was already there and merely
+    unreachable, because the exception escaped first.  Now classified
+    alongside "empty bounding box".
+
+    **A drawing that renders nothing now says what IS in it** -- modelspace
+    entity count and types, paper space layout count and per-layout counts.
+    ``Model (empty)`` is a verdict without evidence, and on 17 GBT sheets it
+    was unactionable.  Deliberately a census and NOT a selection-rule change:
+    ``drawable`` already counts TEXT and MTEXT, so "the content test ignores
+    text" is not the explanation, and changing a default on a guess is
+    exactly how 0.5.0 regressed.
+
+    **Both module docstrings are now RAW strings.**  Three invalid escapes
+    have shipped inside Windows paths quoted in them (``\U``, ``\.``,
+    ``\A``); a raw docstring makes the class impossible rather than merely
+    absent.  ``test_no_syntax_warnings`` now asserts the prefix, and a module
+    it cannot find is a FAILURE -- a silent ``continue`` is how the ``\A``
+    escape passed a green suite in 0.5.1.
+
+    **CLI/GUI parity is a gate.**  ``check_cli_gui_parity`` compares argparse
+    against the window and fails the suite on any option with no control;
+    three CLI-only flags are listed with stated reasons.
+    ``check_setting_keys_cover_gui`` asserts every attribute the GUI assigns
+    to a backend is registered in ``BACKEND_SETTING_KEYS`` and therefore
+    survives ``spawn`` -- the 0.4.x defect, now impossible to repeat
+    silently.
+
+    NOT in this release, and deliberately: ``--passes per-backend`` (staged
+    one-backend-at-a-time runs) and a watchdog giving ``--timeout`` force over
+    in-process backends.  Both are structural changes to ``run_batch`` and to
+    the backend call path, and rushing either at the end of a long session is
+    precisely how 0.5.0's regression happened.  The three-command manual
+    equivalent of staged passes works today with ``--backend`` plus
+    ``--skip-existing``.
+
 0.5.1
     **0.5.0's --layouts default was a regression, and it shipped.**  The
     first sheet of the next run said so::
@@ -106,7 +237,7 @@ Semantic versioning, newest first: External.Internal.Working.
     what every sheet contains needs a before/after on real sheets, not
     an inference from a failure message.
 
-    Also fixed: ``SyntaxWarning: invalid escape sequence '\\.'`` from
+    Also fixed: ``SyntaxWarning: invalid escape sequence '\.'`` from
     0.5.0's own revision note, which quoted a Windows path inside a
     non-raw docstring -- printed once per worker on every run.  The
     regression suite now compiles this module under
@@ -170,7 +301,7 @@ Semantic versioning, newest first: External.Internal.Working.
        handed the *scratch* path and the rename moves the file first, so
        it reports::
 
-           Cannot open the document ... \\.dwg2pdf_plot\\<sheet>.pdf
+           Cannot open the document ... \.dwg2pdf_plot\<sheet>.pdf
            Error [Operating system]: The system cannot find the path specified.
 
        Once per sheet, modal, in a serial run -- strictly worse than the
@@ -268,7 +399,7 @@ Semantic versioning, newest first: External.Internal.Working.
     **The old-decoder warning was itself misleading, twice.**  A live run
     of the GBT set opened with four identical paragraphs::
 
-        using LibreDWG 0.11.3876 from ...\\envs\\py3p12\\Library\\bin\\dwg2dxf.EXE
+        using LibreDWG 0.11.3876 from ...\envs\py3p12\Library\bin\dwg2dxf.EXE
         -- this is an old decoder (conda-forge ships 0.11 from 2020). The
         copy bundled in vendor/ is newer ... Remove the old one from PATH,
         or let the bundled copy be found first.
@@ -343,7 +474,7 @@ Semantic versioning, newest first: External.Internal.Working.
     Also new:
 
     * ``--exclude GLOB`` (repeatable), which prunes whole directories.
-      The GBT tree contains ``ROSE_GBT\\Achive\\RoseGBT\\`` -- a full
+      The GBT tree contains ``ROSE_GBT\Achive\RoseGBT\`` -- a full
       duplicate of the live tree -- so the 1876-drawing run was
       converting a large share of the set twice, which inflated both the
       drawing count and the 3.1 hours, and means some of the 850
@@ -363,10 +494,10 @@ Semantic versioning, newest first: External.Internal.Working.
     different AutoCAD profile, and so a different ``PrinterConfigDir``,
     from the GUI.  Diagnostics from the failing machine disproved that::
 
-        C:\\Users\\<user>\\AppData\\Roaming\\Autodesk\\AutoCAD 2025\\R25.0\\enu\\Plotters\\DWG To PDF.pc3
+        C:\Users\<user>\AppData\Roaming\Autodesk\AutoCAD 2025\R25.0\enu\Plotters\DWG To PDF.pc3
 
-        HKCU\\...\\R25.0\\ACAD-8101:409\\Profiles\\<<AutoCAD 2025 - English Unnamed Profile>>\\General
-            PrinterConfigDir  REG_SZ  C:\\Users\\<user>\\AppData\\Roaming\\Autodesk\\AutoCAD 2025\\R25.0\\enu\\plotters;%RoamableRootFolder%Plotters
+        HKCU\...\R25.0\ACAD-8101:409\Profiles\<<AutoCAD 2025 - English Unnamed Profile>>\General
+            PrinterConfigDir  REG_SZ  C:\Users\<user>\AppData\Roaming\Autodesk\AutoCAD 2025\R25.0\enu\plotters;%RoamableRootFolder%Plotters
 
     The file is present, in the directory the profile names.  Nothing
     was missing.
@@ -886,6 +1017,7 @@ from __future__ import annotations
 import argparse
 import atexit
 import csv
+import collections
 import dataclasses
 import gc
 import io
@@ -912,7 +1044,7 @@ from typing import Any, Callable, Iterable, Iterator, Optional, Sequence
 __author__ = "William W. Wallace"
 __email__ = "naval.antennas@gmail.com"
 __phone__ = "(304) 456-2216"
-__revision__ = "0.5.1"
+__revision__ = "0.5.2"
 __all__ = [
     "PageSpec",
     "ConversionResult",
@@ -1093,6 +1225,48 @@ def _bundled_runs_here(relative_path: str) -> bool:
     return True
 
 
+
+def _unrenderable_layout(exc: BaseException) -> Optional[str]:
+    """Classify a render error as "this layout, not this drawing", or ``None``.
+
+    Two distinct ezdxf/PyMuPDF failures mean the same thing operationally --
+    *this* layout cannot produce a page, so try another one rather than
+    failing the drawing:
+
+    ``empty bounding box``
+        The layout holds only entities the add-on cannot draw, most often a
+        paperspace containing nothing but a VIEWPORT (the add-on has no 3D
+        engine and does not render viewport contents).
+
+    ``cannot convert float NaN to integer``
+        The layout's extents are non-finite, so the page size computed from
+        them is NaN and the conversion to an integer point size raises.  This
+        was 105 of 956 failures on the 1762-drawing GBT archive
+        (2026-10-06) -- 11 % of everything that failed -- and it presented as
+        a bare ``ValueError: cannot convert float NaN to integer`` with no
+        mention of a layout, which reads like a corrupt drawing.
+
+        It is not.  Re-running that archive with ``--layouts auto`` converted
+        84 of the 105 unchanged, because ``auto`` selected a different,
+        well-formed layout.  Treating a non-finite page the same way as an
+        empty one is therefore not a workaround: it is the behaviour that was
+        already demonstrably correct, merely unreachable because the
+        exception escaped first.
+
+    Returns
+    -------
+    str or None
+        A short reason for the skip note, or ``None`` when the exception is
+        something else and must propagate.
+    """
+    text = str(exc).lower()
+    if "empty bounding box" in text:
+        return "nothing renderable"
+    if "nan" in text and "integer" in text:
+        return "non-finite extents"
+    return None
+
+
 # %% Small helpers
 # ===========================================================================
 # Small helpers
@@ -1149,6 +1323,16 @@ def _find_tool(stem: str) -> Optional[Path]:
             # A relative entry names a bundled binary; resolve it against the
             # module's own directory so it is found no matter where the user
             # happens to be when they run this.
+            #
+            # 0.5.2: the platform guard applies HERE too.  It was present only
+            # in the _PREFER_BUNDLED loop above, so a tool that is not in
+            # _PREFER_BUNDLED -- or a _PREFER_BUNDLED tool that reached this
+            # fallback -- could still resolve to vendor/libredwg-win64/*.exe
+            # on Linux.  The result is not a clean "not found" but an
+            # OSError: [Errno 8] Exec format error at conversion time, which
+            # reads like a corrupt drawing rather than a missing decoder.
+            if not _bundled_runs_here(candidate):
+                continue
             path = _MODULE_DIR / path
         if path.is_file():
             return path
@@ -2924,6 +3108,57 @@ class EzdxfBackend(Backend):
         )
         return merged, note
 
+    @staticmethod
+    def _empty_census(doc) -> str:
+        """Describe what IS in a drawing that rendered nothing.
+
+        Added in 0.5.2 because ``Model (empty)`` is a verdict without
+        evidence, and on the GBT archive it was wrong 17 times in a way no
+        one could act on.  Those 17 sheets survived BOTH ``--layouts model``
+        and ``--layouts auto``; the message named neither how many paper
+        space layouts existed, nor what entity types the drawing actually
+        held, so there was nothing to reason from but the file name.
+
+        Deliberately a census and not a fix.  The honest state of knowledge
+        is that nobody knows yet why those sheets look empty to ezdxf --
+        ``drawable`` already counts TEXT and MTEXT, so "the content test
+        ignores text" is NOT the explanation, and changing the selection rule
+        on a guess is precisely how the 0.5.0 regression happened.  So this
+        makes the next run diagnostic instead of mysterious.
+
+        Never raises: a diagnostic that can fail turns a clear error into an
+        obscure one.
+        """
+        try:
+            model = doc.modelspace()
+            kinds = collections.Counter(e.dxftype() for e in model)
+            n_model = sum(kinds.values())
+            paper = [n for n in doc.layout_names_in_taborder()
+                     if n.lower() != "model"]
+            per_layout = []
+            for name in paper[:8]:
+                try:
+                    psp = doc.paperspace(name)
+                    pk = collections.Counter(e.dxftype() for e in psp)
+                    per_layout.append(
+                        "%s=%d%s" % (name, sum(pk.values()),
+                                     "" if not pk else
+                                     " [" + ", ".join(
+                                         "%s:%d" % kv
+                                         for kv in pk.most_common(4)) + "]"))
+                except Exception:       # noqa: BLE001 - diagnostic only
+                    per_layout.append("%s=?" % name)
+            top = ", ".join("%s:%d" % kv for kv in kinds.most_common(5))
+            return (
+                "  Census: modelspace %d entit%s%s; %d paper space layout(s)%s."
+                % (n_model, "y" if n_model == 1 else "ies",
+                   (" [" + top + "]") if top else "",
+                   len(paper),
+                   (" " + "; ".join(per_layout)) if per_layout else "")
+            )
+        except Exception:               # noqa: BLE001 - never mask the real error
+            return ""
+
     def _iter_layouts(self, doc, spec: PageSpec):
         """Yield ``(name, layout_object, dxf_layout_or_None)`` per requested layout.
 
@@ -3107,8 +3342,9 @@ class EzdxfBackend(Backend):
                     # no 3D engine and does not render viewport contents
                     # [EZDXF-DRAW].  That is a limitation to report, not a
                     # conversion failure.
-                    if "empty bounding box" in str(exc).lower():
-                        skipped_layouts.append(f"{layout_name} (nothing renderable)")
+                    if _unrenderable_layout(exc):
+                        skipped_layouts.append(
+                            "%s (%s)" % (layout_name, _unrenderable_layout(exc)))
                         continue
                     raise
 
@@ -3179,6 +3415,7 @@ class EzdxfBackend(Backend):
                 raise RuntimeError(
                     f"nothing to render for --layouts {spec.layouts!r}: "
                     f"{detail}.{hint}"
+                    f"{self._empty_census(doc)}"
                 )
             if skipped_layouts:
                 _LOG.info(
@@ -3285,13 +3522,46 @@ class OdaEzdxfBackend(_DwgViaDxfBackend):
     #: older target would silently drop newer entity types.
     DXF_VERSION = "ACAD2018"
 
+    #: Set by --oda-exe.  Must be registered in BACKEND_SETTING_KEYS or it
+    #: will not survive the 'spawn' process boundary -- the 0.4.x class of bug.
+    exe_override: Optional[str] = None
+
     @classmethod
     def _exe(cls) -> Optional[Path]:
+        """Locate ODAFileConverter: --oda-exe first, then the usual search.
+
+        Absence is NEVER an error here.  ODA File Converter is proprietary
+        and is deliberately not bundled with this distribution -- ODA do not
+        distribute it as a redistributable component, and for non-members it
+        is licensed for non-commercial use only -- so a machine without it is
+        the normal case, not a broken one.  :meth:`available` simply reports
+        False and the backend drops out of the chain.
+        """
+        if cls.exe_override:
+            path = Path(cls.exe_override)
+            return path if path.is_file() else None
         return _find_tool("ODAFileConverter")
 
     @classmethod
+    def unavailable_reason(cls) -> Optional[str]:
+        """Why this backend is not usable here, or ``None`` if it is.
+
+        Added in 0.5.2 so the startup chain diagnostic can say WHICH
+        prerequisite is missing instead of silently omitting the backend.
+        """
+        if cls.exe_override and not Path(cls.exe_override).is_file():
+            return "--oda-exe %r is not a file" % cls.exe_override
+        if cls._exe() is None:
+            return ("ODAFileConverter not found (set --oda-exe; not bundled "
+                    "-- proprietary, and non-commercial use only for ODA "
+                    "non-members)")
+        if not EzdxfBackend.available():
+            return "ezdxf/PyMuPDF not installed"
+        return None
+
+    @classmethod
     def available(cls) -> bool:
-        return cls._exe() is not None and EzdxfBackend.available()
+        return cls.unavailable_reason() is None
 
     @classmethod
     def describe(cls) -> str:
@@ -3716,6 +3986,12 @@ class AcCoreConsoleBackend(Backend):
     #: report "no device works" on a machine where one does.
     CALIBRATION_MIN_ATTEMPT: float = 60.0
 
+    #: Seconds allowed for the plot-device LISTING (``_probe_devices``), as
+    #: distinct from a plot attempt.  See the note at the call site: this was
+    #: the per-drawing --timeout until 0.5.2, which cost 300 s per drawing on
+    #: a machine where the listing hangs.  Overridable with --acad-probe-timeout.
+    PROBE_TIMEOUT: float = 30.0
+
     #: Calibration state.  Per worker PROCESS, not per run: on Windows the
     #: pool uses 'spawn', so each worker re-imports this module and
     #: calibrates itself once.  See :func:`apply_backend_settings`.
@@ -3796,6 +4072,47 @@ class AcCoreConsoleBackend(Backend):
         ("save changes to page setup", "N"),
         ("proceed with plot", "Y"),
     )
+
+    #: System variables set before -PLOT so the headless console never waits
+    #: for a dialog, as ``(name, quiet_value)``.
+    #:
+    #: These are driven ONE AT A TIME (see :meth:`_plot_interactive`).  Until
+    #: 0.5.2 all three names and all three values were written to stdin in one
+    #: burst at the first ``Command:`` prompt, and the driver then switched
+    #: straight into the -PLOT answer table.  The three
+    #: ``Enter new value for X <n>:`` prompts the burst generated were
+    #: therefore matched against the -PLOT table, found nothing, and each one
+    #: was answered with a BARE NEWLINE "taking the default".  Those stray
+    #: newlines queued on stdin and were consumed later by -PLOT, shifting
+    #: every plot answer by one -- the exact desynchronisation the prompt
+    #: matching was built to prevent, merely relocated from the .scr file into
+    #: the setup phase.  Field evidence, 2026-10-06::
+    #:
+    #:     unrecognised -PLOT prompt, taking the default: Command:
+    #:     (the previous message repeated 2 more times)
+    #:     unrecognised -PLOT prompt, taking the default: Enter new value for FILEDIA <0>
+    #:
+    #: Every accoreconsole attempt on that machine failed for this reason,
+    #: including all 20 plot-device calibration candidates -- 20 minutes per
+    #: drawing to learn nothing, because the device name was never the
+    #: problem.
+    _SETUP_VARS: tuple[tuple[str, str], ...] = (
+        ("FILEDIA", "0"),           # no file dialogs
+        ("CMDDIA", "0"),            # no command dialogs
+        ("BACKGROUNDPLOT", "0"),    # plot in the foreground, so we can see it
+    )
+
+    #: ``Enter new value for FILEDIA <1>:`` -> ("FILEDIA", "1").
+    #:
+    #: The captured old value is what makes the restore in
+    #: :meth:`_plot_interactive` possible: AutoCAD states the prior setting in
+    #: the prompt itself, so nothing has to be read back separately.  These
+    #: variables persist in the AutoCAD profile, and leaving an operator's
+    #: interactive session with FILEDIA 0 means their file dialogs silently
+    #: stop appearing.
+    _SETVAR_PROMPT = re.compile(
+        r"enter new value for\s+([A-Za-z_][A-Za-z0-9_]*)\s*<([^>]*)>",
+        re.IGNORECASE)
 
     _TRANSCRIPT_FAULTS = (
         "not found.",
@@ -4057,7 +4374,20 @@ class AcCoreConsoleBackend(Backend):
         transcript: list[str] = []
         deadline = time.monotonic() + timeout
         pending = b""
-        started = False
+
+        # -- phase machine (0.5.2) ------------------------------------------
+        # "banner"  waiting for the first Command: prompt
+        # "setup"   driving _SETUP_VARS one at a time, each name followed by
+        #           its own value prompt -- NOTHING is answered from the
+        #           -PLOT table here, which is what 0.5.1 got wrong
+        # "plot"    -PLOT has been issued; answer from _PROMPT_ANSWERS
+        # "restore" the plot is away; put the system variables back
+        # "done"    nothing further to send
+        phase = "banner"
+        setup_queue: list[tuple[str, str]] = list(cls._SETUP_VARS)
+        restore_queue: list[tuple[str, str]] = []
+        prior: dict[str, str] = {}
+        awaiting_value: Optional[str] = None
 
         def send(line: str) -> None:
             try:
@@ -4076,30 +4406,95 @@ class AcCoreConsoleBackend(Backend):
                 text_so_far = _decode_console(
                     pending.decode("latin-1", "replace"))
 
-                # A prompt is recognised by its trailing ": " or ">: ",
-                # which is how the console signals it is waiting.
-                if not text_so_far.rstrip().endswith((":", ">")):
+                # A prompt is recognised by its trailing ":", which is how the
+                # console signals it is waiting.
+                #
+                # ">" was ALSO accepted until 0.5.2, and that was a second,
+                # independent desynchronisation.  The console is read one byte
+                # at a time, so a prompt such as::
+                #
+                #     Enter a layout name or [?] <Model>:
+                #
+                # satisfies an endswith(">") test the moment the default
+                # marker closes -- BEFORE the colon arrives.  The driver
+                # answered there, cleared the buffer, and the trailing ": "
+                # then accumulated on its own and was read as a second,
+                # anonymous prompt.  Its answer was a bare newline, which
+                # queued on stdin and shifted every later -PLOT answer by one.
+                #
+                # The signature is unmistakable once seen, and it is in the
+                # field transcript from bracca, 2026-10-06::
+                #
+                #     unrecognised -PLOT prompt, taking the default: :
+                #
+                # Every AutoCAD prompt terminates in ": "; "<default>" is
+                # always followed by it.  So ":" alone is the correct test.
+                if not text_so_far.rstrip().endswith(":"):
                     continue
                 line = text_so_far.rsplit("\n", 1)[-1].strip()
                 pending = b""
-                if not line:
+                # A line that is nothing but the terminator carries no
+                # question, so it is never answered -- see above.
+                if not line or line.strip(": \t") == "":
                     continue
                 transcript.append(line)
 
-                if not started:
-                    # Nothing is answered until -PLOT has been issued:
-                    # the banner also ends in a colon.
-                    if line.lower().startswith("command"):
-                        started = True
-                        send("FILEDIA")
-                        send("0")
-                        send("CMDDIA")
-                        send("0")
-                        send("BACKGROUNDPLOT")
-                        send("0")
-                        send("-PLOT")
+                low = line.lower()
+                at_command = low.startswith("command")
+
+                # -- banner: say nothing until AutoCAD is at a command prompt
+                if phase == "banner":
+                    if at_command:
+                        phase = "setup"
+                    else:
+                        continue
+
+                # -- setup / restore: one variable at a time ----------------
+                if phase in ("setup", "restore"):
+                    m = cls._SETVAR_PROMPT.search(line)
+                    if m:
+                        # AutoCAD is asking for the value.  Its prompt states
+                        # the CURRENT setting, which is recorded here so the
+                        # restore phase can put it back.
+                        name = m.group(1).upper()
+                        awaiting_value = name
+                        want = dict(cls._SETUP_VARS).get(name)
+                        if phase != "restore":
+                            prior.setdefault(name, m.group(2).strip())
+                            send(want if want is not None else "")
+                        else:
+                            send(prior.get(name, m.group(2).strip()))
+                        continue
+                    if at_command:
+                        # The variable just set is done with; drop it and move
+                        # on.  This is the ONLY place the queue advances, so a
+                        # prompt we did not expect can never shift it.
+                        if awaiting_value is not None:
+                            active = (setup_queue if phase != "restore"
+                                      else restore_queue)
+                            if active and active[0][0] == awaiting_value:
+                                active.pop(0)
+                            awaiting_value = None
+                        if phase == "restore":
+                            if restore_queue:
+                                send(restore_queue[0][0])
+                            else:
+                                phase = "done"
+                                break
+                            continue
+                        if setup_queue:
+                            send(setup_queue[0][0])
+                        else:
+                            phase = "plot"
+                            send("-PLOT")
+                        continue
+                    # Anything else during setup is noise -- a banner line, a
+                    # warning.  It is NOT answered: a bare newline here is
+                    # precisely what desynchronised 0.5.1.
+                    _LOG.debug("ignored during %s phase: %s", phase, line)
                     continue
 
+                # -- plot: now, and only now, the -PLOT answer table ---------
                 answer = cls._answer_for(line)
                 if answer is None:
                     _LOG.debug("unrecognised -PLOT prompt, taking the "
@@ -4107,8 +4502,19 @@ class AcCoreConsoleBackend(Backend):
                     send("")
                     continue
                 send(answers.get(answer, answer))
-                if "proceed with plot" in line.lower():
-                    break
+                if "proceed with plot" in low:
+                    # Do not break here (0.5.1 did).  The system variables
+                    # above persist in the AutoCAD profile, so an operator's
+                    # interactive session would be left with its dialogs
+                    # suppressed.  Hand over to the restore phase instead; it
+                    # is bounded by the same deadline, and the PDF is already
+                    # being written either way.
+                    restore_queue = [(n, prior.get(n, ""))
+                                     for n, _ in cls._SETUP_VARS
+                                     if n in prior]
+                    phase = "restore" if restore_queue else "done"
+                    if phase == "done":
+                        break
 
             # Give the plot itself time to land, then close stdin so the
             # console exits rather than waiting for more input.
@@ -4365,7 +4771,21 @@ class AcCoreConsoleBackend(Backend):
         # does work, this is what finds a renamed or site-specific
         # plotter.  System printers are excluded outright -- they cannot
         # write to a path we choose.
-        probed = cls._probe_devices(exe, sample, timeout)
+        # 0.5.2: the probe gets its OWN budget, not the per-drawing one.
+        #
+        # It only asks accoreconsole to list its plotters; it does not plot.
+        # Giving it --timeout meant that on a drawing where the probe hangs it
+        # burned the full 300 s BEFORE calibration had tried a single device.
+        # Measured on bracca, 2026-10-06::
+        #
+        #     plot-device probe failed: ... timed out after 300.0 seconds
+        #     calibrating the accoreconsole plot device on ... (20 candidate(s), 60s each)
+        #
+        # 300 s of nothing, then 1200 s of calibration -- 25 minutes for one
+        # drawing.  A listing that has not answered in PROBE_TIMEOUT is not
+        # going to.
+        probed = cls._probe_devices(
+            exe, sample, min(timeout, cls.PROBE_TIMEOUT))
         stock = cls.PC3.lower()
         ranked = (
             [d for d in probed if stock in d.lower()]
@@ -5633,9 +6053,19 @@ BACKENDS_BY_NAME: dict[str, type[Backend]] = {c.name: c for c in BACKEND_CLASSES
 #: which is every drawing that did not need the serial retry.  The settings
 #: now travel with the job.
 BACKEND_SETTING_KEYS: dict[str, tuple[str, ...]] = {
+    # Every attribute a CLI flag or GUI control can set MUST be listed here.
+    # On Windows the pool uses the 'spawn' start method, so a worker
+    # re-imports this module and gets pristine class attributes; this
+    # snapshot is the only thing that carries an operator's choices across
+    # that boundary.  An unregistered attribute is not a cosmetic omission --
+    # it silently reverts to its default in every worker, which is how a
+    # whole run can use settings nobody selected.
     "accoreconsole": ("PC3", "pc3", "language", "script_override",
-                      "command", "CALIBRATE", "mode"),
+                      "command", "CALIBRATE", "mode",
+                      "_device",          # 0.5.2 --acad-device
+                      "PROBE_TIMEOUT"),   # 0.5.2 --acad-probe-timeout
     "acad-com": ("PC3", "pc3", "window_mode", "attach", "recycle_after"),
+    "oda+ezdxf": ("exe_override",),       # 0.5.2 --oda-exe
 }
 
 
@@ -5655,6 +6085,29 @@ def backend_settings() -> dict[str, dict[str, Any]]:
             continue
         snapshot[name] = {key: getattr(cls, key) for key in keys
                           if hasattr(cls, key)}
+    # 0.5.2: the console logging decision rides along with the settings.
+    #
+    # Windows uses the 'spawn' start method, so a worker re-imports this
+    # module and NEVER runs main() -- which is the only caller of
+    # _configure_logging().  The worker therefore had no handler at all, and
+    # Python fell back to logging.lastResort: a bare StreamHandler on stderr
+    # at level WARNING with no formatter.  Two consequences, both confirmed
+    # in the field on 2026-10-06:
+    #
+    #   * ezdxf's WARNING-level recover messages reached the console RAW --
+    #     past _LibraryCapFilter and past _DedupFilter, which live on the
+    #     parent's handler and cannot see another process's writes.  Dozens
+    #     of uncapped lines per drawing from every worker at once.
+    #   * everything a worker logged BELOW warning was silently DISCARDED,
+    #     including "calibrating the accoreconsole plot device ..." and
+    #     "plot device attempt n/N".  A grep of a full run's captured stdout
+    #     and stderr for 'calibrat' returned only parent-emitted lines.  The
+    #     single most informative diagnostic the engine produces was
+    #     invisible in every parallel run.
+    #
+    # The log FILE stays parent-only: four workers opening it mode="w" would
+    # truncate each other.
+    snapshot["__logging__"] = dict(_LOG_SETTINGS)
     return snapshot
 
 
@@ -5669,6 +6122,8 @@ def apply_backend_settings(settings: Optional[dict[str, dict[str, Any]]]
     if not settings:
         return
     for name, values in settings.items():
+        if name.startswith("__"):
+            continue            # pseudo-entries such as __logging__
         cls = BACKENDS_BY_NAME.get(name)
         if cls is None:
             continue
@@ -5842,6 +6297,24 @@ def select_backend_chain(
         return [select_backend(requested, need_dwg)]
 
     usable = [c for c in available_backends() if c.reads_dwg or not need_dwg]
+    if not usable and need_dwg:
+        # 0.5.2: degrade, do not abort.
+        #
+        # An input tree is routinely mixed.  Refusing the WHOLE run because
+        # no backend can read DWG throws away the DXF sheets that would have
+        # converted perfectly well, and gives the operator a wall of install
+        # advice instead of the files they could have had.  The DWG sheets
+        # still fail -- individually, in the manifest, with a reason -- which
+        # is where a per-drawing problem belongs.
+        dxf_only = list(available_backends())
+        if dxf_only:
+            _LOG.warning(
+                "no backend on this machine can read DWG; continuing with "
+                "%s for DXF input only. Every DWG will be recorded as failed. "
+                "See --help for how to install a DWG decoder.",
+                ", ".join(c.name for c in dxf_only),
+            )
+            usable = dxf_only
     if not usable:
         raise SystemExit(_no_backend_message(need_dwg))
 
@@ -6131,6 +6604,7 @@ def _convert_task(
         :meth:`ConversionResult.as_row` output.
     """
     apply_backend_settings(settings)
+    _configure_worker_logging(settings)
 
     source = Path(source_str)
     out_dir = Path(out_dir_str)
@@ -6173,6 +6647,16 @@ def _convert_task(
         if source.suffix.lower() == ".dwg" and not cls.reads_dwg:
             continue
 
+        # 0.5.2: logged BEFORE the attempt, not only on completion.
+        #
+        # Until now the only per-drawing line was the completion record, so a
+        # drawing that stalled was ANONYMOUS: the console showed the previous
+        # drawing's success and then nothing.  On 2026-10-06 that turned a
+        # five-minute question -- which sheet is it on? -- into a day of
+        # inference from process CPU counters, and three wrong diagnoses.
+        # One line, emitted first, would have answered it immediately.
+        _LOG.debug("starting %s with %s (attempt %d of %d)",
+                   source.name, name, index + 1, len(backend_names))
         result = cls(timeout=timeout).convert(source, out_dir, spec)
         if result.status == "ok":
             if index > 0:
@@ -7208,6 +7692,30 @@ def build_parser() -> argparse.ArgumentParser:
              "Manager, clear that box in the copy, and name the copy here",
     )
     group.add_argument(
+        "--acad-device", default=None, metavar="NAME",
+        help="PIN the accoreconsole plot-device answer and skip calibration "
+             "entirely. Calibration measures the answer by trying each "
+             "candidate in turn, which on a machine with 20 plotters costs "
+             "20 x 60 s PER WORKER PROCESS -- and the winner is cached on a "
+             "class attribute, so every respawned worker pays it again. Once "
+             "a run has reported which device won, give it here",
+    )
+    group.add_argument(
+        "--acad-probe-timeout", type=float, default=30.0, metavar="SEC",
+        help="time limit for LISTING accoreconsole's plot devices, as "
+             "distinct from plotting (default: 30). Separate from --timeout "
+             "because a listing that hangs used to burn the full per-drawing "
+             "budget before calibration had tried a single device",
+    )
+    group.add_argument(
+        "--oda-exe", default=None, metavar="PATH",
+        help="path to ODAFileConverter for the oda+ezdxf backend. NOT "
+             "bundled: ODA File Converter is proprietary and, for ODA "
+             "non-members, licensed for NON-COMMERCIAL USE ONLY -- confirm "
+             "your own position before installing it. Absence is never an "
+             "error; the backend is simply unavailable",
+    )
+    group.add_argument(
         "--workers", type=int, default=0, metavar="N",
         help="parallel workers; 0 = min(cpu_count, 8) (default: 0)",
     )
@@ -7367,6 +7875,65 @@ class _DedupFilter(logging.Filter):
         return True
 
 
+#: What the parent decided about console logging, so a spawned worker can
+#: reproduce it.  Written by :func:`_configure_logging`, carried in the
+#: :func:`backend_settings` snapshot, applied by
+#: :func:`_configure_worker_logging`.
+_LOG_SETTINGS: dict[str, Any] = {"level": logging.INFO, "verbose_libs": False}
+
+#: Guards :func:`_configure_worker_logging` so it installs one handler per
+#: process, not one per drawing.
+_WORKER_LOGGING_DONE: bool = False
+
+
+def _configure_worker_logging(
+    settings: Optional[dict[str, dict[str, Any]]] = None,
+) -> None:
+    """Install the console handler inside a spawned worker process.
+
+    A no-op in the parent (which has already configured logging) and after the
+    first call in any one worker.
+
+    This is the other half of the ``spawn`` problem that cost the 0.4.x
+    ``backend_settings`` bug: class attributes are not the only module state a
+    re-imported module loses -- the logging configuration goes with it, and
+    its absence is louder.  See the long note in :func:`backend_settings`.
+
+    The cap filter is added BEFORE the dedup filter, for the same reason it is
+    in the parent: handler filters run in the order added and the first
+    ``False`` drops the record, so a dedup that ran first would count records
+    the cap is about to discard and then emit an orphaned tally for them.
+
+    No file handler is installed here.  ``--log-file`` is opened ``mode="w"``,
+    and several workers doing that would truncate each other's output; the
+    parent owns the file.
+    """
+    global _WORKER_LOGGING_DONE
+    if _WORKER_LOGGING_DONE:
+        return
+    _WORKER_LOGGING_DONE = True
+
+    wanted = dict(_LOG_SETTINGS)
+    if settings:
+        wanted.update(settings.get("__logging__") or {})
+
+    root = logging.getLogger()
+    if root.handlers:
+        # The parent, or something that has already configured logging.
+        return
+
+    level = int(wanted.get("level", logging.INFO))
+    console = logging.StreamHandler(stream=sys.stderr)
+    console.setFormatter(logging.Formatter("%(levelname)-7s %(message)s"))
+    if not wanted.get("verbose_libs"):
+        console.addFilter(_LibraryCapFilter(
+            _LIBRARY_LOGGERS, max(level, logging.WARNING)))
+    console.addFilter(_DedupFilter(console))
+    console.setLevel(level)
+    root.setLevel(level)
+    root.addHandler(console)
+
+
 def _configure_logging(
     verbose: bool,
     quiet: bool,
@@ -7402,6 +7969,10 @@ def _configure_logging(
         console.addFilter(_LibraryCapFilter(
             _LIBRARY_LOGGERS, max(level, logging.WARNING)))
     console.addFilter(_DedupFilter(console))
+
+    # Recorded so a spawned worker can reproduce this; see backend_settings().
+    _LOG_SETTINGS["level"] = int(level)
+    _LOG_SETTINGS["verbose_libs"] = bool(verbose_libs)
 
     root = logging.getLogger()
     root.setLevel(logging.DEBUG if log_file else level)
@@ -7559,6 +8130,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         AcCoreConsoleBackend.pc3 = args.acad_pc3
         AcadComBackend.pc3 = args.acad_pc3
         _LOG.info("AutoCAD plotter configuration: %s", args.acad_pc3)
+
+    AcCoreConsoleBackend.PROBE_TIMEOUT = max(5.0, args.acad_probe_timeout)
+    if args.acad_device:
+        # Pinned, so _calibrate() never runs: _device is the cached winner and
+        # a non-None value is what short-circuits calibration.
+        AcCoreConsoleBackend._device = args.acad_device
+        _LOG.info("accoreconsole plot device pinned to %r "
+                  "(calibration skipped)", args.acad_device)
+    if args.oda_exe:
+        OdaEzdxfBackend.exe_override = args.oda_exe
+        _LOG.info("ODA File Converter: %s", args.oda_exe)
 
     backend_cls = chain[0]
     if len(chain) > 1:

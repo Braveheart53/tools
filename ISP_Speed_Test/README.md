@@ -2,14 +2,18 @@
 
 | | |
 |---|---|
-| Bundle version | 1.6.0 |
-| Script version | isp_speed_monitor.py 1.2.0 |
-| README version | 1.6.0 |
+| Bundle version | 1.7.2 |
+| Script version | isp_speed_monitor.py 1.3.1 |
+| README version | 1.7.2 |
 
 ## Revision history (newest first)
 
 | Version | Date | Item | Change |
 |---|---|---|---|
+| 1.7.2 | 2026-10-11 | bundle | Script 1.3.1: Veusz-review fixes — `vz_text` follows Veusz's latexEscape (literal backslash → `{\backslash}`, `[ ]` escaped); Render Veusz pages re-implemented via `veusz --listen --quiet` + marker file (`--export-dpi`, `%PAGE%` and `--export` on .vszh5 do not work); new `--render-veusz FILE [--dpi N] [--outdir DIR]`; tests/render_in_veusz.sh 1.1.0 no longer waits for the 180 s timeout on Veusz 4.2.x. pyproject 1.3.1, REQUIRED_MODULES 1.3.4 |
+| 1.7.1 | 2026-10-03 | bundle | BUILD_PLAN 1.0.2: install-time prerequisite dialog contract; no code changes |
+| 1.7.0 | 2026-10-03 | bundle | Script 1.3.0 (plan Step 1): author/publisher William W. Wallace, Adaptive Electrodynamics LLC dba AdaptEd, support mailto with subject; EDITION constant with Demo limits; per-OS data folder (+ `--portable`); tool discovery via `ISP_SPEED_MONITOR_*` env vars and bundled `tools/`; Tools ▸ Export sanitized copy / Open in Veusz / Render pages / Install prerequisite tools; `--reexport --sanitize`. README 1.7.0, pyproject 1.3.0, REQUIRED_MODULES 1.3.3, BUILD_PLAN 1.0.1 |
+| 1.6.1 | 2026-09-06 | bundle | Added docs/BUILD_PLAN.md 1.0.0 (packaging, installers, C++ port, Demo edition plan); no code changes |
 | 1.6.0 | 2026-09-05 | bundle | Script 1.2.0: write-through of every test to SQLite/JSONL, "Refresh output files every N tests/rounds" (stable file names, atomic replace, partial/final flag), interrupted-campaign detection, Veusz label escaping; README 1.6.0; pyproject 1.2.0; REQUIRED_MODULES 1.3.2; sample config updated |
 | 1.5.1 | 2026-09-05 | bundle | Script 1.1.1: Ookla endpoints use `--server-id=<id>` / `--host=<fqdn>` / no flag for auto, host names accepted in "Add by ID", command line logged per test, Tools ▸ Diagnose selected endpoint…; README 1.5.1 (endpoint entry section); pyproject 1.1.1; REQUIRED_MODULES 1.3.1 |
 | 1.5.0 | 2026-09-04 | bundle | Script 1.1.0: menu bar (File / Campaign / View / Tools / Help), View ▸ Theme = System / Light / Dark with explicit Fusion palettes (fixes light/dark not changing on system-dark Windows), Help ▸ About with author/contact/library versions, Tools ▸ Re-export from database / template config / back-end check / log; author contact block in header; finer Spyder cells. Tests 1.1.0 exercise all three themes. README 1.5.0, REQUIRED_MODULES 1.3.0, pyproject 1.1.0 |
@@ -32,7 +36,7 @@ environment.yml           mamba/conda environment
 requirements.txt          pip requirements
 REQUIRED_MODULES.txt      module list with purpose and tested versions
 tests/gui_smoke.py        offscreen GUI smoke test (screenshots every tab)
-tests/render_in_veusz.sh  loads a .vszh5 in a real Veusz binary (PATH or $VEUSZ_BIN) and renders every page to PNG
+tests/render_in_veusz.sh  loads a .vszh5 in a real Veusz binary (PATH or $VEUSZ_BIN) and renders every page to PNG (1.1.0: marker-file completion, optional dpi arg)
 sample_output/            example campaign config + GUI plot screenshot
 ```
 
@@ -125,7 +129,9 @@ script passes `--accept-license --accept-gdpr` automatically.
 python isp_speed_monitor.py                                   # GUI
 python isp_speed_monitor.py --headless --config campaign.json # server / cron / Task Scheduler
 python isp_speed_monitor.py --make-config campaign.json       # template config
-python isp_speed_monitor.py --reexport out/speedtests.sqlite3 [--campaign-id N] [--time-axis utc]
+python isp_speed_monitor.py --reexport out/speedtests.sqlite3 [--campaign-id N] [--time-axis utc] [--sanitize]
+python isp_speed_monitor.py --portable                        # keep data next to the program, not in the user data folder
+python isp_speed_monitor.py --render-veusz out/campaign_c1.vszh5 --outdir out/png --dpi 150   # PNG per page via installed Veusz
 python isp_speed_monitor.py --selftest                        # ~15 s simulated campaign, all exports
 ```
 
@@ -195,6 +201,36 @@ theme choice are remembered via QSettings.
   scheme — which is why an earlier "light" request still looked dark on a
   system-dark Windows PC. On Qt ≥ 6.8 (PySide6 ≥ 6.8) the window title bar
   follows the choice as well; on older Qt the title bar stays in the OS colour.
+
+## Editions, data folder, tool discovery (1.3.0)
+
+- **Author / publisher**: William W. Wallace, Adaptive Electrodynamics LLC dba AdaptEd.
+  Help ▸ About contains a support link that opens a pre-addressed e-mail
+  (subject "ISP speed test feedback and support").
+- **Edition**: the module constant `EDITION` is `"full"` or `"demo"`; it is set by
+  the build, not by the user. The Demo edition caps campaigns at 3 h, limits the
+  fixed interval to 15 min – 3 h in 15-minute steps, fixes random-gap mode at a
+  30-minute gap over 3 h, and disables N-tests-per-window, CSV, JSONL, the periodic
+  file refresh and Tools ▸ Re-export. The limits are applied to every config at
+  campaign start (`enforce_edition`), so editing a JSON config cannot bypass them.
+- **Default data folder** is now per user: `%LOCALAPPDATA%\AdaptEd\ISP Speed Monitor`
+  on Windows, `~/.local/share/isp-speed-monitor` (or `$XDG_DATA_HOME`) on Linux,
+  `~/Library/Application Support/ISP Speed Monitor` on macOS. `--portable` or
+  `ISP_SPEED_MONITOR_PORTABLE=1` keeps `speedtest_output/` next to the program.
+- **Tool discovery order** for the Ookla CLI, LibreSpeed CLI and Veusz: explicit path
+  in the Setup tab → environment variable (`ISP_SPEED_MONITOR_OOKLA`,
+  `ISP_SPEED_MONITOR_LIBRESPEED`, `ISP_SPEED_MONITOR_VEUSZ`, written by the
+  installers) → `tools/` folder next to the program → PATH → well-known install
+  folders.
+- **Tools menu additions**: *Export sanitized copy* writes a `_sanitized` snapshot
+  with IPs, MAC/interface, ISP, result URLs, verbatim payloads, host name, platform,
+  local paths and notes removed (also `--reexport --sanitize`); *Open latest export
+  in Veusz* and *Render Veusz pages to PNG* use the installed Veusz program
+  (driven in `--listen --quiet` mode with `loadHDF5Doc` + `Export(page=[i], dpi=…)`,
+  completion detected by a marker file because Veusz 4.2.x ignores `Quit()` in
+  listen mode; `veusz --export` itself cannot open `.vszh5`);
+  *Install / update prerequisite tools* runs `scripts/install_prereqs.ps1|.sh`
+  when shipped with the program (plan Step 2), otherwise shows the download pages.
 
 ## Outputs (all in the chosen output folder)
 

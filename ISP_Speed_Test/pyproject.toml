@@ -1,5 +1,7 @@
-# file version: 1.2.0   ([project].version below tracks the script version)
+# file version: 1.3.1   ([project].version below tracks the script version)
 # revision history (newest first)
+#   1.3.1  2026-10-11  project version follows script 1.3.1
+#   1.3.0  2026-10-03  project version follows script 1.3.0; author/publisher metadata updated
 #   1.2.0  2026-09-05  project version follows script 1.2.0
 #   1.1.1  2026-09-05  project version follows script 1.1.1
 #   1.1.0  2026-09-04  project version follows script 1.1.0; author metadata
@@ -14,9 +16,9 @@
 # One-off without a project:  uv run --with qtpy,pyside6,pyqtgraph,numpy,h5py isp_speed_monitor.py
 [project]
 name = "isp-speed-monitor"
-version = "1.2.0"
+version = "1.3.1"
 description = "Scheduled / random multi-endpoint ISP speed-test logger with qtpy GUI, SQLite and native Veusz export"
-authors = [{ name = "W. Wallace", email = "wwallace@nrao.edu" }]
+authors = [{ name = "William W. Wallace (Adaptive Electrodynamics LLC dba AdaptEd)", email = "adaptive.electrodynamics@gmail.com" }]
 requires-python = ">=3.10"
 dependencies = [
     "qtpy>=2.4",

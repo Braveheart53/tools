@@ -3,6 +3,33 @@
 Semantic versioning (MAJOR.MINOR.PATCH); newest first. Each file also carries
 its own version and revision history in its header.
 
+## 1.7.2 — 2026-10-11
+- `isp_speed_monitor.py` → 1.3.1: external-review fixes for the Veusz writer/renderer —
+  `vz_text` uses Veusz's latexEscape rule (`{\backslash}` for a literal backslash, `[ ]`
+  escaped); `veusz_render_pages()` + `--render-veusz` drive `veusz --listen --quiet` with a
+  completion marker (replaces the non-working `--export --export-dpi %PAGE%` call).
+- `tests/render_in_veusz.sh` → 1.1.0 (marker file, terminates Veusz, dpi argument).
+- `README.md` → 1.7.2, `pyproject.toml` → 1.3.1, `REQUIRED_MODULES.txt` → 1.3.4, `docs/PROGRESS.md` → 1.0.1.
+
+## 1.7.1 — 2026-10-03
+- `docs/BUILD_PLAN.md` → 1.0.2: explicit install-time dialog contract per prerequisite
+  (ask, links, automatic or manual install, wait, verify, continue). No code changes.
+
+## 1.7.0 — 2026-10-03
+- `isp_speed_monitor.py` → 1.3.0 (plan Step 1, hardening): author/publisher block
+  (William W. Wallace, Adaptive Electrodynamics LLC dba AdaptEd, support mailto with
+  subject), `EDITION` constant + Demo limits (GUI and config enforcement), per-OS
+  default data folder and `--portable`, env-var / bundled `tools/` discovery for
+  Ookla, LibreSpeed and Veusz, Tools ▸ Export sanitized copy / Open in Veusz /
+  Render Veusz pages / Install prerequisite tools, `--reexport --sanitize`.
+- `README.md` → 1.7.0, `pyproject.toml` → 1.3.0, `REQUIRED_MODULES.txt` → 1.3.3,
+  `docs/BUILD_PLAN.md` → 1.0.1 (publisher name, Step 1 status), `docs/PROGRESS.md` 1.0.0 added.
+
+## 1.6.1 — 2026-09-06
+- Added `docs/BUILD_PLAN.md` 1.0.0: packaging (Windows EXE/MSI, RHEL RPM, Ubuntu DEB),
+  prerequisite installers (Ookla, LibreSpeed, Veusz), C++23 port and Demo-edition plan.
+  No code changes; script remains 1.2.0.
+
 ## 1.6.0 — 2026-09-05
 - `isp_speed_monitor.py` → 1.2.0: per-test write-through to SQLite + JSONL;
   "Refresh output files every N tests|rounds" rewrites JSON/CSV/Veusz to stable

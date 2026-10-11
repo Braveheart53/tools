@@ -28,13 +28,12 @@ offset, Unix epoch seconds, tz name, UTC offset, endpoint identity (backend,
 server id, name, host, location), and every metric the backend reports.
 
 # %%% Author Info
-@Author: W. Wallace — NRAO / Green Bank Observatory
-Phone  : +1 (304) 456-2216
-Email  : wwallace@nrao.edu
-Email2 : naval.antennas@gmail.com
+@Author: William W. Wallace — Adaptive Electrodynamics LLC dba AdaptEd
+Email  : adaptive.electrodynamics@gmail.com  (subject: ISP speed test feedback and support)
+Product: ISP Speed Monitor — Publisher: Adaptive Electrodynamics LLC dba AdaptEd
 Date   : 2026-09-04
 Python : 3.12  (tested with PySide6 6.11 / pyqtgraph 0.13 / h5py 3.x; 3.10+ should work)
-Version: 1.2.0
+Version: 1.3.1
 Deps   : qtpy, PySide6, pyqtgraph, numpy, h5py   (pip install -r requirements.txt)
          .vszh5 output verified to load and render in Veusz 4.2.1.
          Optional back-ends: Ookla Speedtest CLI (`speedtest` binary),
@@ -77,6 +76,37 @@ average over the selected endpoints.
 
 # %%% Revision History (newest first)
 --------------------------------------
+1.3.1  2026-10-11  Fixes from external review of the Veusz writer:
+                   (1) vz_text() now follows Veusz's own latexEscape rule — a
+                   literal backslash becomes {\\backslash} (a bare "\\\\" is a line
+                   break in Veusz, so Windows paths in titles were split) and
+                   [ ] are escaped too; (2) "Render Veusz pages to PNG" was
+                   unusable: --export-dpi is not a Veusz option, %PAGE% only
+                   works in the GUI export dialog and `veusz --export` cannot
+                   open .vszh5 — replaced by veusz_render_pages(), which drives
+                   `veusz --listen --quiet`, loads the HDF5 document, exports
+                   every page with Export(page=[i], dpi=...), detects completion
+                   through a marker file and terminates Veusz (4.2.x ignores
+                   Quit() in listen mode); new CLI --render-veusz FILE [--dpi N]
+                   [--outdir DIR]; tests/render_in_veusz.sh 1.1.0 uses the same
+                   marker approach instead of waiting for the 180 s timeout.
+1.3.0  2026-10-03  Step 1 of the packaging plan (hardening): author/publisher
+                   block -> William W. Wallace, Adaptive Electrodynamics LLC
+                   dba AdaptEd, support mailto link with pre-filled subject in
+                   About; EDITION constant ("full"|"demo") with Demo limits
+                   (3 h campaigns, 15 min-3 h interval in 15 min steps, random
+                   gap fixed 30 min, per-window / CSV / JSONL / periodic refresh
+                   disabled) enforced in both GUI and config; default output
+                   folder in the per-OS user data dir (--portable or
+                   ISP_SPEED_MONITOR_PORTABLE=1 keeps it next to the program);
+                   tool discovery order env var (ISP_SPEED_MONITOR_OOKLA /
+                   _LIBRESPEED / _VEUSZ) -> bundled tools/ folder -> PATH ->
+                   well-known folders; Veusz located the same way; Tools menu:
+                   Export sanitized copy (IPs, MAC, ISP, result URLs, host,
+                   platform, paths, notes removed), Open latest export in Veusz,
+                   Render Veusz pages to PNG, Install / update prerequisite
+                   tools (runs scripts/install_prereqs.* when present);
+                   --sanitize for --reexport; --edition shown by --version.
 1.2.0  2026-09-05  Data safety: every test is committed to SQLite and appended
                    to results.jsonl the moment it finishes (round row opened at
                    round start, statistics filled at round end). New Setup field
@@ -145,6 +175,7 @@ import datetime
 import platform
 import subprocess
 import traceback
+import urllib.parse
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -168,12 +199,31 @@ try:
 except ImportError:  # pragma: no cover
     pg = None
 
-__version__ = "1.2.0"
+__version__ = "1.3.1"
 APP_NAME = "ISP Speed Monitor"
 ORG_NAME = "ISPSpeedMonitor"
-AUTHOR = "W. Wallace"
-AUTHOR_ORG = "NRAO / Green Bank Observatory"
-AUTHOR_CONTACT = {"Phone": "+1 (304) 456-2216", "Email": "wwallace@nrao.edu", "Email2": "naval.antennas@gmail.com"}
+AUTHOR = "William W. Wallace"
+AUTHOR_ORG = "Adaptive Electrodynamics LLC dba AdaptEd"
+PUBLISHER = AUTHOR_ORG
+SUPPORT_EMAIL = "adaptive.electrodynamics@gmail.com"
+SUPPORT_SUBJECT = "ISP speed test feedback and support"
+AUTHOR_CONTACT = {"Email": SUPPORT_EMAIL}
+
+# ---- Edition --------------------------------------------------------------
+# "full" = all features.  "demo" = freely distributable, feature-limited build.
+# The installer/build script sets this constant; it is NOT a runtime setting.
+EDITION = "full"
+IS_DEMO = EDITION == "demo"
+DEMO_MAX_DURATION_S = 3 * 3600.0          # campaign length cap
+DEMO_INTERVAL_MIN_S = 15 * 60.0           # fixed-interval range 15 min .. 3 h
+DEMO_INTERVAL_MAX_S = 3 * 3600.0
+DEMO_INTERVAL_STEP_S = 15 * 60.0          # 15-minute increments
+DEMO_RANDOM_GAP_S = 30 * 60.0             # random-gap mode: fixed 30 min gap
+DEMO_DISABLED = ("export_every", "csv", "jsonl", "per_window", "random_gap_edit", "reexport")
+
+# ---- Tool discovery: environment variables (set by the installers) ---------
+TOOL_ENV = {"ookla": "ISP_SPEED_MONITOR_OOKLA", "librespeed": "ISP_SPEED_MONITOR_LIBRESPEED",
+            "veusz": "ISP_SPEED_MONITOR_VEUSZ"}
 URL_OOKLA_CLI = "https://www.speedtest.net/apps/cli"
 URL_LIBRESPEED_CLI = "https://github.com/librespeed/speedtest-cli/releases"
 URL_VEUSZ = "https://veusz.github.io/"
@@ -181,7 +231,34 @@ URL_VEUSZ = "https://veusz.github.io/"
 # ===========================================================================
 # %% USER-TUNABLE DEFAULTS
 # ===========================================================================
-DEFAULT_OUTPUT_DIR = os.path.join(os.path.abspath(os.getcwd()), "speedtest_output")
+
+
+def program_dir() -> str:
+    """Folder holding the program (frozen executable or this script)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def bundled_tools_dir() -> str:
+    """`tools/` folder shipped next to the program (installer places librespeed-cli there)."""
+    return os.path.join(program_dir(), "tools")
+
+
+def user_data_dir() -> str:
+    """Per-OS writable data folder for this product (no admin rights needed)."""
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "AdaptEd", APP_NAME)
+    if sys.platform == "darwin":
+        return os.path.join(os.path.expanduser("~/Library/Application Support"), APP_NAME)
+    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return os.path.join(base, "isp-speed-monitor")
+
+
+PORTABLE = ("--portable" in sys.argv) or os.environ.get("ISP_SPEED_MONITOR_PORTABLE", "") not in ("", "0", "false")
+DEFAULT_OUTPUT_DIR = (os.path.join(program_dir(), "speedtest_output") if PORTABLE
+                      else os.path.join(user_data_dir(), "speedtest_output"))
 DB_FILENAME = "speedtests.sqlite3"          # single DB, many campaigns
 RESULTS_JSONL = "results.jsonl"             # raw per-test append log
 ROUNDS_JSONL = "rounds.jsonl"               # per-round average append log
@@ -495,9 +572,23 @@ def _popen_kwargs() -> Dict[str, Any]:
     return kw
 
 
-def _find_exe(candidates: List[str], explicit: str = "") -> str:
+def _env_tool(tool: str) -> str:
+    """Executable named by the installer-set environment variable, or ''."""
+    p = os.environ.get(TOOL_ENV.get(tool, ""), "").strip().strip('"')
+    return p if p and os.path.isfile(p) else ""
+
+
+def _find_exe(candidates: List[str], explicit: str = "", tool: str = "") -> str:
+    """Discovery order: explicit path -> environment variable -> bundled tools/
+    folder -> PATH."""
     if explicit:
         return explicit if os.path.isfile(explicit) else ""
+    if tool and _env_tool(tool):
+        return _env_tool(tool)
+    for c in candidates:
+        fp = os.path.join(bundled_tools_dir(), c)
+        if os.path.isfile(fp) and os.access(fp, os.X_OK):
+            return fp
     for c in candidates:
         p = shutil.which(c)
         if p:
@@ -505,11 +596,32 @@ def _find_exe(candidates: List[str], explicit: str = "") -> str:
     return ""
 
 
+def find_veusz_exe(explicit: str = "") -> str:
+    """Locate the Veusz program (external viewer; never linked)."""
+    names = ["veusz.exe", "veusz"] if os.name == "nt" else ["veusz"]
+    p = _find_exe(names, explicit, "veusz")
+    if p:
+        return p
+    extra: List[str] = []
+    if os.name == "nt":
+        for base in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("LOCALAPPDATA", "")):
+            if base:
+                extra += [os.path.join(base, "Veusz", "veusz.exe"), os.path.join(base, "Programs", "Veusz", "veusz.exe")]
+    elif sys.platform == "darwin":
+        extra.append("/Applications/Veusz.app/Contents/MacOS/veusz")
+    else:
+        extra += ["/opt/veusz/veusz", os.path.expanduser("~/.local/opt/veusz/veusz")]
+        for root in ("/opt/veusz", os.path.expanduser("~/.local/opt/veusz")):
+            if os.path.isdir(root):
+                extra += sorted((os.path.join(root, d, "veusz") for d in os.listdir(root)), reverse=True)
+    return next((e for e in extra if os.path.isfile(e)), "")
+
+
 def _all_on_path(names: List[str]) -> List[str]:
     """Every executable matching `names` anywhere on PATH (not just the first),
     followed by well-known install folders. Order = PATH order."""
     found: List[str] = []
-    dirs = [d for d in os.environ.get("PATH", "").split(os.pathsep) if d]
+    dirs = [bundled_tools_dir()] + [d for d in os.environ.get("PATH", "").split(os.pathsep) if d]
     if os.name == "nt":
         la = os.environ.get("LOCALAPPDATA", "")
         pf = os.environ.get("ProgramFiles", r"C:\Program Files")
@@ -558,6 +670,8 @@ def find_ookla_exe(explicit: str = "") -> Tuple[str, str]:
     `speedtest`/`speedtest.exe` shim of the same name (typically first on PATH in
     a conda/venv), so every candidate is probed with --version and the first one
     reporting "Ookla" wins. Returns (path, note); path == "" if none found."""
+    if not explicit:
+        explicit = _env_tool("ookla")
     if explicit:
         if not os.path.isfile(explicit):
             return "", f"Ookla exe not found: {explicit}"
@@ -760,7 +874,7 @@ class LibreSpeedBackend(BackendBase):
     supports_partial = True
 
     def exe(self) -> str:
-        return _find_exe(["librespeed-cli", "librespeed-cli.exe"], self.exe_path)
+        return _find_exe(["librespeed-cli", "librespeed-cli.exe"], self.exe_path, "librespeed")
 
     def available(self) -> Tuple[bool, str]:
         exe = self.exe()
@@ -1189,15 +1303,50 @@ def _commit_atomic(tmp: str, path: str) -> str:
     return path
 
 
-def export_json(db: SpeedDB, cid: int, path: str) -> str:
+SANITIZE_RESULT_KEYS = ("external_ip", "internal_ip", "interface", "isp", "result_url", "raw_json", "raw")
+SANITIZE_CONFIG_KEYS = ("output_dir", "ookla_exe", "librespeed_exe", "notes")
+
+
+def scrub_result_row(r: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove network identifiers from one result row (in place, returned)."""
+    for k in SANITIZE_RESULT_KEYS:
+        if k in r:
+            r[k] = None if k == "raw" else ""
+    return r
+
+
+def sanitize_bundle(bundle: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip everything that identifies the user, machine or network from a
+    campaign bundle: IPs, MAC/interface, ISP, result URLs, verbatim payloads,
+    hostname, platform, local paths and free-text notes."""
+    camp = bundle.get("campaign", {})
+    camp["host"] = "redacted"
+    camp["platform"] = "redacted"
+    camp["notes"] = ""
+    cfg = camp.get("config") or {}
+    for k in SANITIZE_CONFIG_KEYS:
+        if k in cfg:
+            cfg[k] = ""
+    for r in bundle.get("results", []):
+        scrub_result_row(r)
+    bundle.setdefault("generator", {})["sanitized"] = True
+    return bundle
+
+
+def export_json(db: SpeedDB, cid: int, path: str, sanitize: bool = False) -> str:
     tmp = _atomic_path(path)
+    bundle = campaign_bundle(db, cid)
+    if sanitize:
+        bundle = sanitize_bundle(bundle)
     with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(campaign_bundle(db, cid), fh, indent=1, default=str)
+        json.dump(bundle, fh, indent=1, default=str)
     return _commit_atomic(tmp, path)
 
 
-def export_csv(db: SpeedDB, cid: int, results_path: str, rounds_path: str) -> Tuple[str, str]:
+def export_csv(db: SpeedDB, cid: int, results_path: str, rounds_path: str, sanitize: bool = False) -> Tuple[str, str]:
     results = db.results(cid)
+    if sanitize:
+        results = [scrub_result_row(r) for r in results]
     cols = ["id", "round_id", "endpoint_id"] + [c for c in RESULT_COLS if c != "raw_json"]
     with open(_atomic_path(results_path), "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
@@ -1261,11 +1410,15 @@ class VszDoc:
 def vz_text(text: str) -> str:
     """Escape Veusz text-markup characters so user strings render literally.
 
-    Veusz treats ``_`` / ``^`` as subscript / superscript and ``{ }`` as grouping;
-    a campaign called ``Frontier_WV_20260904`` would otherwise render as
-    "Frontier" with "WV" as a subscript.
+    Mirrors Veusz's own ``utils.textrender.latexEscape``: ``_`` ``^`` ``[`` ``]``
+    ``{`` ``}`` get a backslash prefix and a literal backslash becomes
+    ``{\\backslash}`` (a bare ``\\\\`` is a LINE BREAK in Veusz, so a Windows path
+    in a title would otherwise be split).  A campaign called
+    ``Frontier_WV_20260904`` would otherwise render "WV" as a subscript.
     """
-    return re.sub(r"([_^{}\\])", r"\\\1", str(text))
+    t = str(text).replace("\\", "\ue000")
+    t = re.sub(r"([_^\[\]{}])", r"\\\1", t)
+    return t.replace("\ue000", "{\\backslash}")
 
 
 def _escape_hdf_name(name: str) -> str:
@@ -1383,11 +1536,13 @@ def _add_time_graph(doc: VszDoc, gname: str, xlabel: str, ylabel: str, series: L
     doc.up()
 
 
-def export_veusz(db: SpeedDB, cid: int, path: str, time_axis: str = "local") -> str:
+def export_veusz(db: SpeedDB, cid: int, path: str, time_axis: str = "local", sanitize: bool = False) -> str:
     """Write a native Veusz .vszh5 document: raw per-endpoint arrays, combined
     raw arrays, averaged arrays (mean with std as symmetric error), metadata,
     and pages that mirror the GUI plots."""
     bundle = campaign_bundle(db, cid)
+    if sanitize:
+        bundle = sanitize_bundle(bundle)
     camp, eps, rounds, results = bundle["campaign"], bundle["endpoints"], bundle["rounds"], bundle["results"]
     final_path, path = path, _atomic_path(path)
     if os.path.exists(path):
@@ -1543,7 +1698,7 @@ def export_veusz(db: SpeedDB, cid: int, path: str, time_axis: str = "local") -> 
     return _commit_atomic(path, final_path)
 
 
-def export_all(db: SpeedDB, cid: int, cfg: CampaignConfig, tag: str = "") -> List[str]:
+def export_all(db: SpeedDB, cid: int, cfg: CampaignConfig, tag: str = "", sanitize: bool = False) -> List[str]:
     """Run every enabled exporter and return the list of written files.
 
     * ``tag == ""`` (periodic refresh and final export): files use the STABLE name
@@ -1561,15 +1716,122 @@ def export_all(db: SpeedDB, cid: int, cfg: CampaignConfig, tag: str = "") -> Lis
     else:
         base = os.path.join(cfg.output_dir, f"{slugify(cfg.name, 40)}_c{cid}")
     if cfg.export_json:
-        out.append(export_json(db, cid, base + ".json"))
+        out.append(export_json(db, cid, base + ".json", sanitize))
     if cfg.export_csv:
-        out.extend(export_csv(db, cid, base + "_results.csv", base + "_rounds.csv"))
+        out.extend(export_csv(db, cid, base + "_results.csv", base + "_rounds.csv", sanitize))
     if cfg.export_veusz:
         if h5py is None:
             logger.error("Veusz export skipped: h5py not installed")
         else:
-            out.append(export_veusz(db, cid, base + ".vszh5", cfg.veusz_time_axis))
+            out.append(export_veusz(db, cid, base + ".vszh5", cfg.veusz_time_axis, sanitize))
     return out
+
+
+def latest_export_files(cfg: CampaignConfig, cid: int) -> List[str]:
+    """Stable export files for a campaign that currently exist on disk."""
+    base = os.path.join(cfg.output_dir, f"{slugify(cfg.name, 40)}_c{cid}")
+    return [p for p in (base + ".vszh5", base + ".json", base + "_results.csv", base + "_rounds.csv") if os.path.isfile(p)]
+
+
+def veusz_render_pages(veusz_exe: str, vszh5_path: str, outdir: str, dpi: int = 150,
+                       timeout_s: float = 180.0) -> List[str]:
+    """Render every page of a ``.vszh5`` to PNG with the installed Veusz program.
+
+    ``veusz --export`` cannot open HDF5 documents (it treats the file as a
+    ``.vsz`` command script), so Veusz is driven in ``--listen --quiet`` mode:
+    the document is loaded with ``loadHDF5Doc`` and each page exported with
+    ``Export(..., page=[i], dpi=...)``.  Veusz 4.2.x does not exit on ``Quit()``
+    in listen mode, so completion is detected through a marker file and the
+    process is then terminated.  Returns the PNG paths in page order.
+    """
+    os.makedirs(outdir, exist_ok=True)
+    stem = os.path.splitext(os.path.basename(vszh5_path))[0]
+    marker = os.path.join(outdir, f".{stem}.render_done")
+    listing = os.path.join(outdir, f".{stem}.render_pages.txt")
+    for f in (marker, listing):
+        if os.path.exists(f):
+            os.remove(f)
+    # Veusz's listen-mode interpreter executes the input line by line, so the
+    # page loop is wrapped in a single exec() statement.
+    inner = (
+        "import veusz.document.loader as _L\n"
+        "_doc = Root._ci.document\n"
+        f"_L.loadHDF5Doc(_doc, {vszh5_path!r})\n"
+        "_out = []\n"
+        "for _i, _p in enumerate(_doc.basewidget.children):\n"
+        f"    _fn = {os.path.join(outdir, stem)!r} + '_p%02d_%s.png' % (_i, _p.name)\n"
+        f"    Export(_fn, page=[_i], dpi={int(dpi)})\n"
+        "    _out.append(_fn)\n"
+        f"open({listing!r}, 'w', encoding='utf-8').write('\\n'.join(_out))\n"
+        f"open({marker!r}, 'w').write('ok')\n"
+    )
+    script = f"exec({inner!r})\nQuit()\n"
+    env = dict(os.environ)
+    env.setdefault("LC_ALL", "C.UTF-8")
+    if os.name != "nt" and not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
+        env.setdefault("QT_QPA_PLATFORM", "offscreen")
+    proc = subprocess.Popen([veusz_exe, "--listen", "--quiet"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, env=env, **_popen_kwargs())
+    try:
+        assert proc.stdin is not None
+        proc.stdin.write(script.encode("utf-8"))
+        proc.stdin.close()
+        t0 = time.time()
+        while time.time() - t0 < timeout_s:
+            if os.path.exists(marker):
+                break
+            if proc.poll() is not None:
+                break
+            time.sleep(0.25)
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+    if not os.path.exists(marker):
+        out = ""
+        try:
+            out = (proc.stdout.read() if proc.stdout else b"").decode("utf-8", "replace")
+        except Exception:
+            pass
+        tail = "\n".join(l for l in out.splitlines() if l.strip() and "locale" not in l.lower() and "SAMP" not in l)[-800:]
+        raise RuntimeError(f"Veusz did not finish rendering within {timeout_s:.0f} s" + (f":\n{tail}" if tail else ""))
+    with open(listing, encoding="utf-8") as fh:
+        files = [l for l in fh.read().splitlines() if l]
+    if not files:
+        raise RuntimeError("Veusz loaded the document but found no pages to export")
+    for f in (marker, listing):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+    return [f for f in files if os.path.isfile(f)]
+
+
+def enforce_edition(cfg: CampaignConfig) -> CampaignConfig:
+    """Apply the Demo-edition limits to a config (no-op for the Full edition).
+    Called for every campaign start, headless or GUI, so a hand-edited config
+    cannot bypass the GUI restrictions."""
+    if not IS_DEMO:
+        return cfg
+    sc = cfg.schedule_obj()
+    sc.end_at_local = ""
+    sc.duration_s = DEMO_MAX_DURATION_S if (not sc.duration_s or sc.duration_s > DEMO_MAX_DURATION_S) else sc.duration_s
+    if sc.mode == "random_per_window":
+        sc.mode = "interval"
+    if sc.mode == "interval":
+        iv = min(max(sc.interval_s, DEMO_INTERVAL_MIN_S), DEMO_INTERVAL_MAX_S)
+        sc.interval_s = round(iv / DEMO_INTERVAL_STEP_S) * DEMO_INTERVAL_STEP_S
+    elif sc.mode == "random_gap":
+        sc.duration_s = DEMO_MAX_DURATION_S
+        sc.min_gap_s = sc.max_gap_s = DEMO_RANDOM_GAP_S
+    cfg.schedule = asdict(sc)
+    cfg.export_csv = False
+    cfg.write_jsonl = False
+    cfg.export_every_n = 0
+    return cfg
 
 
 # ===========================================================================
@@ -1770,6 +2032,7 @@ class CampaignController(QtCore.QObject):
     def start(self, cfg: CampaignConfig) -> None:
         if self.running:
             raise RuntimeError("campaign already running")
+        cfg = enforce_edition(cfg)
         eps = cfg.endpoint_objs()
         if not eps:
             raise ValueError("no endpoints selected")
@@ -2116,6 +2379,17 @@ class DurationEdit(QtWidgets.QWidget):
         self.unit.setCurrentText("seconds")
         self.spin.setValue(s)
 
+    def constrain(self, min_s: float, max_s: float, step_s: float) -> None:
+        """Lock the editor to minutes with a fixed range and increment (Demo edition)."""
+        cur_min = self.seconds() / 60.0
+        self.unit.setCurrentText("minutes")
+        self.unit.setEnabled(False)
+        self.spin.setDecimals(0)
+        self.spin.setRange(min_s / 60.0, max_s / 60.0)
+        self.spin.setSingleStep(step_s / 60.0)
+        step_min = step_s / 60.0
+        self.spin.setValue(round(min(max(cur_min, min_s / 60.0), max_s / 60.0) / step_min) * step_min)
+
 
 class ServerListWorker(QtCore.QThread):
     done = Signal(object, str)  # list[Endpoint], error
@@ -2382,6 +2656,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_check_backends = act("&Check back-ends", tip="Probe Ookla / LibreSpeed / python speedtest-cli availability")
         self.act_diagnose = act("&Diagnose selected endpoint…", tip="Run one raw test for the highlighted endpoint and show the exact command line and output")
         self.act_view_log = act("Open &log file")
+        self.act_sanitized = act("Export &sanitized copy (shareable)…", tip="JSON/CSV/Veusz snapshot with IPs, MAC/interface, ISP, result URLs, host name, platform, local paths and notes removed")
+        self.act_open_veusz = act("Open latest export in &Veusz", tip="Open the current/latest campaign's .vszh5 in the installed Veusz program")
+        self.act_render_veusz = act("&Render Veusz pages to PNG…", tip="Use the installed Veusz program to export every page of the latest .vszh5 to PNG files")
+        self.act_install_tools = act("&Install / update prerequisite tools…", tip="Run the installer script for Ookla Speedtest CLI, LibreSpeed CLI and Veusz")
         # Help
         self.act_readme = act("&README (bundle)")
         self.act_url_ookla = act("Ookla Speedtest &CLI download")
@@ -2410,7 +2688,8 @@ class MainWindow(QtWidgets.QMainWindow):
         m_view.addSeparator()
         m_view.addAction(self.act_reset_layout)
         m_tools = mb.addMenu("&Tools")
-        for a in (self.act_reexport, self.act_template, None, self.act_check_backends, self.act_diagnose, self.act_view_log):
+        for a in (self.act_reexport, self.act_sanitized, self.act_template, None, self.act_open_veusz, self.act_render_veusz,
+                  None, self.act_check_backends, self.act_diagnose, self.act_install_tools, self.act_view_log):
             m_tools.addSeparator() if a is None else m_tools.addAction(a)
         m_help = mb.addMenu("&Help")
         for a in (self.act_readme, None, self.act_url_ookla, self.act_url_libre, self.act_url_veusz, None,
@@ -2674,6 +2953,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_check_backends.triggered.connect(self.check_backends)
         self.act_diagnose.triggered.connect(self.diagnose_endpoint)
         self.act_view_log.triggered.connect(self.open_log)
+        self.act_sanitized.triggered.connect(self.export_sanitized)
+        self.act_open_veusz.triggered.connect(self.open_in_veusz)
+        self.act_render_veusz.triggered.connect(self.render_veusz_pages)
+        self.act_install_tools.triggered.connect(self.install_tools)
+        if IS_DEMO:
+            self._apply_demo_limits()
         self.act_readme.triggered.connect(self.open_readme)
         self.act_url_ookla.triggered.connect(lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl(URL_OOKLA_CLI)))
         self.act_url_libre.triggered.connect(lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl(URL_LIBRESPEED_CLI)))
@@ -2732,6 +3017,7 @@ class MainWindow(QtWidgets.QMainWindow):
             notes=self.ed_notes.text())
 
     def apply_config(self, cfg: CampaignConfig) -> None:
+        cfg = enforce_edition(cfg)
         sc = cfg.schedule_obj()
         {"interval": self.rad_interval, "random_gap": self.rad_random, "random_per_window": self.rad_window}.get(sc.mode, self.rad_interval).setChecked(True)
         self.dur_interval.set_seconds(sc.interval_s)
@@ -2765,6 +3051,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh_selected()
         self._update_summary()
 
+        if IS_DEMO:
+            self._apply_demo_limits()
     def _load_settings(self) -> None:
         geo = self.settings.value("geometry")
         if geo:
@@ -2946,6 +3234,140 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tabs.setCurrentIndex(1)
         except Exception as exc:
             QtWidgets.QMessageBox.warning(self, APP_NAME, str(exc))
+
+    # %%% Tools menu: sanitized export, Veusz, prerequisite installer, demo limits
+    def _latest_cfg_cid(self) -> Tuple[CampaignConfig, SpeedDB, int]:
+        """(config, db, campaign id) for the running campaign or the latest in the DB."""
+        if self.ctrl.cfg is not None and self.ctrl.cid is not None and self.ctrl.db is not None:
+            return self.ctrl.cfg, self.ctrl.db, self.ctrl.cid
+        cfg = self.collect_config()
+        db = self.ctrl.open_db(cfg)
+        cid = db.latest_campaign_id()
+        if cid is None:
+            raise RuntimeError("no campaign in database yet")
+        return cfg, db, cid
+
+    def export_sanitized(self) -> None:
+        try:
+            cfg, db, cid = self._latest_cfg_cid()
+            files = export_all(db, cid, cfg, "_sanitized", sanitize=True)
+            self.statusBar().showMessage("Sanitized export: " + "; ".join(os.path.basename(f) for f in files), 15000)
+            QtWidgets.QMessageBox.information(self, APP_NAME, "Shareable copy written (identifiers removed):\n\n" +
+                                              "\n".join(files))
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, APP_NAME, f"Sanitized export failed:\n{exc}")
+            logger.debug(traceback.format_exc())
+
+    def _veusz_or_warn(self) -> str:
+        exe = find_veusz_exe()
+        if not exe:
+            QtWidgets.QMessageBox.information(
+                self, APP_NAME, "Veusz was not found (environment variable " + TOOL_ENV["veusz"] + ", PATH, or the usual "
+                "install folders).\nUse Tools ▸ Install / update prerequisite tools…, or download it from " + URL_VEUSZ)
+        return exe
+
+    def _latest_vszh5(self) -> str:
+        cfg, db, cid = self._latest_cfg_cid()
+        files = [f for f in latest_export_files(cfg, cid) if f.endswith(".vszh5")]
+        if not files:
+            if h5py is None:
+                raise RuntimeError("h5py is not installed; cannot write .vszh5")
+            os.makedirs(cfg.output_dir, exist_ok=True)
+            files = [export_veusz(db, cid, os.path.join(cfg.output_dir, f"{slugify(cfg.name, 40)}_c{cid}.vszh5"), cfg.veusz_time_axis)]
+        return files[0]
+
+    def open_in_veusz(self) -> None:
+        try:
+            exe = self._veusz_or_warn()
+            if not exe:
+                return
+            path = self._latest_vszh5()
+            subprocess.Popen([exe, path], **_popen_kwargs())
+            self.statusBar().showMessage(f"Opened {os.path.basename(path)} in Veusz", 10000)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, APP_NAME, f"Could not open in Veusz:\n{exc}")
+            logger.debug(traceback.format_exc())
+
+    def render_veusz_pages(self) -> None:
+        try:
+            exe = self._veusz_or_warn()
+            if not exe:
+                return
+            path = self._latest_vszh5()
+            outdir = QtWidgets.QFileDialog.getExistingDirectory(self, "Folder for PNG pages", os.path.dirname(path))
+            if not outdir:
+                return
+            QtWidgets.QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                pngs = veusz_render_pages(exe, path, outdir, dpi=150)
+            finally:
+                QtWidgets.QApplication.restoreOverrideCursor()
+            QtWidgets.QMessageBox.information(self, APP_NAME, f"Rendered {len(pngs)} page(s) to\n{outdir}\n\n" +
+                                              "\n".join(os.path.basename(f) for f in pngs))
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, APP_NAME, f"Veusz render failed:\n{exc}")
+            logger.debug(traceback.format_exc())
+
+    def install_tools(self) -> None:
+        """Launch scripts/install_prereqs.ps1 (Windows) or .sh (POSIX) in a
+        terminal when shipped with the program; otherwise open the download pages."""
+        sdir = os.path.join(program_dir(), "scripts")
+        try:
+            if os.name == "nt":
+                script = os.path.join(sdir, "install_prereqs.ps1")
+                if os.path.isfile(script):
+                    subprocess.Popen(["powershell.exe", "-NoExit", "-ExecutionPolicy", "Bypass", "-File", script,
+                                      "-Interactive"], creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+                    return
+            else:
+                script = os.path.join(sdir, "install_prereqs.sh")
+                if os.path.isfile(script):
+                    for term in ("x-terminal-emulator", "gnome-terminal", "konsole", "xterm"):
+                        t = shutil.which(term)
+                        if t:
+                            args = [t, "--", "bash", script, "--interactive"] if term == "gnome-terminal" else [t, "-e", f"bash '{script}' --interactive"]
+                            subprocess.Popen(args)
+                            return
+                    raise RuntimeError(f"no terminal emulator found; run:  bash {script} --interactive")
+            QtWidgets.QMessageBox.information(
+                self, APP_NAME, "The prerequisite installer script is not shipped with this copy.\nDownload pages:\n"
+                f"Ookla Speedtest CLI: {URL_OOKLA_CLI}\nLibreSpeed CLI: {URL_LIBRESPEED_CLI}\nVeusz: {URL_VEUSZ}")
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, APP_NAME, f"Could not start the installer:\n{exc}")
+
+    def _apply_demo_limits(self) -> None:
+        """Grey out / clamp the Setup widgets for the Demo edition (mirrors enforce_edition)."""
+        hours = DEMO_MAX_DURATION_S / 3600.0
+        self.setWindowTitle(f"{APP_NAME} {__version__} — DEMO (campaigns limited to {hours:g} h)")
+        for w in (self.chk_csv, self.chk_jsonl):
+            w.setChecked(False)
+            w.setEnabled(False)
+            w.setToolTip("Not available in the Demo edition")
+        self.spn_autoexp.setValue(0)
+        for w in (self.spn_autoexp, self.cmb_export_unit):
+            w.setEnabled(False)
+            w.setToolTip("Not available in the Demo edition — files are written when the campaign ends")
+        for w in (self.rad_window, self.spn_per_window, self.dur_window):
+            w.setEnabled(False)
+            w.setToolTip("Not available in the Demo edition")
+        if self.rad_window.isChecked():
+            self.rad_interval.setChecked(True)
+        self.dur_interval.constrain(DEMO_INTERVAL_MIN_S, DEMO_INTERVAL_MAX_S, DEMO_INTERVAL_STEP_S)
+        self.dur_min.set_seconds(DEMO_RANDOM_GAP_S)
+        self.dur_max.set_seconds(DEMO_RANDOM_GAP_S)
+        for w in (self.dur_min, self.dur_max):
+            w.setEnabled(False)
+            w.setToolTip(f"Demo edition: fixed {DEMO_RANDOM_GAP_S / 60:g} min gap, {hours:g} h campaign")
+        if self.chk_indef.isChecked() or not (0.0 < self.dur_total.seconds() <= DEMO_MAX_DURATION_S):
+            self.dur_total.set_seconds(DEMO_MAX_DURATION_S)
+        self.dur_total.constrain(60.0, DEMO_MAX_DURATION_S, 60.0)
+        self.chk_indef.setChecked(False)
+        self.chk_indef.setEnabled(False)
+        self.ed_end_at.clear()
+        self.ed_end_at.setEnabled(False)
+        self.ed_end_at.setPlaceholderText("Demo edition: campaign length is capped")
+        self.act_reexport.setEnabled(False)
+        self.act_reexport.setToolTip("Not available in the Demo edition")
 
     def export_now(self) -> None:
         try:
@@ -3143,11 +3565,14 @@ class MainWindow(QtWidgets.QMainWindow):
             binding = "qtpy"
         libs = [f"Python {sys.version.split()[0]}", binding, f"numpy {np.__version__}",
                 f"pyqtgraph {pg.__version__ if pg else 'n/a'}", f"h5py {h5py.__version__ if h5py else 'n/a'}"]
-        contact = "".join(f"<tr><td>{k}</td><td>{html.escape(v)}</td></tr>" for k, v in AUTHOR_CONTACT.items())
-        text = (f"<h3>{APP_NAME} v{__version__}</h3>"
+        mailto = "mailto:" + SUPPORT_EMAIL + "?subject=" + urllib.parse.quote(SUPPORT_SUBJECT)
+        contact = (f"<tr><td>Email</td><td><a href='{mailto}'>{html.escape(SUPPORT_EMAIL)}</a> "
+                   f"(subject: {html.escape(SUPPORT_SUBJECT)})</td></tr>")
+        edition = " — DEMO edition" if IS_DEMO else ""
+        text = (f"<h3>{APP_NAME} v{__version__}{edition}</h3>"
                 f"<p>Scheduled / random multi-endpoint ISP speed-test logger with SQLite, JSON/JSONL, CSV and "
                 f"native Veusz .vszh5 output.</p>"
-                f"<p><b>Author:</b> {html.escape(AUTHOR)} — {html.escape(AUTHOR_ORG)}</p>"
+                f"<p><b>Author:</b> {html.escape(AUTHOR)}<br><b>Publisher:</b> {html.escape(PUBLISHER)}</p>"
                 f"<table cellpadding='2'>{contact}</table>"
                 f"<p><b>Libraries:</b><br>{'<br>'.join(html.escape(l) for l in libs)}</p>"
                 f"<p><b>Settings:</b> {html.escape(self.settings.fileName())}<br>"
@@ -3338,7 +3763,7 @@ def selftest_config(outdir: str) -> CampaignConfig:
     return cfg
 
 
-def reexport(db_path: str, cid: Optional[int], outdir: Optional[str], time_axis: str) -> int:
+def reexport(db_path: str, cid: Optional[int], outdir: Optional[str], time_axis: str, sanitize: bool = False) -> int:
     if not os.path.isfile(db_path):
         print(f"ERROR: database not found: {db_path}", file=sys.stderr)
         return 2
@@ -3353,7 +3778,7 @@ def reexport(db_path: str, cid: Optional[int], outdir: Optional[str], time_axis:
         cfg.output_dir = outdir or os.path.dirname(os.path.abspath(db_path))
         cfg.export_json = cfg.export_csv = cfg.export_veusz = True
         cfg.veusz_time_axis = time_axis
-        for f in export_all(db, cid, cfg, "_reexport"):
+        for f in export_all(db, cid, cfg, "_sanitized" if sanitize else "_reexport", sanitize):
             print(f"wrote {f}")
         return 0
     finally:
@@ -3374,7 +3799,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--time-axis", choices=["local", "utc"], default="local", help="Veusz x-axis for --reexport")
     ap.add_argument("--selftest", action="store_true", help="short headless campaign with the Simulated back-end")
     ap.add_argument("--verbose", action="store_true")
-    ap.add_argument("--version", action="version", version=f"{APP_NAME} {__version__}")
+    ap.add_argument("--render-veusz", metavar="FILE.vszh5", help="render every page of a .vszh5 to PNG with the installed Veusz (into --outdir)")
+    ap.add_argument("--dpi", type=int, default=150, help="PNG resolution for --render-veusz")
+    ap.add_argument("--sanitize", action="store_true", help="with --reexport: remove IPs, MAC, ISP, URLs, host, paths, notes")
+    ap.add_argument("--portable", action="store_true", help="keep data next to the program instead of the user data folder")
+    ap.add_argument("--version", action="version", version=f"{APP_NAME} {__version__} ({EDITION} edition)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)-7s %(message)s")
@@ -3385,7 +3814,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"template written: {args.make_config}")
         return 0
     if args.reexport:
-        return reexport(args.reexport, args.campaign_id, args.outdir, args.time_axis)
+        return reexport(args.reexport, args.campaign_id, args.outdir, args.time_axis, args.sanitize)
+    if args.render_veusz:
+        exe = find_veusz_exe()
+        if not exe:
+            print("Veusz not found (set " + TOOL_ENV["veusz"] + " or add veusz to PATH)", file=sys.stderr)
+            return 2
+        outdir = args.outdir or os.path.dirname(os.path.abspath(args.render_veusz))
+        for f in veusz_render_pages(exe, args.render_veusz, outdir, args.dpi):
+            print("wrote", f)
+        return 0
     if args.selftest:
         outdir = args.outdir or os.path.join(DEFAULT_OUTPUT_DIR, "selftest")
         return run_headless(selftest_config(outdir))

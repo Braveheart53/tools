@@ -1,0 +1,34 @@
+# EMF Envelope FFT Analyzer 0.0.2 - mamba environment (Miniforge / conda-forge)
+#
+#   mamba env create -f emf_envelope_fft.yml
+#   mamba activate emf-fft
+#   python emf_envelope_fft_v0_0_2.py --selftest
+#
+# vszh5_writer.py (0.0.11, shipped in this folder) must stay next to the
+# script; it is the author's Veusz HDF5 writer, not a conda package.
+#
+# Versions are the conda-forge releases current on 2026-10-15; the script
+# needs SciPy >= 1.12 (ShortTimeFFT) and was tested with Python 3.12.13,
+# NumPy 2.5.4, SciPy 1.18.1, pandas 3.0.6, h5py 3.16, PySide6 6.12,
+# Qt.py 2.0.7, pyqtgraph 0.14, pypdf 6.20 and Veusz 4.2.1.
+# To rebuild the manual (tools/build_manual_pdf.py) you also need a TeX
+# distribution with lualatex (TeX Live or MiKTeX); it is not a conda package
+# here.
+name: emf-fft
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy>=2.0
+  - scipy>=1.12
+  - pandas>=2.2
+  - h5py>=3.10
+  - openpyxl            # .xlsx exports
+  - pyside6             # live window (through Qt.py)
+  - qt.py
+  - pyqtgraph
+  - pypdf               # PDF bookmarks when rendering (vszh5_writer.py)
+  - veusz               # optional: open/render the .vszh5 documents
+  - spyder-kernels      # optional: run from your Spyder install
+  # Optional GPU (NVIDIA CUDA only); then add --gpu on the command line:
+  # - cupy

@@ -1,0 +1,141 @@
+/* ==========================================================================
+   legacy-dark.css  --  dark-theme overrides for the plain-stylesheet pages
+   --------------------------------------------------------------------------
+   Author : William W. Wallace
+   Version: 1.0.0
+   Applies to:
+       Grafan_Promethius_install_linux.html
+       Grafana_Prometheus_install_windows.html
+       Archive/Windows_Exporter_Grafana_dashboard.html
+
+   Those three pages were authored with a flat Arial stylesheet and literal
+   hex colours (#f4f4f4 code blocks, #fff3cd notes, and so on).  They had no
+   dark theme and no theme control at all.  Rather than rewrite their inline
+   stylesheets -- which would change their light appearance and their content
+   structure -- this sheet adds a dark variant on top.
+
+   HOW IT IS SCOPED
+   ----------------
+   Every rule is gated on  :root[data-theme="dark"], set by the shared
+   navigation strip's theme button (assets/sitenav.js).  With no attribute,
+   or with data-theme="light", not one declaration here applies and the page
+   renders exactly as it did before the rebuild.
+
+   This sheet is loaded AFTER the page's own inline <style> block so that it
+   wins on equal specificity.  Where the inline rule is more specific, the
+   selector below is written to match or exceed it rather than using
+   !important, so a future edit to the page can still override this file.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Page canvas and text
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] body {
+  background: #12151b;
+  color: #d7dde7;
+}
+
+:root[data-theme="dark"] h1,
+:root[data-theme="dark"] h2,
+:root[data-theme="dark"] h3,
+:root[data-theme="dark"] h4 {
+  /* The source sets #2c3e50 on headings, which is unreadable on a dark
+     canvas; this lifts them to a light slate with the same hue family. */
+  color: #e8eef7;
+}
+
+:root[data-theme="dark"] a         { color: #6fb3ff; }
+:root[data-theme="dark"] a:visited { color: #a991e8; }
+:root[data-theme="dark"] hr        { border-color: #2a323f; }
+
+/* --------------------------------------------------------------------------
+   2. Code: block and inline
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] pre {
+  background: #0c1017;
+  color: #dbe6f5;
+  border: 1px solid #2a323f;
+}
+:root[data-theme="dark"] code {
+  background: #1a212c;
+  color: #9ecbff;
+}
+/* A <code> nested inside a <pre> must not get the inline-code chip. */
+:root[data-theme="dark"] pre code {
+  background: transparent;
+  color: inherit;
+}
+
+/* --------------------------------------------------------------------------
+   3. Admonitions.  The source uses pastel fills with a 4 px left rule; the
+      dark variants keep the same hue and rule colour at low luminance so the
+      semantic colour coding (amber = note, cyan = info, red = warning) is
+      preserved.
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] .note {
+  background: #2a2208;
+  border-left-color: #d9a406;
+  color: #f0e4c0;
+}
+:root[data-theme="dark"] .info {
+  background: #06262e;
+  border-left-color: #2ab7d4;
+  color: #c6e9f2;
+}
+:root[data-theme="dark"] .warn {
+  background: #2e0f13;
+  border-left-color: #e2515f;
+  color: #f6d2d6;
+}
+
+/* --------------------------------------------------------------------------
+   4. Tables
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] table { border-color: #2a323f; }
+:root[data-theme="dark"] th,
+:root[data-theme="dark"] td {
+  border-color: #2a323f;
+  color: #d7dde7;
+}
+:root[data-theme="dark"] th { background: #1a212c; }
+:root[data-theme="dark"] tbody tr:nth-child(even) { background: #161c25; }
+
+/* --------------------------------------------------------------------------
+   5. Tab widget used by Grafana_Prometheus_install_windows.html
+      (.tab-bar / .tab-btn / .tab-panel, switched by its inline swTab()).
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] .tab-bar   { border-bottom-color: #3a434f; }
+:root[data-theme="dark"] .tab-btn   {
+  background: #1a212c;
+  border-color: #3a434f;
+  color: #b9c4d2;
+}
+:root[data-theme="dark"] .tab-btn:hover { background: #222b38; }
+:root[data-theme="dark"] .tab-btn.active {
+  background: #12151b;
+  color: #e8eef7;
+  border-bottom-color: #12151b;
+}
+:root[data-theme="dark"] .tab-panel {
+  background: #12151b;
+  border-color: #3a434f;
+  color: #d7dde7;
+}
+
+/* --------------------------------------------------------------------------
+   6. Footer
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] .footer { color: #8794a8; }
+
+/* --------------------------------------------------------------------------
+   7. Printing always uses the light rendering: the dark canvas would waste
+      toner and the pastel admonitions reproduce better on paper.
+   -------------------------------------------------------------------------- */
+@media print {
+  :root[data-theme="dark"] body { background: #ffffff; color: #000000; }
+  :root[data-theme="dark"] pre  { background: #f4f4f4; color: #000000; }
+  :root[data-theme="dark"] code { background: #e8e8e8; color: #000000; }
+  :root[data-theme="dark"] h1,
+  :root[data-theme="dark"] h2,
+  :root[data-theme="dark"] h3 { color: #2c3e50; }
+}

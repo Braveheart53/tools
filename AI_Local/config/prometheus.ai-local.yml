@@ -1,0 +1,138 @@
+# ===========================================================================
+# prometheus.ai-local.yml
+# ---------------------------------------------------------------------------
+# Author : William W. Wallace
+# Version: 0.0.1
+# Created: 2026-10-18
+#
+# Scrape configuration for the four-node deployment documented in this page
+# set, with the ingest cost of each job stated inline so the storage relation
+# on monitoring-sizing.html can be evaluated without guessing.
+#
+# Check it before starting the service:
+#   .\prometheus.exe --config.file="C:\Prometheus\prometheus.yml" --config.check
+#
+# INGEST AND DISK, from monitoring-sizing.html
+#   lambda = sum_j ( n_j / T_s,j )          samples per second
+#   D      = T_ret * lambda * beta          bytes on disk
+#
+# With the series counts commented on each job below, T_ret = 15 d and
+# beta = 2 B/sample, this configuration gives lambda ~= 426 samples/s and
+# D ~= 1.1 GB of compacted blocks. Allocate 8-10 GB: the write-ahead log and
+# memory-mapped chunks count toward a size limit, and compaction needs
+# transient space on top of the steady state.
+#
+# THE SERIES COUNTS BELOW ARE PLANNING ESTIMATES. Replace them with
+# measurements once this has run for a day:
+#   count by (job) ({__name__=~".+"})
+# ===========================================================================
+
+global:
+  # 15 s is the interval the whole page set assumes. Raising it WITHOUT also
+  # raising every rate() window that depends on it breaks panels, and breaks
+  # them intermittently: see the window condition on monitoring-sizing.html,
+  #   w >= (2 + f) * T_s
+  # which at T_s = 15 s and two tolerated misses gives w >= 60 s, hence the
+  # [1m] windows used in the dashboards.
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+  external_labels:
+    deployment: ai-local
+
+scrape_configs:
+
+  # -------------------------------------------------------------------------
+  # Prometheus itself. Small, and the source of prometheus_tsdb_head_series,
+  # which is the metric that replaces every estimate in this file.
+  #   ~ 100 series / 15 s  =  ~7 samples/s
+  # -------------------------------------------------------------------------
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # -------------------------------------------------------------------------
+  # windows_exporter on all four nodes. By far the largest contributor, and
+  # therefore the first place to look if disk becomes a problem.
+  #   ~ 1500 series each x 4 nodes / 15 s  =  ~400 samples/s
+  #
+  # To cut it, drop collectors rather than lengthening the interval: the
+  # documentation notes that reducing SERIES is more effective than reducing
+  # samples, because samples within a series compress and new series do not.
+  # The per-process and per-partition collectors are the usual offenders.
+  # -------------------------------------------------------------------------
+  - job_name: 'windows'
+    static_configs:
+      - targets:
+          - '192.168.7.27:9182'   # NODE-A, inference host
+          - '192.168.7.28:9182'   # worker
+          - '192.168.7.45:9182'   # worker
+          - '192.168.7.181:9182'  # worker
+    relabel_configs:
+      # A short, stable node label is worth more in a dashboard legend than
+      # the host:port that instance carries by default.
+      - source_labels: [__address__]
+        regex: '192\.168\.7\.27:.*'
+        target_label: node
+        replacement: 'node-a'
+      - source_labels: [__address__]
+        regex: '192\.168\.7\.28:.*'
+        target_label: node
+        replacement: 'node-b'
+      - source_labels: [__address__]
+        regex: '192\.168\.7\.45:.*'
+        target_label: node
+        replacement: 'node-c'
+      - source_labels: [__address__]
+        regex: '192\.168\.7\.181:.*'
+        target_label: node
+        replacement: 'node-d'
+
+  # -------------------------------------------------------------------------
+  # NVIDIA GPU exporter, on the GPU-bearing nodes. Installed at port 9835 by
+  # the existing GPU monitoring page.
+  #   ~ 120 series each x 3 nodes / 15 s  =  ~24 samples/s
+  #
+  # Check which of its metrics are counters and which are gauges before
+  # writing panels: utilisation published as a cumulative busy-seconds
+  # counter needs rate(); utilisation published as an instantaneous
+  # percentage must NOT be wrapped in rate(). Read the '# TYPE' lines:
+  #   Invoke-WebRequest http://localhost:9835/metrics |
+  #     Select-Object -ExpandProperty Content | Select-String '^# TYPE'
+  # -------------------------------------------------------------------------
+  - job_name: 'nvidia_gpu'
+    static_configs:
+      - targets:
+          - '192.168.7.27:9835'
+          - '192.168.7.28:9835'
+          - '192.168.7.45:9835'
+
+  # -------------------------------------------------------------------------
+  # AMD GPU exporter, reached through the WSL2 port-proxy the GPU monitoring
+  # page sets up. amd_smi_exporter cannot be built natively for Windows
+  # because the underlying AMD SMI and ROCm libraries are Linux-only.
+  # Commented out until that bridge is running on a given node.
+  # -------------------------------------------------------------------------
+  # - job_name: 'amd_gpu'
+  #   static_configs:
+  #     - targets: ['192.168.7.181:9835']
+
+  # -------------------------------------------------------------------------
+  # llama-server's own metrics, exposed by the --metrics flag the service
+  # definitions in this set already pass.
+  #   ~ 30 series / 15 s  =  ~2 samples/s
+  #
+  # This is the job that answers the question the model-selection page cares
+  # about: whether decode rate has collapsed because weights spilled to
+  # system RAM.
+  # -------------------------------------------------------------------------
+  - job_name: 'llama_server'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['192.168.7.27:8080']
+
+  # -------------------------------------------------------------------------
+  # Ollama does not expose a Prometheus endpoint, so there is no job for it.
+  # Use 'ollama ps' to check residency, and watch the windows_exporter and
+  # GPU memory gauges for the spill.
+  # -------------------------------------------------------------------------

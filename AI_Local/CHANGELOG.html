@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Version history — AI_Local</title>
+<meta name="description" content="Version history for the AI_Local page set, following semantic versioning from 0.0.1.">
+<meta name="author" content="William W. Wallace">
+<meta name="generator" content="build_ai_local_site.py 0.0.1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f5f66'/%3E%3Cg stroke='%23e3efef' stroke-width='2' fill='none'%3E%3Cpath d='M16 9v6M16 15l-6 6M16 15l6 6'/%3E%3C/g%3E%3Cg fill='%23e3efef'%3E%3Ccircle cx='16' cy='8' r='3'/%3E%3Ccircle cx='9' cy='23' r='3'/%3E%3Ccircle cx='23' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/equations.css">
+<link rel="stylesheet" href="assets/sitenav.css">
+</head>
+<body class="ail">
+<a class="skip" href="#content">Skip to content</a>
+<nav class="ailnav" aria-label="AI_Local page set">
+  <div class="ailnav-inner">
+    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
+    <span class="ailnav-ver">v0.0.1</span>
+    <div class="ailnav-links">
+      <a href="index.html">Overview</a><a href="local-code-build-test.html">Build &amp; test</a><a href="ollama-model-selection.html">Model choice</a><a href="claude-sandbox-local-env.html">Sandbox access</a><a href="monitoring-sizing.html">Monitor sizing</a><a href="llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="GPU_monitoring_setup.html">GPU metrics</a><a href="Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="references.html">References</a><a href="CHANGELOG.html">Change log</a>
+    </div>
+    <button class="ailnav-theme" type="button" aria-label="Switch theme" aria-pressed="false"><span class="ailnav-theme-icon" aria-hidden="true">☾</span><span class="ailnav-theme-label">Dark</span></button>
+  </div>
+</nav>
+<main id="content">
+<section class="hero">
+  <div class="container">
+    <div class="eyebrow">Change log</div>
+    <h1>Version history</h1>
+    <p class="lead">The AI_Local page set carries one version, stamped in the navigation strip of every page. This log records what changed in each revision, including what was deliberately left alone.</p>
+    <p class="small muted">Versioning is semantic, X.Y.Z, with 0.0.1 as the first internal draft. Current version: <span class="mono">v0.0.1</span>.</p>
+  </div>
+</section>
+
+<section id="scheme">
+  <div class="container">
+    <h2>Versioning scheme</h2>
+
+    <div class="table-wrap">
+      <table>
+        <caption>What each component of the version number signifies for this page set.</caption>
+        <thead><tr><th scope="col">Component</th><th scope="col">Increments when</th><th scope="col">Example</th></tr></thead>
+        <tbody>
+          <tr><td><strong>X</strong> &mdash; major</td><td>The set is restructured, or guidance changes in a way that invalidates a previous configuration</td><td>Moving the whole set off Open WebUI</td></tr>
+          <tr><td><strong>Y</strong> &mdash; minor</td><td>A page is added or removed, or a page gains substantial new material</td><td>Adding the build-and-test page</td></tr>
+          <tr><td><strong>Z</strong> &mdash; patch</td><td>Corrections, re-verified figures, new citations, styling fixes</td><td>Updating a model size after a requantisation</td></tr>
+          <tr><td><strong>0.y.z</strong></td><td>Pre-release. The set is an internal draft until 1.0.0</td><td>v0.0.1, this revision</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Individual assets carry their own version in their header comment, which moves independently of the set version. Shell scripts and Python modules shipped alongside the pages follow the same scheme.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Assets with their own independent version stamp, as of set version v0.0.1.</caption>
+        <thead><tr><th scope="col">Asset</th><th scope="col">Version</th><th scope="col">Purpose</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">assets/site.css</td><td class="mono">1.0.0</td><td>Base stylesheet for the new pages only</td></tr>
+          <tr><td class="mono">assets/equations.css</td><td class="mono">1.0.0</td><td>Equation and variable-table component, shared by every page</td></tr>
+          <tr><td class="mono">assets/equations.js</td><td class="mono">1.0.0</td><td>KaTeX rendering and the variable-table disclosure</td></tr>
+          <tr><td class="mono">assets/sitenav.css</td><td class="mono">1.0.0</td><td>Shared navigation strip</td></tr>
+          <tr><td class="mono">assets/sitenav.js</td><td class="mono">1.0.0</td><td>Active-link marking and the injected theme control</td></tr>
+          <tr><td class="mono">assets/legacy-dark.css</td><td class="mono">1.0.0</td><td>Dark theme for the three plain-stylesheet pages</td></tr>
+          <tr><td class="mono">scripts/build_ai_local_site.py</td><td class="mono">0.0.1</td><td>Generator and verifier for the whole set</td></tr>
+          <tr><td class="mono">scripts/probe_model_throughput.py</td><td class="mono">0.0.1</td><td>Throughput measurement against the equations</td></tr>
+          <tr><td class="mono">scripts/build_cpp.ps1</td><td class="mono">0.0.1</td><td>CMake build wrapper with a bounded job count</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="releases">
+  <div class="container">
+    <h2>Releases</h2>
+<div class="rel">
+  <h3><span class="rel-ver">v0.0.1</span><span class="rel-date">2026-10-18</span></h3>
+  <p class="lead small">First internal draft of the rebuilt page set</p>
+  <h4>Added</h4>
+    <ul>
+      <li><strong>local-code-build-test.html</strong> &mdash; the page that was missing from the set: how to let a locally hosted model generate code and then build and test it on local hardware through Open WebUI. Covers the choice between Pyodide, the Jupyter engine and Open Terminal; the full variable set for each; wiring a named mamba environment in by either route; CMake and MSVC builds; Qt, Veusz and GPU specifics for Python; and a twelve-step verification sequence.</li>
+      <li><strong>ollama-model-selection.html</strong> &mdash; which models in the Ollama library are suited to local code and agent work, with every size, context window, capability label and published benchmark figure cited to its model page, and the memory and throughput arithmetic that decides whether a given tag will fit and run.</li>
+      <li><strong>claude-sandbox-local-env.html</strong> &mdash; granting a sandboxed agent prompt access to local mamba environments: what an OS-enforced command sandbox restricts, how it differs from a container backend, the settings that grant environment access, and the denial checks that confirm a policy actually took effect.</li>
+      <li><strong>monitoring-sizing.html</strong> &mdash; the four relations the existing monitoring install pages assume but never state: the disk cost of a retention window, what the scrape configuration actually ingests, the lower bound on a range-vector window that stops panels emptying intermittently, and the difference between a counter and a gauge when computing utilisation. Placed on its own page rather than duplicated as an appendix on each of the four monitoring pages.</li>
+      <li><strong>index.html</strong> &mdash; a landing page for the set, generated from the page manifest so a future page appears here without an edit.</li>
+      <li><strong>references.html</strong> &mdash; a single IEEE-format reference table for the whole set, generated from <span class="mono">references.py</span>, with a per-reference sourcing-confidence class and one shared access date.</li>
+      <li><strong>CHANGELOG.html</strong> &mdash; this page.</li>
+      <li>A shared navigation strip on every page, giving one consistent route between all pages in the set plus the version stamp and a link to this change log.</li>
+      <li>A shared equation component (<span class="mono">assets/equations.css</span>, <span class="mono">assets/equations.js</span>) reproducing the equation and variable-definition pattern from <em>Atomic Theory Atlas</em>: a provenance pill, a <em>Define variables</em> disclosure that opens a symbol table with SI units, and an explicit step list behind every derived result.</li>
+      <li>KaTeX vendored into <span class="mono">assets/katex/</span> so equations typeset with no network access, consistent with the rest of the set being usable offline.</li>
+      <li>A dark theme for the three pages that had none (<span class="mono">assets/legacy-dark.css</span>), plus a theme control on every page that lacked one.</li>
+      <li><span class="mono">scripts/probe_model_throughput.py</span> &mdash; measures prefill and decode rates through the Ollama API and prints them against what the equations predict.</li>
+      <li><span class="mono">scripts/build_cpp.ps1</span> &mdash; a no-argument CMake build wrapper that discovers the MSVC toolchain with <span class="mono">vswhere</span> instead of a hard-coded toolset path, and caps parallelism from free memory.</li>
+      <li><span class="mono">config/</span> &mdash; ready-to-edit Open WebUI, Open Terminal and sandbox configuration files matching the worked examples on the pages.</li>
+    </ul>
+  <h4>Changed</h4>
+    <ul>
+      <li>Fifteen equations that were previously implicit in prose or absent entirely are now explicit blocks with variable tables: weight footprint, active parameters for a routed mixture of experts, key/value cache size, context budget, the memory-bandwidth decode ceiling, layer offload count, distributed per-token time, the RPC break-even condition, safe parallel job count, Amdahl speed-up, agent-loop wall clock, Prometheus disk and ingest rate, the <span class="mono">rate()</span> window condition, and counter-based utilisation.</li>
+      <li>The four pre-existing pages that carry an artifact iframe wrapper (<span class="mono">Dockler_Jupyter_withGPU_Passthru_nssm</span>, <span class="mono">GPU_monitoring_setup</span>, <span class="mono">Jupyter_Server_Setup_wsl</span> and the archived <span class="mono">Jupyter_Code_Eval_Setup</span>) have the duplicate <span class="mono">&lt;!DOCTYPE&gt;</span>, <span class="mono">&lt;html&gt;</span> and <span class="mono">&lt;body&gt;</span> elements removed, so each is now one valid document instead of two nested ones.</li>
+      <li>Every pre-existing page keeps its own stylesheet, layout, content and theme toggle unchanged. The rebuild adds the navigation strip and the shared stylesheets and nothing else, so no existing guide looks different from how it looked before.</li>
+    </ul>
+  <h4>Fixed</h4>
+    <ul>
+      <li><span class="mono">Grafan_Promethius_install_linux.html</span>, <span class="mono">Grafana_Prometheus_install_windows.html</span> and the archived <span class="mono">Windows_Exporter_Grafana_dashboard.html</span> had no dark theme and no theme control. Both are now present, scoped so the light rendering is byte-for-byte unchanged.</li>
+      <li>Pages in the set had no way to reach each other; every page now carries the same navigation.</li>
+      <li>Citations were previously inline URLs or absent. All claims now resolve to a numbered row in one reference table.</li>
+    </ul>
+  <h4>Known limitations</h4>
+    <ul>
+      <li>The <span class="mono">TERMINAL_SERVER_CONNECTIONS</span> format is not published by the vendor, so the Open Terminal connection cannot be fully pre-seeded from the environment. Recorded on the build page.</li>
+      <li>Ollama tag pages do not state quantisation for most tags, so the footprint equation's bits-per-weight input is a library default rather than a published figure. The equation says so.</li>
+      <li>Per-compiler memory, the throughput realisation factor, runtime VRAM reservation, GGUF container overhead and the Prometheus series counts are planning estimates for this class of hardware, stated as ranges and flagged in each equation block.</li>
+      <li>The architectural quantities in the 24&nbsp;GB worked fit are placeholders of a plausible shape, not values read from a model. The table says so and names the command that produces the real ones.</li>
+    </ul>
+</div>
+  </div>
+</section>
+
+<section id="unchanged">
+  <div class="container">
+    <h2>What was deliberately not changed</h2>
+
+    <p>The rebuild was additive by design. Recorded here so a future revision does not assume these were oversights.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Deliberate non-changes in v0.0.1, with the reason each was left alone.</caption>
+        <thead><tr><th scope="col">Left alone</th><th scope="col">Reason</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Each pre-existing page's own stylesheet, layout and theme toggle</td>
+            <td>The seven existing guides each have a distinct look that works. Imposing one stylesheet would have changed every page's appearance for no reader benefit, and would have risked breaking page-specific behaviour such as the tab widget on the Windows Prometheus page</td>
+          </tr>
+          <tr>
+            <td>The technical content of the existing guides</td>
+            <td>Nothing in them was found to be wrong. The rebuild adds the missing material rather than rewriting what was already correct</td>
+          </tr>
+          <tr>
+            <td>Hard-coded IP addresses (<span class="mono">192.168.7.x</span>) and absolute paths</td>
+            <td>They document this deployment, and replacing them with placeholders would make the commands less useful to their actual reader</td>
+          </tr>
+          <tr>
+            <td>The binary installers and extracted exporter archives in the directory</td>
+            <td>Outside the scope of a documentation rebuild, and the set's own <span class="mono">Files_you_Will_need_that_areNot_here.txt</span> already tracks what is missing</td>
+          </tr>
+          <tr>
+            <td><span class="mono">setup_info.txt</span> as a scratch file</td>
+            <td>It is a working notebook of commands, several marked as wrong in place. That record has value; the parts worth promoting were promoted into the new pages with citations, and the file stays as it is</td>
+          </tr>
+          <tr>
+            <td>The two pages under <span class="mono">Archive/</span></td>
+            <td>Kept where they are, with the navigation strip and shared stylesheets added, so an archived page is still reachable and still readable in both themes</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="next">
+  <div class="container">
+    <h2>Candidates for the next revision</h2>
+
+    <p>Not implemented, and listed for a decision rather than as a plan.</p>
+
+    <ul>
+      <li><strong>Measured throughput tables.</strong> Running <span class="mono">probe_model_throughput.py</span> across the shortlisted models on the actual nodes would replace the realisation factor with a measurement and turn the model-selection page's estimates into data.</li>
+      <li><strong>A Grafana dashboard JSON for the agent loop.</strong> Prompt rate, decode rate, iteration count and build duration on one board, so the loop equation's terms can be watched instead of computed.</li>
+      <li><strong>Worked architecture tables per shortlisted model</strong>, read from <span class="mono">ollama show</span>, replacing the placeholder layer and head counts in the 24&nbsp;GB fit.</li>
+      <li><strong>A single generated PDF of the whole set</strong>, bookmarked, with variable tables expanded. The print stylesheet already expands them; the remaining work is pagination.</li>
+      <li><strong>An <span class="mono">mcpo</span> page.</strong> Exposing instrument control &mdash; Keysight or Lake Shore over VISA &mdash; to a local model as an MCP tool server is a natural extension of the build-and-test page and is currently only mentioned in passing.</li>
+    </ul>
+  </div>
+</section>
+</main>
+<footer class="foot">
+  <div class="container">
+    <p><strong>AI_Local</strong> v0.0.1 &middot; William W. Wallace &middot;
+       <a href="CHANGELOG.html">change log</a> &middot;
+       <a href="references.html">references</a></p>
+    <p class="small">Equations typeset offline with KaTeX. Every page in this set opens
+       from local disk with no network access, and nothing here uses browser storage.</p>
+  </div>
+</footer>
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="assets/equations.js"></script>
+<script src="assets/sitenav.js"></script>
+</body>
+</html>

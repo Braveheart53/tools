@@ -1,0 +1,594 @@
+# -*- coding: utf-8 -*-
+"""
+page_sandbox.py -- body content for claude-sandbox-local-env.html
+
+Author  : William W. Wallace
+Version : 0.0.1
+Created : 2026-10-18
+
+PURPOSE
+-------
+Supplies the body fragment for the page covering the second half of the
+request: how to grant a sandboxed agent prompt access to the mamba
+environments already present on a local machine, so that it can build and test
+there, and what the boundary actually is.
+
+This page is about an OS-enforced sandbox around shell commands, which is a
+different containment model from the Open WebUI backends covered on
+``local-code-build-test.html``.  The two pages cross-reference rather than
+duplicate: the Open WebUI backends contain by deployment choice (a container),
+while this model contains by operating-system policy around each command.
+
+SOURCING POLICY
+---------------
+Every setting key, default and behavioural statement is quoted from the Claude
+Code sandboxing and permissions documentation cited in ``references.py``.
+Where the documentation does not state something, the page says so rather than
+filling the gap.
+"""
+
+# %% Imports -----------------------------------------------------------------
+from __future__ import annotations
+
+
+# %% Body fragment -----------------------------------------------------------
+def build() -> str:
+    """Return the complete body fragment for claude-sandbox-local-env.html."""
+    return r"""
+<section class="hero">
+  <div class="container">
+    <div class="eyebrow">Sandboxed prompt access</div>
+    <h1>Giving a sandboxed agent access to local mamba environments</h1>
+    <p class="lead">The Open WebUI backends contain code by putting it in a container. The other approach keeps the work on the real filesystem and draws the boundary at the operating system, around each shell command. That is the model to use when an agent must build against the environments, drivers and instrument libraries you already have, and it is configured differently.</p>
+    <p class="small muted">Setting names, defaults and behavioural statements are quoted from the Claude Code sandboxing and permissions documentation cited inline and read on 2026-10-18. Where the documentation does not state something, this page says so rather than guessing.</p>
+  </div>
+</section>
+
+<section id="on-this-page">
+  <div class="container">
+    <h2>On this page</h2>
+    <ul class="toc">
+      <li><a href="#model">1. What the sandbox actually restricts</a></li>
+      <li><a href="#compare">2. How it compares to the container backends</a></li>
+      <li><a href="#enable">3. Turning it on</a></li>
+      <li><a href="#mamba-access">4. Granting access to a mamba environment</a></li>
+      <li><a href="#network">5. Network policy for package installs</a></li>
+      <li><a href="#escape">6. When a tool cannot work inside the sandbox</a></li>
+      <li><a href="#credentials">7. Keeping credentials out of reach</a></li>
+      <li><a href="#project">8. A worked configuration for this deployment</a></li>
+      <li><a href="#platform">9. Platform limits</a></li>
+      <li><a href="#together">10. Running both models side by side</a></li>
+    </ul>
+  </div>
+</section>
+
+<section id="model">
+  <div class="container">
+    <h2>1. What the sandbox actually restricts</h2>
+
+    <p>The documentation describes the Bash sandbox as "a boundary that the operating system enforces around the shell commands" the agent runs, covering the commands and the processes they start, and notes that because the operating system applies the limits while a command runs, sandboxed commands can run without approving each one<a class="cite" href="references.html#r21">[21]</a>.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>The three dimensions the sandbox restricts, with the documented default reach and the settings key that adjusts it. Reach and key names are quoted from the sandboxing documentation.</caption>
+        <thead><tr><th scope="col">Dimension</th><th scope="col">Default reach</th><th scope="col">Settings keys</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Writes</strong></td>
+            <td>"The working directory, a per-user temp directory, and directories you've added" with <span class="mono">--add-dir</span>, <span class="mono">/add-dir</span> or <span class="mono">permissions.additionalDirectories</span><a class="cite" href="references.html#r23">[23]</a>. Protected paths stay write-denied</td>
+            <td><span class="mono">sandbox.filesystem.allowWrite</span>, <span class="mono">sandbox.filesystem.denyWrite</span></td>
+          </tr>
+          <tr>
+            <td><strong>Reads</strong></td>
+            <td>"Most of the machine, including credential files such as <span class="mono">~/.ssh</span> and <span class="mono">~/.aws/credentials</span>"</td>
+            <td><span class="mono">sandbox.filesystem.denyRead</span>, <span class="mono">sandbox.credentials</span></td>
+          </tr>
+          <tr>
+            <td><strong>Network</strong></td>
+            <td>"No direct route out. Connections go through a proxy on your machine that checks each host against your allowed domains, <strong>which start empty</strong>"</td>
+            <td><span class="mono">sandbox.network.allowedDomains</span>, <span class="mono">sandbox.network.deniedDomains</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout danger">
+      <p><strong>Reads are permissive by default and writes are not.</strong> This asymmetry is the single most important property to internalise. Out of the box a sandboxed command can read most of the machine, credential files included, while it can only write to the working directory and temp. So the configuration effort goes into <em>restricting reads</em> and <em>granting the few extra writes a build needs</em> &mdash; not the other way round.</p>
+    </div>
+
+    <h3>1.1 What runs outside the boundary</h3>
+
+    <p>The sandbox covers shell commands only. The documentation states that the agent's file tools, MCP servers and hooks run outside it, and specifically that a <span class="mono">denyRead</span> entry does not stop the Read tool and <span class="mono">allowedDomains</span> does not limit a web-fetch tool<a class="cite" href="references.html#r21">[21]</a>.</p>
+
+    <div class="callout">
+      <p><strong>Consequence for a secret you care about.</strong> A <span class="mono">denyRead</span> rule on a credentials file stops a <span class="mono">cat</span> in the shell but not the agent's own file-reading tool. Filesystem permission rules are the other half of that fence, and the documentation also offers <span class="mono">permissions.blockReadsOutsideWorkingDirectories</span> as a single switch for denying sandboxed commands read access to home directories and mounted volumes while keeping working directories readable<a class="cite" href="references.html#r21">[21]</a><a class="cite" href="references.html#r22">[22]</a>. The permission-rule syntax those rules use is documented separately from the sandbox keys<a class="cite" href="references.html#r23">[23]</a>, which is worth knowing because the two use different path conventions &mdash; see &sect;4.4.</p>
+    </div>
+  </div>
+</section>
+
+<section id="compare">
+  <div class="container">
+    <h2>2. How it compares to the container backends</h2>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Two containment models for the same job, with the property that should decide between them. Container-side facts are from the Open WebUI documentation; sandbox-side facts are from the Claude Code sandboxing documentation.</caption>
+        <thead><tr><th scope="col">Property</th><th scope="col">Container backend (Open Terminal, Jupyter)</th><th scope="col">OS-enforced command sandbox</th></tr></thead>
+        <tbody>
+          <tr><td>Where code runs</td><td>Inside a container or a separate kernel process<a class="cite" href="references.html#r3">[3]</a></td><td>On the real filesystem, under OS policy<a class="cite" href="references.html#r21">[21]</a></td></tr>
+          <tr><td>Sees host mamba environments</td><td>No, unless rebuilt inside or reached through a host kernel</td><td><strong>Yes</strong>, directly</td></tr>
+          <tr><td>Sees host instrument drivers and licences</td><td>No, without device passthrough</td><td><strong>Yes</strong></td></tr>
+          <tr><td>Boundary granularity</td><td>The whole container</td><td>Per command, per path, per domain</td></tr>
+          <tr><td>Network default</td><td>Unrestricted unless allowed-domains is set<a class="cite" href="references.html#r6">[6]</a></td><td><strong>Closed.</strong> Allowed domains "start empty"<a class="cite" href="references.html#r21">[21]</a></td></tr>
+          <tr><td>Read default</td><td>Container filesystem only</td><td>Most of the machine<a class="cite" href="references.html#r21">[21]</a></td></tr>
+          <tr><td>Blast radius of a mistake</td><td>Bounded by the container</td><td>Bounded by the policy you wrote</td></tr>
+          <tr><td>Reproducibility</td><td>High: the image is the specification</td><td>Lower: depends on host state</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout info-box">
+      <p><strong>Choose by what the build needs to touch.</strong> If the work can be reproduced from a YAML environment specification, the container is better: reproducible, disposable, and a bounded blast radius whatever the policy says. If the work needs the host &mdash; a VISA driver talking to an instrument, a licensed solver, a card that is already configured &mdash; the container cannot reach it and the OS-enforced sandbox is the option that can.</p>
+    </div>
+  </div>
+</section>
+
+<section id="enable">
+  <div class="container">
+    <h2>3. Turning it on</h2>
+
+    <p>The documented minimal form is a <span class="mono">sandbox</span> block in <span class="mono">settings.json</span><a class="cite" href="references.html#r21">[21]</a>. Every key used on this page is listed in the settings reference<a class="cite" href="references.html#r22">[22]</a>, which is the place to check a default before relying on it.</p>
+
+    <p class="code-label">~/.claude/settings.json &mdash; minimal</p>
+<pre><code>{
+  "sandbox": {
+    "enabled": true
+  }
+}</code></pre>
+
+    <p>There is also a one-shot CLI form for testing a policy without editing a file, quoted from the documentation:</p>
+
+<pre><code>claude --settings '{"sandbox": {"enabled": true, "allowUnsandboxedCommands": false}}'</code></pre>
+
+    <h3>3.1 Two modes</h3>
+
+    <p>The documentation describes two sandbox modes in which the filesystem and network restrictions are identical, differing only in whether sandboxed commands are auto-approved or require explicit permission<a class="cite" href="references.html#r21">[21]</a>. Auto-allow is the mode that makes an unattended build loop practical; regular permissions keeps a prompt in front of every command.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Sandbox modes and the settings that constrain how far a command can escape them.</caption>
+        <thead><tr><th scope="col">Setting</th><th scope="col">Effect</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">allowUnsandboxedCommands</td><td>Whether a command that fails under the sandbox may be retried unsandboxed. Setting it to <span class="mono">false</span> makes the <span class="mono">dangerouslyDisableSandbox</span> parameter ignored entirely<a class="cite" href="references.html#r21">[21]</a></td></tr>
+          <tr><td class="mono">failIfUnavailable</td><td>Prevents running commands unsandboxed when the sandbox cannot start. The documentation notes the overrides panel shows this as <strong>Strict sandbox mode</strong><a class="cite" href="references.html#r21">[21]</a></td></tr>
+          <tr><td class="mono">excludedCommands</td><td>Command patterns that run outside the sandbox altogether &mdash; no filesystem restrictions, no network proxy. Covered in &sect;6</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>For an unattended loop, set both of the first two: <span class="mono">allowUnsandboxedCommands: false</span> so a failing command cannot quietly escape, and <span class="mono">failIfUnavailable</span> so a sandbox that will not start stops the work rather than running it unconfined.</p>
+
+    <h3>3.2 Confirming it is actually on</h3>
+
+    <p>The documentation gives a direct check: switch to manual mode and ask for a command that changes something. The permission prompt for a command running outside the boundary is titled "Bash command (unsandboxed)"<a class="cite" href="references.html#r21">[21]</a>. If that title appears for a command you expected to be sandboxed, an <span class="mono">excludedCommands</span> pattern is matching it.</p>
+  </div>
+</section>
+
+<section id="mamba-access">
+  <div class="container">
+    <h2>4. Granting access to a mamba environment</h2>
+
+    <p>This is the specific problem. A build needs to read the environment's interpreter and libraries, and to write in three places: the project, the build tree, and wherever the package cache lives.</p>
+
+    <h3>4.1 What a mamba build touches</h3>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Paths a mamba-based build reads or writes, and how each is handled under the sandbox. Default-reach statements are from the sandboxing documentation; the mamba directory names follow this deployment's own configuration.</caption>
+        <thead><tr><th scope="col">Path</th><th scope="col">Access</th><th scope="col">Already covered?</th><th scope="col">Action</th></tr></thead>
+        <tbody>
+          <tr><td>Project source</td><td>Read + write</td><td><strong>Yes</strong> &mdash; the working directory is writable by default</td><td>None</td></tr>
+          <tr><td>Build tree under the project</td><td>Read + write</td><td><strong>Yes</strong></td><td>None</td></tr>
+          <tr><td>Environment prefix, e.g. <span class="mono">[your-envs-dir]/Py3p12</span></td><td>Read + execute</td><td><strong>Yes</strong> &mdash; reads reach most of the machine by default</td><td>None for reading. Needed only if the agent must <em>install into</em> the environment</td></tr>
+          <tr><td>Package cache, <span class="mono">CONDA_PKGS_DIRS</span></td><td>Write</td><td>No</td><td>Add to <span class="mono">allowWrite</span>, but only if installs are permitted</td></tr>
+          <tr><td>Environment prefix, for installs</td><td>Write</td><td>No</td><td>Add to <span class="mono">allowWrite</span> &mdash; and think first (see below)</td></tr>
+          <tr><td><span class="mono">~/.condarc</span> / <span class="mono">~/.mambarc</span></td><td>Read</td><td><strong>Yes</strong></td><td>None</td></tr>
+          <tr><td>Temp directory</td><td>Write</td><td><strong>Yes</strong> &mdash; a per-user temp directory is writable by default</td><td>None</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout info-box">
+      <p><strong>The common case needs no filesystem configuration at all.</strong> Reading an environment and building inside the project are both covered by the defaults. Configuration is only required when the agent must <em>mutate</em> the environment, and that is a decision worth making deliberately rather than by default &mdash; an agent that can write into a shared environment prefix can break every other project that uses it.</p>
+    </div>
+
+    <h3>4.2 Read-only environment: the recommended posture</h3>
+
+    <p>The agent runs in the environment and never changes it. Dependency changes go through the YAML specification and a human.</p>
+
+    <p class="code-label">&lt;project&gt;/.claude/settings.json</p>
+<pre><code>{
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "filesystem": {
+      // "." resolves to the project root when the configuration lives in
+      // project settings, which is the documented behaviour. The working
+      // directory is writable by default; this is explicit for clarity.
+      "allowWrite": ["."]
+    },
+    "network": {
+      // Allowed domains start empty, so an offline build needs nothing here.
+      "allowedDomains": []
+    }
+  }
+}</code></pre>
+
+    <p>Standardise the invocation, for the same reason as in the container case: a bare <span class="mono">python</span> finds the system interpreter.</p>
+
+<pre><code># Correct: stateless, explicit about the environment.
+mamba run -n Py3p12 python -m pytest -q
+
+# Also correct, and the most explicit of all.
+[your-envs-dir]/Py3p12/bin/python -m pytest -q      # POSIX
+[your-envs-dir]\Py3p12\python.exe -m pytest -q      # Windows
+
+# Wrong inside a sandbox: activation needs a shell hook and each command
+# may run in a fresh shell.
+mamba activate Py3p12 &amp;&amp; pytest</code></pre>
+
+    <h3>4.3 Mutable environment, when the agent must install</h3>
+
+    <p>Sometimes the task <em>is</em> adding a dependency. Grant the two write paths explicitly. The documentation notes these paths are enforced at the OS level so all commands inside the sandbox, child processes included, respect them, and recommends this over excluding the tool from the sandbox entirely<a class="cite" href="references.html#r21">[21]</a>.</p>
+
+    <p class="code-label">~/.claude/settings.json &mdash; environment writes permitted</p>
+<pre><code>{
+  "sandbox": {
+    "enabled": true,
+    "filesystem": {
+      "allowWrite": [
+        // The environment prefix the agent may modify. Name ONE environment,
+        // never the whole envs directory: a wider entry lets a task for one
+        // project break another project's environment.
+        "~/miniforge3/envs/ai_sandbox",
+        // The package cache. Without it a solve downloads and then fails to
+        // write, which presents as a confusing permission error.
+        "~/miniforge3/pkgs"
+      ],
+      "denyWrite": [
+        // Belt and braces: the base environment stays immutable even though
+        // the allowWrite entries above do not include it.
+        "~/miniforge3/envs/base"
+      ]
+    },
+    "network": {
+      "allowedDomains": ["conda.anaconda.org", "repo.anaconda.com", "pypi.org", "files.pythonhosted.org"]
+    }
+  }
+}</code></pre>
+
+    <div class="callout">
+      <p><strong>Create a dedicated environment for this.</strong> Clone the real environment once, grant write access only to the clone, and let the agent install into it. The clone is disposable, nothing else depends on it, and a bad solve costs a <span class="mono">mamba env create</span> rather than a day:</p>
+<pre><code>mamba env create -f Py3p12_Clean.yml -n ai_sandbox</code></pre>
+      <p class="small muted" style="margin-top:.6rem">The <span class="mono">-f</span> and <span class="mono">-n</span> flags are documented in the conda command reference as "Environment definition file" and "Name of environment"<a class="cite" href="references.html#r24">[24]</a>.</p>
+    </div>
+
+    <h3>4.4 How overlapping path rules resolve</h3>
+
+    <p>The documentation states that when read rules overlap, the rule with the narrower path applies, and gives three cases<a class="cite" href="references.html#r21">[21]</a>. The third is the one that matters for secrets.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Overlap resolution for read rules, quoted from the sandboxing documentation, with the consequence for a mamba layout.</caption>
+        <thead><tr><th scope="col">Rules</th><th scope="col">Documented result</th><th scope="col">Use for</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono">denyRead: ["~/"]</td>
+            <td>"<span class="mono">~/projects</span> is readable and the rest of the home directory stays blocked. The narrower allow re-opens that part of the denied region"</td>
+            <td>Blocking the home directory while keeping the environments and the project readable</td>
+          </tr>
+          <tr>
+            <td class="mono">allowRead: ["~/"]</td>
+            <td>"<span class="mono">~/.env</span> stays blocked and the rest of the home directory is readable. The deny holds inside a wider allow, so a broad allow can't silently re-expose a secret"</td>
+            <td>Carving one file out of a broad allow</td>
+          </tr>
+          <tr>
+            <td class="mono">allowRead: ["~/"]</td>
+            <td>"Every <span class="mono">.env</span> under the home directory stays blocked and the rest is readable"</td>
+            <td><strong>Wildcard denies.</strong> The form to use for secrets scattered across many project directories</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Note also that the path convention here differs from the permission-rule convention. The documentation states sandbox filesystem paths use standard conventions &mdash; <span class="mono">/tmp/build</span> absolute, <span class="mono">~/.kube</span> home-relative &mdash; which "differs from Read and Edit permission rules", where <span class="mono">//path</span> is absolute and <span class="mono">/path</span> is project-relative<a class="cite" href="references.html#r21">[21]</a><a class="cite" href="references.html#r23">[23]</a>. Two conventions in two adjacent settings blocks is a reliable source of rules that silently never match.</p>
+
+    <p>When the same filesystem array appears in several settings scopes they are merged rather than replaced, and an edit during a session is applied to the running session, so the next sandboxed command runs under the new paths<a class="cite" href="references.html#r21">[21]</a>. That makes it practical to widen a path mid-task without restarting.</p>
+  </div>
+</section>
+
+<section id="network">
+  <div class="container">
+    <h2>5. Network policy for package installs</h2>
+
+    <p>Allowed domains start empty and connections go through a proxy on the machine that checks each host<a class="cite" href="references.html#r21">[21]</a>. So a sandboxed build is offline until told otherwise, which is the right default and also the first thing that appears broken.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Minimum allowed-domain sets by task. Keep the list as short as the task allows; an entry is a permanent hole in an otherwise closed egress policy.</caption>
+        <thead><tr><th scope="col">Task</th><th scope="col">Domains</th></tr></thead>
+        <tbody>
+          <tr><td>Build and test only, no installs</td><td><em>empty</em> &mdash; the default, and the right answer for most work</td></tr>
+          <tr><td>conda / mamba installs</td><td><span class="mono">conda.anaconda.org</span>, <span class="mono">repo.anaconda.com</span></td></tr>
+          <tr><td>conda-forge specifically</td><td><span class="mono">conda.anaconda.org</span> (conda-forge is a channel on that host)</td></tr>
+          <tr><td>pip installs</td><td><span class="mono">pypi.org</span>, <span class="mono">files.pythonhosted.org</span></td></tr>
+          <tr><td>Cloning a dependency</td><td><span class="mono">github.com</span>, <span class="mono">codeload.github.com</span></td></tr>
+          <tr><td>Pulling a local model</td><td>Nothing. Ollama is on the LAN, not the internet</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout info-box">
+      <p><strong>Local services are reached by address, not by domain.</strong> The inference host in this deployment is <span class="mono">192.168.7.27:11434</span>. The documentation notes the bracketed form for a literal address in <span class="mono">network.allowedDomains</span>, for example <span class="mono">"[::1]"</span><a class="cite" href="references.html#r21">[21]</a>. Confirm with a probe rather than assuming a LAN address is exempt from the proxy.</p>
+    </div>
+
+    <p>When a connection is blocked the documentation states the denied host is named in the command's result, so the agent can see what was blocked and may retry with the unsandboxed parameter<a class="cite" href="references.html#r21">[21]</a>. That is a useful diagnostic and a reason to set <span class="mono">allowUnsandboxedCommands: false</span>: the agent should report the blocked host, not route around the policy.</p>
+  </div>
+</section>
+
+<section id="escape">
+  <div class="container">
+    <h2>6. When a tool cannot work inside the sandbox</h2>
+
+    <p><span class="mono">sandbox.excludedCommands</span> runs matching commands outside the boundary &mdash; "no filesystem restrictions and no network proxy" &mdash; and the documentation is explicit that a tool needing one more directory or one more host should get <span class="mono">allowWrite</span> or <span class="mono">allowedDomains</span> instead, which keeps the command sandboxed<a class="cite" href="references.html#r21">[21]</a>.</p>
+
+    <p class="code-label">~/.claude/settings.json &mdash; the documented example</p>
+<pre><code>{
+  "sandbox": {
+    "enabled": true,
+    "excludedCommands": ["docker compose *"]
+  }
+}</code></pre>
+
+    <h3>6.1 The matching rules, and why a pattern misses</h3>
+
+    <p>Five rules from the documentation decide whether a call leaves the sandbox<a class="cite" href="references.html#r21">[21]</a>. Each one is a way for a pattern to behave unexpectedly.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Matching rules for <span class="mono">excludedCommands</span>, quoted from the sandboxing documentation, with the practical consequence.</caption>
+        <thead><tr><th scope="col">Rule</th><th scope="col">Consequence</th></tr></thead>
+        <tbody>
+          <tr><td>"End the pattern with <span class="mono"> *</span>" &mdash; a pattern with no wildcard is an exact match, so <span class="mono">docker</span> matches only <span class="mono">docker</span> with no arguments</td><td>A pattern without the trailing wildcard almost never matches a real call</td></tr>
+          <tr><td>"Every command in the call has to match": <span class="mono">npm ci &amp;&amp; docker compose build</span> stays sandboxed unless another entry covers <span class="mono">npm ci</span></td><td>Chained commands are all-or-nothing</td></tr>
+          <tr><td>Matching is on the text of the call, so "a script or <span class="mono">make</span> target that calls <span class="mono">docker</span> internally doesn't match, and neither does <span class="mono">/usr/local/bin/docker</span>"</td><td>An absolute path or a wrapper script defeats the pattern. This is usually what you want</td></tr>
+          <tr><td>"Some calls stay sandboxed": a redirect to a file, a <span class="mono">cd</span>, or a command substitution such as <span class="mono">$(...)</span> keeps the whole call sandboxed</td><td>A build wrapped in <span class="mono">cd build &amp;&amp; ...</span> never leaves the sandbox</td></tr>
+          <tr><td>Where the entry is saved can matter: under an admin-required sandbox, entries in a repository's <span class="mono">.claude/settings.json</span> and <span class="mono">.claude/settings.local.json</span> are ignored</td><td>A repository cannot widen a managed policy</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout danger">
+      <p><strong>The documented warning, which applies directly to a build.</strong> An excluded command runs with your full access, and a broad entry such as <span class="mono">docker *</span> covers everything that tool can do. The documentation adds that a pattern covering "an interpreter, a script inside your working directory, or a tool that acts on a file there, as <span class="mono">docker compose</span> does with its compose file" lets the agent write that file and then run it outside the sandbox<a class="cite" href="references.html#r21">[21]</a>.</p>
+      <p>A build script is exactly that shape. Excluding <span class="mono">cmake *</span> or <span class="mono">./build.sh *</span> hands the agent an unsandboxed interpreter for a file it can rewrite, which removes the boundary entirely. Grant the directory or the host with <span class="mono">allowWrite</span> or <span class="mono">allowedDomains</span> instead.</p>
+    </div>
+
+    <h3>6.2 Disabling filesystem isolation while keeping network isolation</h3>
+
+    <p><span class="mono">sandbox.filesystem.disabled</span> set to <span class="mono">true</span> skips filesystem isolation while keeping network isolation, which the documentation describes as the right choice "when you sandbox to control where commands connect rather than what they write"<a class="cite" href="references.html#r21">[21]</a>.</p>
+
+<pre><code>{
+  "sandbox": {
+    "enabled": true,
+    "filesystem": { "disabled": true },
+    "network": { "allowedDomains": ["conda.anaconda.org", "pypi.org", "files.pythonhosted.org"] }
+  }
+}</code></pre>
+
+    <div class="callout danger">
+      <p><strong>The documented escalation path.</strong> With filesystem isolation off and commands auto-allowed, the documentation warns that a sandboxed command can write files later commands run or read &mdash; "shell startup files, executables on <span class="mono">$PATH</span>, or <span class="mono">~/.claude/settings.json</span>" &mdash; and use them to widen its own access on the next run<a class="cite" href="references.html#r21">[21]</a>. Set this only for workloads trusted not to escalate. For a build against a shared mamba installation, the narrow <span class="mono">allowWrite</span> list in &sect;4.3 is the safer configuration and costs two lines.</p>
+    </div>
+  </div>
+</section>
+
+<section id="credentials">
+  <div class="container">
+    <h2>7. Keeping credentials out of reach</h2>
+
+    <p>Because reads reach most of the machine by default, credentials need explicit handling. <span class="mono">sandbox.credentials</span> takes <span class="mono">files</span> and <span class="mono">envVars</span> entries, and for <span class="mono">"mode": "deny"</span> the documentation states file paths are denied for reads inside the sandbox and environment variables are unset before each sandboxed command runs<a class="cite" href="references.html#r21">[21]</a>.</p>
+
+    <p class="code-label">~/.claude/settings.json &mdash; the documented form</p>
+<pre><code>{
+  "sandbox": {
+    "enabled": true,
+    "credentials": {
+      "files": [
+        { "path": "~/.aws/credentials", "mode": "deny" },
+        { "path": "~/.ssh", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "NPM_TOKEN", "mode": "deny" }
+      ]
+    }
+  }
+}</code></pre>
+
+    <p>Three documented properties worth knowing before relying on this<a class="cite" href="references.html#r21">[21]</a>:</p>
+
+    <ul>
+      <li><strong>There is no built-in deny list.</strong> "Only the files and variables you list are restricted." Nothing is protected by default.</li>
+      <li><strong><span class="mono">deny</span> entries merge across scopes and only ever narrow.</strong> Any scope can add one and no scope can remove one another scope added.</li>
+      <li><strong>File denial is part of the filesystem layer.</strong> It does not apply if filesystem isolation is disabled, although environment-variable protection still does.</li>
+    </ul>
+
+    <div class="callout">
+      <p><strong>For this deployment, the list to write.</strong> A government-contracting and instrumentation workstation has credentials an agent has no business reading: SAM.gov and Costpoint session material, instrument licence files, VPN profiles, signing keys. These are not in any default deny list because there is no default deny list. Enumerate them once, as <span class="mono">deny</span> entries in user settings so no project scope can relax them.</p>
+    </div>
+  </div>
+</section>
+
+<section id="project">
+  <div class="container">
+    <h2>8. A worked configuration for this deployment</h2>
+
+    <p>Two files. User settings carry the restrictions that must hold everywhere; project settings carry the grants a particular build needs.</p>
+
+    <p class="code-label">~/.claude/settings.json &mdash; restrictions that always apply</p>
+<pre><code>{
+  "sandbox": {
+    "enabled": true,
+
+    // No quiet escape: a command that fails under the sandbox must report the
+    // failure rather than being retried with full access.
+    "allowUnsandboxedCommands": false,
+
+    // If the sandbox itself cannot start, stop rather than running unconfined.
+    "failIfUnavailable": true,
+
+    "filesystem": {
+      // Deny the home directory wholesale, then re-open only what a build
+      // legitimately reads. The documented overlap rule is that the narrower
+      // allow re-opens that part of the denied region.
+      "denyRead": [
+        "~/",
+        // A wildcard deny holds inside a wider allow the same way an exact
+        // path does, so this survives the allowRead entries below.
+        "~/**/.env",
+        "~/**/*.pem",
+        "~/**/id_rsa*"
+      ],
+      "allowRead": [
+        "~/miniforge3",          // interpreters and libraries
+        "~/projects",            // source trees
+        "~/.condarc",            // channel configuration
+        "~/.mambarc"
+      ],
+      "denyWrite": [
+        "~/miniforge3/envs/base" // the base environment is never a target
+      ]
+    },
+
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws/credentials", "mode": "deny" },
+        { "path": "~/.config/gh", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "GH_TOKEN", "mode": "deny" }
+      ]
+    },
+
+    "network": {
+      // Empty by default. A project that needs installs opens the specific
+      // hosts in its own settings file.
+      "allowedDomains": []
+    }
+  }
+}</code></pre>
+
+    <p class="code-label">&lt;project&gt;/.claude/settings.json &mdash; grants for one project</p>
+<pre><code>{
+  "sandbox": {
+    "enabled": true,
+    "filesystem": {
+      // "." resolves to the project root in project settings. Arrays merge
+      // across scopes, so these add to the user-level rules above rather
+      // than replacing them.
+      "allowWrite": [
+        ".",
+        "/tmp/cmake-build"
+      ],
+      "allowRead": ["."]
+    },
+    "network": {
+      // This project pulls dependencies, so the indexes are opened here and
+      // nowhere else.
+      "allowedDomains": [
+        "conda.anaconda.org",
+        "repo.anaconda.com",
+        "pypi.org",
+        "files.pythonhosted.org"
+      ]
+    }
+  }
+}</code></pre>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Verification sequence for the configuration above. Each check isolates one rule, and the expected result is what confirms the rule took effect.</caption>
+        <thead><tr><th scope="col">#</th><th scope="col">Check</th><th scope="col">Command</th><th scope="col">Expected</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Sandbox is on</td><td>Ask for a command that changes something, in manual mode</td><td>Prompt is <em>not</em> titled "Bash command (unsandboxed)"</td></tr>
+          <tr><td>2</td><td>Environment is readable</td><td class="mono">mamba run -n Py3p12 python -V</td><td>A version string</td></tr>
+          <tr><td>3</td><td>Project is writable</td><td class="mono">touch ./build/.probe</td><td>Succeeds</td></tr>
+          <tr><td>4</td><td>Base environment is protected</td><td class="mono">touch ~/miniforge3/envs/base/.probe</td><td><strong>Denied</strong></td></tr>
+          <tr><td>5</td><td>Home reads are blocked</td><td class="mono">cat ~/.bash_history</td><td><strong>Denied</strong></td></tr>
+          <tr><td>6</td><td>Credentials are blocked</td><td class="mono">ls ~/.ssh</td><td><strong>Denied</strong></td></tr>
+          <tr><td>7</td><td>Egress is closed by default</td><td class="mono">curl -sS -m 5 https://example.com</td><td><strong>Denied</strong>, with the host named in the result</td></tr>
+          <tr><td>8</td><td>Allowed index is reachable</td><td class="mono">curl -sSI -m 10 https://pypi.org/simple/</td><td>Succeeds, from the project directory</td></tr>
+          <tr><td>9</td><td>Token is scrubbed</td><td class="mono">printenv GITHUB_TOKEN</td><td>Empty</td></tr>
+          <tr><td>10</td><td>Build and test run</td><td class="mono">cmake --build build --parallel 4 &amp;&amp; mamba run -n Py3p12 python -m pytest -q</td><td>Both succeed</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Checks 4 through 7 are the ones to actually run. A policy that has never been tested against a denial is a policy you are assuming, and the asymmetric read default means an untested configuration usually fails open rather than closed.</p>
+  </div>
+</section>
+
+<section id="platform">
+  <div class="container">
+    <h2>9. Platform limits</h2>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Platform support for the OS-enforced sandbox, quoted from the sandboxing documentation. The Windows row matters for this deployment, where the nodes are Windows hosts.</caption>
+        <thead><tr><th scope="col">Platform</th><th scope="col">Documented behaviour</th></tr></thead>
+        <tbody>
+          <tr><td>macOS</td><td>Supported</td></tr>
+          <tr><td>Linux</td><td>Supported. Needs <span class="mono">socat</span>, described as "the relay used to route network traffic through the sandbox proxy"<a class="cite" href="references.html#r21">[21]</a></td></tr>
+          <tr><td>WSL2</td><td>Supported, with the same Linux prerequisites</td></tr>
+          <tr><td><strong>Native Windows</strong></td><td><strong>Commands run unsandboxed.</strong> The documentation states that to use the sandbox on a Windows machine, run inside a WSL2 distribution<a class="cite" href="references.html#r21">[21]</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout danger">
+      <p><strong>Read this before configuring anything on a Windows node.</strong> On native Windows the sandbox does not apply and commands run unsandboxed. A <span class="mono">settings.json</span> full of careful deny rules has no effect there. The nodes in this deployment are Windows hosts, so the practical options are: run the agent inside WSL2 and keep the project on the Linux filesystem, or use the container backends on the <a href="local-code-build-test.html">build and test page</a>, which contain by deployment rather than by OS policy.</p>
+    </div>
+
+    <p>On WSL2 there is one more documented subtlety. WSL hands a launch of a Windows binary &mdash; <span class="mono">cmd.exe</span>, <span class="mono">powershell.exe</span>, anything under <span class="mono">/mnt/c/</span> &mdash; to the Windows host over a Unix socket, so whether a sandboxed command can launch one follows the sandbox's Unix-socket settings, and an optional seccomp filter has to be installed to block the socket at all<a class="cite" href="references.html#r21">[21]</a>. A build that shells out to <span class="mono">cl.exe</span> on the Windows side is therefore crossing the boundary, and <span class="mono">allowAllUnixSockets</span> &mdash; which the documentation notes "opens every Unix socket to sandboxed commands" &mdash; is the setting that permits it. Keep the toolchain on one side of that line.</p>
+  </div>
+</section>
+
+<section id="together">
+  <div class="container">
+    <h2>10. Running both models side by side</h2>
+
+    <p>The two approaches are complementary, and a project can use both against the same source tree.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Task-to-backend assignment for a project that uses both containment models. The deciding question is always whether the task needs the host.</caption>
+        <thead><tr><th scope="col">Task</th><th scope="col">Backend</th><th scope="col">Because</th></tr></thead>
+        <tbody>
+          <tr><td>Refactor pure-Python computation</td><td>Open Terminal container</td><td>Reproducible, disposable, no host access needed</td></tr>
+          <tr><td>Build and test a C++ extension</td><td>Open Terminal container</td><td>The toolchain is in the image; the blast radius is the container</td></tr>
+          <tr><td>Debug a Qt GUI against a real display</td><td>OS-enforced sandbox on the host</td><td>A container has no display</td></tr>
+          <tr><td>Exercise an instrument driver over VISA</td><td>OS-enforced sandbox on the host</td><td>The hardware is on the host</td></tr>
+          <tr><td>Reduce data into Veusz <span class="mono">.vszh5</span> output</td><td>Either</td><td>The artefact is a file, so it works in both</td></tr>
+          <tr><td>Rebuild llama.cpp with CUDA and Vulkan</td><td>OS-enforced sandbox on the host</td><td>Needs the host CUDA toolkit and the real GPU</td></tr>
+          <tr><td>Anything touching credentials</td><td>Neither, without review</td><td>Container mounts and sandbox deny lists both have to be configured deliberately, and both default to being wrong</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout info-box">
+      <p><strong>One sentence to carry away.</strong> The container is the better default because its boundary exists whether or not the policy is right; the OS-enforced sandbox is the one that can reach the host, and its boundary is exactly as good as the rules you wrote and tested. Use the container unless the task needs the host, and when it does, run the denial checks in &sect;8 before letting the agent loose.</p>
+    </div>
+  </div>
+</section>
+"""

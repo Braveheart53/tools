@@ -1,0 +1,215 @@
+/* ==========================================================================
+   sitenav.css  --  AI_Local shared cross-page navigation strip
+   --------------------------------------------------------------------------
+   Author : William W. Wallace
+   Version: 1.0.0
+   Purpose: Give every page in the AI_Local set one consistent way to reach
+            every other page, plus a version stamp and a link to the change
+            log, without disturbing the navigation each page already has.
+
+   WHY THE STRIP IS NOT STICKY
+   ---------------------------
+   Several AI_Local pages (llama-rpc-vulkan-guide, the Windows 11 monitoring
+   tutorial, GPU_monitoring_setup, the Jupyter pages) already carry their own
+   position:sticky header or tab bar.  A second sticky element would either
+   double-stack or overlap them.  This strip is therefore position:static and
+   scrolls away, leaving each page's own sticky chrome to behave exactly as it
+   did before the rebuild.
+
+   WHY THE PREFIX IS "ailnav" AND NOT "snav"
+   -----------------------------------------
+   The obvious short prefix was already taken: llama-rpc-vulkan-guide.html
+   defines its own `.snav{flex:1;padding:...}` and uses `<nav class="snav">`
+   for its sidebar.  A shared sheet styling `.snav` would therefore have
+   repainted that page's own navigation, which is exactly the regression this
+   rebuild promised not to introduce.  Every class and token here is prefixed
+   `ailnav`, and build_ai_local_site.py -> verify_class_collisions() fails the
+   build if any shared class name is ever used by a host page again.
+   ========================================================================== */
+
+/* -------------------------------------------------------------------------
+   1. Tokens: light default, dark via OS preference and via explicit opt-in
+   ------------------------------------------------------------------------- */
+:root {
+  --ailnav-bg:      #11161f;
+  --ailnav-fg:      #c9d4e4;
+  --ailnav-fg-dim:  #8794a8;
+  --ailnav-accent:  #6fb3ff;
+  --ailnav-active:  #ffffff;
+  --ailnav-border:  #27303f;
+  --ailnav-hover:   #1c2531;
+}
+
+/* The strip is intentionally dark in both themes: it reads as application
+   chrome rather than as part of the document.  Only the hairline and the
+   hover wash shift so it sits correctly against a light page body. */
+:root[data-theme="light"] {
+  --ailnav-border: #c8d0de;
+}
+
+/* -------------------------------------------------------------------------
+   2. Layout
+   ------------------------------------------------------------------------- */
+.ailnav {
+  position: static;              /* see "WHY THE STRIP IS NOT STICKY" above */
+  z-index: 1;                    /* below any sticky header the page owns   */
+  background: var(--ailnav-bg);
+  color: var(--ailnav-fg);
+  border-bottom: 1px solid var(--ailnav-border);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  /* The host pages vary wildly in box-sizing defaults; pin it locally. */
+  box-sizing: border-box;
+}
+.ailnav *, .ailnav *::before, .ailnav *::after { box-sizing: border-box; }
+
+.ailnav-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 7px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* -------------------------------------------------------------------------
+   3. Brand block
+   ------------------------------------------------------------------------- */
+.ailnav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+  color: var(--ailnav-active);
+  font-weight: 700;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.ailnav-brand svg { width: 18px; height: 18px; display: block; }
+.ailnav-ver {
+  font-family: ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  font-size: 11px;
+  color: var(--ailnav-fg-dim);
+  border: 1px solid var(--ailnav-border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------------
+   4. Link list.
+
+   TWO BEHAVIOURS, AND WHY
+   -----------------------
+   On a wide screen the links WRAP onto a second line.  The alternative --
+   a horizontal scroll container -- was tried first and rejected: with
+   eleven entries the row needs about 1210px and a 1280px window leaves it
+   roughly 900px, so the last two entries were silently clipped with no
+   scrollbar and no other affordance.  A reader had no way to know "Docker
+   Jupyter" and "Install (Linux)" existed.  Wrapping costs one extra line of
+   chrome and shows every destination.
+
+   On a narrow screen (see the media query at the end of this file) the
+   links switch to a single scrolling row instead, because eleven wrapped
+   entries at phone width is a five-line block that pushes the page's own
+   content below the fold.  There, scrolling is the lesser cost, and the
+   partially visible next entry is itself the affordance.
+   ------------------------------------------------------------------------- */
+.ailnav-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;            /* wide screens: show every entry */
+  gap: 2px 4px;
+  min-width: 0;
+  /* Always on its own row, below the brand and the theme control. Letting
+     it share row one would make the nav's height depend on how many links
+     happen to fit beside the brand, so the strip would change height as
+     pages are added. A fixed two-row shape is steadier and, with the links
+     wrapping, no shorter in the cases that matter. */
+  order: 2;
+  flex: 1 1 100%;
+}
+
+.ailnav-links a {
+  color: var(--ailnav-fg);
+  text-decoration: none;
+  padding: 4px 9px;
+  border-radius: 5px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.ailnav-links a:hover  { background: var(--ailnav-hover); color: var(--ailnav-active); }
+.ailnav-links a:focus-visible { outline: 2px solid var(--ailnav-accent); outline-offset: 2px; }
+.ailnav-links a[aria-current="page"] {
+  color: var(--ailnav-active);
+  background: var(--ailnav-hover);
+  border-color: var(--ailnav-border);
+  font-weight: 700;
+}
+
+/* A thin separator before the utility links (References, Change log). */
+.ailnav-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--ailnav-border);
+  flex: 0 0 auto;
+  margin: 0 4px;
+}
+
+/* -------------------------------------------------------------------------
+   5. Theme button.  Injected only on pages that do not already own a theme
+      toggle, so no page ever shows two of them.
+   ------------------------------------------------------------------------- */
+.ailnav-theme {
+  flex: 0 0 auto;
+  /* order 1 keeps it on row one with the brand; margin-left:auto pushes it
+     to the right end of that row. Without the order it would be pushed onto
+     a third row of its own by the full-width link list above. */
+  order: 1;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: var(--ailnav-fg);
+  border: 1px solid var(--ailnav-border);
+  border-radius: 999px;
+  padding: 4px 11px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ailnav-theme:hover { background: var(--ailnav-hover); color: var(--ailnav-active); }
+.ailnav-theme:focus-visible { outline: 2px solid var(--ailnav-accent); outline-offset: 2px; }
+
+/* -------------------------------------------------------------------------
+   6. Responsive and print
+   ------------------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .ailnav-inner { padding: 6px 10px; gap: 7px; }
+
+  /* Narrow screens: one scrolling row rather than a wrapped block, for the
+     reason given in section 4. The links take their own line below the
+     brand, and the partially visible next entry signals that it scrolls. */
+  .ailnav-links {
+    order: 3;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 1px;
+  }
+  .ailnav-links::-webkit-scrollbar { display: none; }
+  .ailnav-links a { white-space: nowrap; }
+
+  .ailnav-theme { margin-left: auto; }
+}
+
+@media print {
+  /* Navigation chrome carries no information on paper. */
+  .ailnav { display: none; }
+}

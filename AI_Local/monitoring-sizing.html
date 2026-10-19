@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sizing the monitoring stack, and getting the queries right</title>
+<meta name="description" content="Prometheus storage and ingest sizing for a local AI deployment, the PromQL range-window condition, and how to treat counters and gauges correctly.">
+<meta name="author" content="William W. Wallace">
+<meta name="generator" content="build_ai_local_site.py 0.0.1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f5f66'/%3E%3Cg stroke='%23e3efef' stroke-width='2' fill='none'%3E%3Cpath d='M16 9v6M16 15l-6 6M16 15l6 6'/%3E%3C/g%3E%3Cg fill='%23e3efef'%3E%3Ccircle cx='16' cy='8' r='3'/%3E%3Ccircle cx='9' cy='23' r='3'/%3E%3Ccircle cx='23' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/equations.css">
+<link rel="stylesheet" href="assets/sitenav.css">
+</head>
+<body class="ail">
+<a class="skip" href="#content">Skip to content</a>
+<nav class="ailnav" aria-label="AI_Local page set">
+  <div class="ailnav-inner">
+    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
+    <span class="ailnav-ver">v0.0.1</span>
+    <div class="ailnav-links">
+      <a href="index.html">Overview</a><a href="local-code-build-test.html">Build &amp; test</a><a href="ollama-model-selection.html">Model choice</a><a href="claude-sandbox-local-env.html">Sandbox access</a><a href="monitoring-sizing.html">Monitor sizing</a><a href="llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="GPU_monitoring_setup.html">GPU metrics</a><a href="Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="references.html">References</a><a href="CHANGELOG.html">Change log</a>
+    </div>
+    <button class="ailnav-theme" type="button" aria-label="Switch theme" aria-pressed="false"><span class="ailnav-theme-icon" aria-hidden="true">☾</span><span class="ailnav-theme-label">Dark</span></button>
+  </div>
+</nav>
+<main id="content">
+<section class="hero">
+  <div class="container">
+    <div class="eyebrow">Monitoring arithmetic</div>
+    <h1>Sizing the monitoring stack, and getting the queries right</h1>
+    <p class="lead">The install pages in this set get Prometheus, the exporters and Grafana running. Four questions come up immediately afterwards and none of them are answered there: how much disk the retention window will cost, what the scrape configuration actually ingests, why a panel intermittently goes blank, and whether a given metric needs differencing before it means anything.</p>
+    <p class="small muted">This page holds those four relations in one place rather than repeating them on each of the four monitoring pages. Every equation is tagged <span class="pill stated">Stated</span> or <span class="pill derived">Derived here</span> and carries an information button that opens a variable table with units.</p>
+  </div>
+</section>
+
+<section id="on-this-page">
+  <div class="container">
+    <h2>On this page</h2>
+    <ul class="toc">
+      <li><a href="#storage">1. Disk cost of a retention window</a></li>
+      <li><a href="#ingest">2. What the scrape configuration ingests</a></li>
+      <li><a href="#windows">3. Why a panel goes blank, and the window that fixes it</a></li>
+      <li><a href="#counters">4. Counters and gauges are not interchangeable</a></li>
+      <li><a href="#apply">5. Applying this to the stack in this set</a></li>
+    </ul>
+  </div>
+</section>
+
+<section id="storage">
+  <div class="container">
+    <h2>1. Disk cost of a retention window</h2>
+
+    <p>The Prometheus storage documentation gives the sizing relation directly, and two figures that make it usable: the server "stores an average of only 1-2 bytes per sample", and a size-based retention limit should be set "to, at most, 80-85% of your allocated Prometheus disk space"<a class="cite" href="references.html#r18">[18]</a>.</p>
+
+    <div class="eq" id="eq-prom-disk">
+  <div class="eq-head">
+    <h3 class="eq-title">Prometheus on-disk size</h3>
+    <div class="eq-tools"><span class="pill stated">Stated</span>
+      <button class="info" aria-controls="v-prom-disk" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ D \;=\; T_{\text{ret}} \cdot \lambda \cdot \beta \]</div>
+  <p class="eq-note">This is the sizing relation given in the Prometheus storage documentation, which also states that the server averages one to two bytes per stored sample and recommends setting a size-based retention limit to at most 80&ndash;85&nbsp;% of the allocated disk<a class="cite" href="references.html#r18">[18]</a>. Reducing the number of series is more effective than reducing the sample rate, because samples within a series compress well and each new series does not.</p>
+  <div class="vars" id="v-prom-disk" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the Prometheus storage relation, named to match the documented form <span class="mono">needed_disk_space = retention_time_seconds * ingested_samples_per_second * bytes_per_sample</span>.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(D\)</td><td>Disk occupied by the time-series database at steady state</td><td>B</td></tr>
+      <tr><td>\(T_{\text{ret}}\)</td><td>Retention window, <span class="mono">--storage.tsdb.retention.time</span>, default 15 d when no size limit is set<a class="cite" href="references.html#r18">[18]</a></td><td>s</td></tr>
+      <tr><td>\(\lambda\)</td><td>Ingested samples per second across every scrape job</td><td>sample&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(\beta\)</td><td>Bytes per stored sample, documented as 1&ndash;2 on average<a class="cite" href="references.html#r18">[18]</a></td><td>B&middot;sample<sup>&minus;1</sup></td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Retention flags that interact with the relation above, with the documented defaults and behaviour quoted from the Prometheus storage documentation.</caption>
+        <thead><tr><th scope="col">Flag</th><th scope="col">Documented default</th><th scope="col">Note</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono">--storage.tsdb.path</td>
+            <td class="mono">data/</td>
+            <td>"Where Prometheus writes its database"<a class="cite" href="references.html#r18">[18]</a></td>
+          </tr>
+          <tr>
+            <td class="mono">--storage.tsdb.retention.time</td>
+            <td class="mono">15d</td>
+            <td>The default applies only when neither this flag nor the size flag is set<a class="cite" href="references.html#r18">[18]</a></td>
+          </tr>
+          <tr>
+            <td class="mono">--storage.tsdb.retention.size</td>
+            <td class="mono">0</td>
+            <td>Disabled by default. The write-ahead log and memory-mapped chunks count toward the total, so "the minimum requirement for the disk is the peak space taken by the <span class="mono">wal</span>"<a class="cite" href="references.html#r18">[18]</a></td>
+          </tr>
+          <tr>
+            <td>Both set together</td>
+            <td>&mdash;</td>
+            <td>"whichever triggers first will be used"<a class="cite" href="references.html#r18">[18]</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout info-box">
+      <p><strong>Reduce series before reducing sample rate.</strong> The documentation states that reducing the number of series is "likely more effective, due to compression of samples within a series"<a class="cite" href="references.html#r18">[18]</a>. The practical reading: lengthening the scrape interval loses resolution for a modest saving, while dropping a high-cardinality metric saves far more and loses nothing you were looking at. Per-process and per-disk-partition metrics are the usual offenders on a Windows host.</p>
+    </div>
+  </div>
+</section>
+
+<section id="ingest">
+  <div class="container">
+    <h2>2. What the scrape configuration ingests</h2>
+
+    <p>The storage relation needs \( \lambda \), which is not published anywhere because it depends entirely on your own <span class="mono">prometheus.yml</span>. It follows from the job definitions.</p>
+
+    <div class="eq" id="eq-prom-ingest">
+  <div class="eq-head">
+    <h3 class="eq-title">Ingested sample rate from the scrape configuration</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-prom-ingest" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ \lambda \;=\; \sum_{j} \frac{n_{j}}{T_{s,j}} \]</div>
+  <p class="eq-note">Feeds the storage relation above. Worth computing before adding an exporter rather than after, because a GPU exporter publishing a few hundred series per card across four nodes is a larger step than it looks.</p>
+  <div class="deriv"><ol>
+    <li>Each scrape job \( j \) collects \( n_{j} \) distinct time series from its targets on every scrape.</li>
+    <li>It scrapes once every \( T_{s,j} \) seconds, so it contributes \( n_{j}/T_{s,j} \) samples per second.</li>
+    <li>Jobs are independent, so the total is the sum over jobs.</li>
+    <li>Worked example for the four-node stack on this page set. <span class="mono">windows_exporter</span> publishing roughly 1500 series on each of 4 nodes at \( T_{s} = 15\ \mathrm{s} \) gives \( 6000/15 = 400\ \mathrm{sample\,s^{-1}} \). An <span class="mono">nvidia_gpu_exporter</span> adding about 120 series on each of 3 GPU nodes at 15&nbsp;s gives \( 360/15 = 24 \). <span class="mono">llama-server --metrics</span> adding roughly 30 series at 15&nbsp;s gives 2. Total \( \lambda \approx 426\ \mathrm{sample\,s^{-1}} \).</li>
+    <li>Substituting into the storage relation with \( T_{\text{ret}} = 15\ \mathrm{d} = 1.296\times10^{6}\ \mathrm{s} \) and \( \beta = 2\ \mathrm{B} \): \( D = 1.296\times10^{6} \times 426 \times 2 = 1.10\times10^{9}\ \mathrm{B} \approx 1.1\ \mathrm{GB} \). Allow several times that for the write-ahead log, memory-mapped chunks and compaction headroom.</li>
+    <li>The series counts above are order-of-magnitude figures for planning, not measurements. Replace them with <span class="mono">prometheus_tsdb_head_series</span> read from your own server once it has been running.</li>
+  </ol></div>
+  <div class="vars" id="v-prom-ingest" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the ingest-rate relation, summed over the scrape jobs defined in <span class="mono">prometheus.yml</span>.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(\lambda\)</td><td>Total ingested samples per second</td><td>sample&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(n_{j}\)</td><td>Distinct time series returned by every target of job \(j\) combined</td><td>dimensionless</td></tr>
+      <tr><td>\(T_{s,j}\)</td><td>Scrape interval for job \(j\), <span class="mono">scrape_interval</span></td><td>s</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="callout">
+      <p><strong>The series counts in that derivation are planning estimates, not measurements.</strong> Roughly 1500 series for <span class="mono">windows_exporter</span>, 120 per GPU for <span class="mono">nvidia_gpu_exporter</span><a class="cite" href="references.html#r20">[20]</a> and 30 for <span class="mono">llama-server --metrics</span> are order-of-magnitude figures for planning only. Replace them with <span class="mono">prometheus_tsdb_head_series</span> read from your own server once it has run for a day:</p>
+<pre><code># Total active series, which is the number the storage relation needs.
+curl -s 'http://localhost:9090/api/v1/query?query=prometheus_tsdb_head_series'
+
+# Series per job, which is how you find the expensive exporter.
+curl -s --get 'http://localhost:9090/api/v1/query' \
+  --data-urlencode 'query=count by (job) ({__name__=~".+"})'</code></pre>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Worked ingest and storage estimate for the four-node stack documented in this page set, evaluated from the two relations above. Series counts are planning estimates; the arithmetic is exact given them.</caption>
+        <thead><tr><th scope="col">Job</th><th scope="col">Targets</th><th scope="col">Series each</th><th scope="col">Interval</th><th scope="col">Samples&middot;s<sup>&minus;1</sup></th></tr></thead>
+        <tbody>
+          <tr><td class="mono">windows_exporter</td><td class="mono">4</td><td class="mono">~1500</td><td class="mono">15 s</td><td class="mono">400</td></tr>
+          <tr><td class="mono">nvidia_gpu_exporter</td><td class="mono">3</td><td class="mono">~120</td><td class="mono">15 s</td><td class="mono">24</td></tr>
+          <tr><td class="mono">llama-server</td><td class="mono">1</td><td class="mono">~30</td><td class="mono">15 s</td><td class="mono">2</td></tr>
+          <tr><td colspan="4"><strong>Total \(\lambda\)</strong></td><td class="mono"><strong>426</strong></td></tr>
+          <tr><td colspan="4">Disk at \(T_{\text{ret}} = 15\ \mathrm{d}\), \(\beta = 2\ \mathrm{B}\)</td><td class="mono"><strong>&asymp; 1.1 GB</strong></td></tr>
+          <tr><td colspan="4">Disk to allocate, at the documented 80&ndash;85 % ceiling<a class="cite" href="references.html#r18">[18]</a>, with headroom for the write-ahead log and compaction</td><td class="mono"><strong>&asymp; 8&ndash;10 GB</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>The gap between 1.1&nbsp;GB of compacted blocks and 8&ndash;10&nbsp;GB of allocation is deliberate. The documentation notes the write-ahead log and memory-mapped chunks count toward the size limit and sets the peak <span class="mono">wal</span> as the disk minimum<a class="cite" href="references.html#r18">[18]</a>, and compaction needs transient space on top of the steady state.</p>
+  </div>
+</section>
+
+<section id="windows">
+  <div class="container">
+    <h2>3. Why a panel goes blank, and the window that fixes it</h2>
+
+    <p>A dashboard panel that works most of the time and empties occasionally is almost never a broken exporter. It is a range-vector window too close to the scrape interval.</p>
+
+    <div class="eq" id="eq-rate-window">
+  <div class="eq-head">
+    <h3 class="eq-title">Minimum range-vector window for <span class="mono">rate()</span></h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-rate-window" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ \left\lfloor \frac{w}{T_{s}} \right\rfloor \;\ge\; 2 + f \qquad\Longrightarrow\qquad w \;\ge\; (2+f)\,T_{s} \]</div>
+  <p class="eq-note">The usual advice to make the window four times the scrape interval is this inequality with \( f = 2 \). Panels that go blank intermittently are nearly always a window too close to the scrape interval, not a broken exporter.</p>
+  <div class="deriv"><ol>
+    <li><span class="mono">rate()</span> is documented as the per-second average rate of increase across the range vector, computed between its first and last samples and extrapolated to the ends of the range to allow for missed scrapes<a class="cite" href="references.html#r19">[19]</a>. It therefore needs two samples inside the window to return anything. The PromQL function reference states that two-float-sample minimum explicitly only for <span class="mono">deriv</span> and <span class="mono">predict_linear</span>; for <span class="mono">rate</span> it is the observed behaviour rather than a documented guarantee, so treat this step as empirical.</li>
+    <li>A window of width \( w \) at scrape interval \( T_{s} \) contains \( \lfloor w/T_{s} \rfloor \) samples when every scrape succeeds.</li>
+    <li>Allowing \( f \) consecutive scrapes to fail or arrive late without the panel emptying requires \( 2+f \) slots rather than 2.</li>
+    <li>Rearranging gives \( w \ge (2+f)T_{s} \).</li>
+    <li>For the \( T_{s} = 15\ \mathrm{s} \) jobs on this page set, tolerating two missed scrapes gives \( w \ge 60\ \mathrm{s} \), which is why the dashboard expressions use <span class="mono">[1m]</span>.</li>
+    <li>Raising \( T_{s} \) without raising \( w \) is the usual regression. Pin the relationship by templating the window from the scrape interval instead of hard-coding it.</li>
+  </ol></div>
+  <div class="vars" id="v-rate-window" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the range-window condition for PromQL rate and increase functions over counters.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(w\)</td><td>Range-vector window, the bracketed duration in <span class="mono">rate(metric[w])</span></td><td>s</td></tr>
+      <tr><td>\(T_{s}\)</td><td>Scrape interval of the job producing the metric</td><td>s</td></tr>
+      <tr><td>\(f\)</td><td>Consecutive failed or late scrapes to tolerate without the expression emptying</td><td>dimensionless</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Minimum range-vector window per scrape interval, evaluated from the condition above for two and three tolerated missed scrapes. The 15&nbsp;s column is the interval used throughout this page set.</caption>
+        <thead><tr><th scope="col">Scrape interval \(T_{s}\)</th><th scope="col">Bare minimum, \(f = 0\)</th><th scope="col">Tolerating 2 misses</th><th scope="col">Tolerating 3 misses</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">10 s</td><td class="mono">20 s</td><td class="mono">40 s</td><td class="mono">50 s</td></tr>
+          <tr><td class="mono">15 s</td><td class="mono">30 s</td><td class="mono"><strong>60 s</strong></td><td class="mono">75 s</td></tr>
+          <tr><td class="mono">30 s</td><td class="mono">60 s</td><td class="mono">120 s</td><td class="mono">150 s</td></tr>
+          <tr><td class="mono">60 s</td><td class="mono">120 s</td><td class="mono">240 s</td><td class="mono">300 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p><strong>The regression to guard against.</strong> Raising <span class="mono">scrape_interval</span> without raising every window that depends on it breaks panels that were previously fine, and it breaks them intermittently, which makes it hard to attribute. In Grafana, template the window from a dashboard variable rather than hard-coding <span class="mono">[1m]</span> in twenty expressions, so one edit moves all of them.</p>
+    </div>
+
+    <p>Two further documented properties are worth knowing. <span class="mono">rate()</span> extrapolates "to the ends of the time range, allowing for missed scrapes", and when combining it with an aggregation you should "always take a <span class="mono">rate()</span> first, then aggregate"<a class="cite" href="references.html#r19">[19]</a>. Aggregating first destroys the per-series counter-reset handling and silently produces a wrong number rather than an error.</p>
+  </div>
+</section>
+
+<section id="counters">
+  <div class="container">
+    <h2>4. Counters and gauges are not interchangeable</h2>
+
+    <p>The GPU exporters publish both kinds of metric, and applying the wrong treatment produces a plausible-looking panel rather than an obvious failure. That makes it the most expensive class of mistake in a monitoring setup.</p>
+
+    <div class="eq" id="eq-gpu-utilisation">
+  <div class="eq-head">
+    <h3 class="eq-title">Utilisation from a cumulative busy-time counter</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-gpu-utilisation" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ U(w) \;=\; \frac{c(t) - c(t-w)}{w} \;=\; \mathrm{rate}\bigl(c[w]\bigr), \qquad 0 \le U \le n_{\text{dev}} \]</div>
+  <p class="eq-note">Worth stating explicitly because the GPU exporters publish both kinds of metric and they are not interchangeable: a cumulative busy-seconds counter must be differenced, while an instantaneous percentage gauge must not be. Applying <span class="mono">rate()</span> to a gauge, or omitting it on a counter, are the two failure modes that produce plausible-looking but wrong dashboards.</p>
+  <div class="deriv"><ol>
+    <li>A busy-time counter \( c(t) \) accumulates seconds during which the device was executing work, and only ever increases.</li>
+    <li>Over a window \( w \) the device was busy for \( c(t) - c(t-w) \) seconds out of \( w \) seconds elapsed.</li>
+    <li>The ratio of those two is the fraction of wall-clock time the device was busy, which is the definition of utilisation.</li>
+    <li>That ratio is precisely what PromQL <span class="mono">rate()</span> computes over a counter. The function reference states that breaks in monotonicity, such as a counter reset when the exporter or driver restarts, are adjusted for automatically<a class="cite" href="references.html#r19">[19]</a>, which is why the raw difference must not be taken by hand.</li>
+    <li>When the counter aggregates \( n_{\text{dev}} \) devices the result saturates at \( n_{\text{dev}} \) rather than 1, so divide by the device count before plotting a percentage.</li>
+    <li>\( w \) must satisfy the window condition derived above, otherwise the panel empties whenever a scrape is missed.</li>
+  </ol></div>
+  <div class="vars" id="v-gpu-utilisation" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the counter-based utilisation relation, applicable to GPU busy time, CPU time and any other cumulative seconds counter.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(U(w)\)</td><td>Mean utilisation over the window</td><td>dimensionless (&times;100 for per cent)</td></tr>
+      <tr><td>\(c(t)\)</td><td>Cumulative busy-seconds counter at time \(t\)</td><td>s</td></tr>
+      <tr><td>\(w\)</td><td>Range-vector window</td><td>s</td></tr>
+      <tr><td>\(n_{\text{dev}}\)</td><td>Devices or cores the counter aggregates</td><td>dimensionless</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="table-wrap">
+      <table>
+        <caption>How to treat each metric kind, and the symptom when the treatment is wrong. This is the check to run against every panel in a new dashboard.</caption>
+        <thead><tr><th scope="col">Metric kind</th><th scope="col">Example</th><th scope="col">Correct treatment</th><th scope="col">Symptom if treated as the other kind</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Counter</strong>, monotonically increasing</td>
+            <td>Cumulative busy seconds, bytes transmitted, request count</td>
+            <td><span class="mono">rate(metric[1m])</span></td>
+            <td>Plotted raw it is a slowly rising ramp that looks like a memory leak and means nothing</td>
+          </tr>
+          <tr>
+            <td><strong>Gauge</strong>, instantaneous</td>
+            <td>GPU utilisation per cent, temperature, VRAM in use, fan speed</td>
+            <td>Plot it directly</td>
+            <td>Wrapped in <span class="mono">rate()</span> it returns a near-zero line, or nothing, because a gauge is not monotonic</td>
+          </tr>
+          <tr>
+            <td><strong>Counter aggregating several devices</strong></td>
+            <td>Busy seconds summed across GPUs or CPU cores</td>
+            <td><span class="mono">rate(...)</span> then divide by \(n_{\text{dev}}\)</td>
+            <td>Reads above 100 % and the axis looks broken</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout info-box">
+      <p><strong>How to tell which you have.</strong> Open the exporter's own metrics endpoint and read the <span class="mono"># TYPE</span> line, which names the kind for every metric:</p>
+<pre><code># The documented check for the NVIDIA exporter, which the set's existing
+# pages install at port 9835.
+Invoke-WebRequest http://localhost:9835/metrics |
+  Select-Object -ExpandProperty Content |
+  Select-String -Pattern '^# TYPE'</code></pre>
+      <p>Do this once per exporter and write the kinds down. It takes a minute and it removes the whole class of mistake above.</p>
+    </div>
+  </div>
+</section>
+
+<section id="apply">
+  <div class="container">
+    <h2>5. Applying this to the stack in this set</h2>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Which relation on this page answers which question raised by each existing monitoring page in the set.</caption>
+        <thead><tr><th scope="col">Page</th><th scope="col">Question it leaves open</th><th scope="col">Relation</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><a href="Grafana_Prometheus_install_windows.html">Install on Windows / WSL2</a></td>
+            <td>How much disk to give the data directory</td>
+            <td><a href="#eq-prom-disk">Storage</a> and <a href="#eq-prom-ingest">ingest rate</a></td>
+          </tr>
+          <tr>
+            <td><a href="Grafan_Promethius_install_linux.html">Install on Node A (Linux)</a></td>
+            <td>Same, plus whether the 15&nbsp;s default scrape interval is affordable</td>
+            <td><a href="#eq-prom-ingest">Ingest rate</a></td>
+          </tr>
+          <tr>
+            <td><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Multi-node llama-server monitoring</a></td>
+            <td>Why a panel empties intermittently</td>
+            <td><a href="#eq-rate-window">Window condition</a></td>
+          </tr>
+          <tr>
+            <td><a href="GPU_monitoring_setup.html">Multi-vendor GPU monitoring</a></td>
+            <td>Whether a given GPU metric needs differencing</td>
+            <td><a href="#eq-gpu-utilisation">Counter-based utilisation</a></td>
+          </tr>
+          <tr>
+            <td><a href="ollama-model-selection.html">Model selection</a></td>
+            <td>Whether a model quietly spilled to system RAM</td>
+            <td>Not an equation: <span class="mono">ollama ps</span>, plus a VRAM gauge panel on the dashboard</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p><strong>The one panel worth adding to an existing dashboard.</strong> Resident VRAM per node, as a gauge, next to decode rate. The ninefold throughput cliff described on the <a href="ollama-model-selection.html#speed">model selection page</a> is invisible in a chat window and obvious on that panel, and it is the failure that wastes the most time in a local deployment.</p>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="foot">
+  <div class="container">
+    <p><strong>AI_Local</strong> v0.0.1 &middot; William W. Wallace &middot;
+       <a href="CHANGELOG.html">change log</a> &middot;
+       <a href="references.html">references</a></p>
+    <p class="small">Equations typeset offline with KaTeX. Every page in this set opens
+       from local disk with no network access, and nothing here uses browser storage.</p>
+  </div>
+</footer>
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="assets/equations.js"></script>
+<script src="assets/sitenav.js"></script>
+</body>
+</html>

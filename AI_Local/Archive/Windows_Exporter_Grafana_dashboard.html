@@ -79,8 +79,23 @@
         footer { text-align: center; padding: 30px; color: #7f8c8d; font-size: 14px; border-top: 1px solid #e0e0e0; margin-top: 40px; }
         .badge { display: inline-block; background: #eee; color: #555; padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 8px; vertical-align: middle; }
     </style>
+<link rel="stylesheet" href="../assets/katex/katex.min.css">
+<link rel="stylesheet" href="../assets/equations.css">
+<link rel="stylesheet" href="../assets/sitenav.css">
+<link rel="stylesheet" href="../assets/legacy-dark.css">
 </head>
 <body>
+<nav class="ailnav" aria-label="AI_Local page set">
+  <div class="ailnav-inner">
+    <a class="ailnav-brand" href="../index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
+    <span class="ailnav-ver">v0.0.1</span>
+    <div class="ailnav-links">
+      <a href="../index.html">Overview</a><a href="../local-code-build-test.html">Build &amp; test</a><a href="../ollama-model-selection.html">Model choice</a><a href="../claude-sandbox-local-env.html">Sandbox access</a><a href="../monitoring-sizing.html">Monitor sizing</a><a href="../llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="../Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="../Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="../Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="../GPU_monitoring_setup.html">GPU metrics</a><a href="../Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="../Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="../references.html">References</a><a href="../CHANGELOG.html">Change log</a>
+    </div>
+    <button class="ailnav-theme" type="button" aria-label="Switch theme" aria-pressed="false"><span class="ailnav-theme-icon" aria-hidden="true">☾</span><span class="ailnav-theme-label">Dark</span></button>
+  </div>
+</nav>
+
     <header>
         <h1>GPU Monitoring Documentation</h1>
         <p>Windows Exporter & Grafana Dashboard Integration Guide</p>
@@ -213,5 +228,9 @@ Start-Service "NvidiaGPUExporter"</code></pre>
             URL.revokeObjectURL(url);
         }
     </script>
+<script src="../assets/katex/katex.min.js"></script>
+<script src="../assets/katex/contrib/auto-render.min.js"></script>
+<script src="../assets/equations.js"></script>
+<script src="../assets/sitenav.js"></script>
 </body>
 </html>

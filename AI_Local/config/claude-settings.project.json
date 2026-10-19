@@ -1,0 +1,79 @@
+{
+  "__README": [
+    "claude-settings.project.json  --  version 0.0.1  --  William W. Wallace",
+    "",
+    "PROJECT-LEVEL sandbox policy: the grants one project needs. Copy the",
+    "'sandbox' object into <project>/.claude/settings.json. Pairs with",
+    "claude-settings.user.json, which carries the machine-wide restrictions.",
+    "",
+    "Filesystem arrays MERGE across settings scopes rather than replacing",
+    "one another, so these entries ADD to the user-level rules instead of",
+    "overriding them. An edit during a session is applied to the running",
+    "session, so a path can be widened mid-task without restarting.",
+    "",
+    "See claude-sandbox-local-env.html section 8."
+  ],
+
+  "sandbox": {
+    "enabled": true,
+
+    "filesystem": {
+      "__NOTE_dot": [
+        "'.' resolves to the PROJECT ROOT when the configuration lives in",
+        "project settings. In ~/.claude/settings.json the same '.' would",
+        "resolve to ~/.claude instead, which is why these entries belong",
+        "here and not there.",
+        "",
+        "The working directory is writable by default; it is listed",
+        "explicitly so the intent is visible to whoever reads this file."
+      ],
+      "allowWrite": [
+        ".",
+        "/tmp/cmake-build"
+      ],
+      "allowRead": [
+        "."
+      ]
+    },
+
+    "__NOTE_network": [
+      "Opened here rather than at user level, so the hole is scoped to the",
+      "one project that pulls dependencies. Delete this block entirely for a",
+      "project that only builds and tests: an offline sandbox is the",
+      "stronger position and costs nothing when there is nothing to fetch."
+    ],
+    "network": {
+      "allowedDomains": [
+        "conda.anaconda.org",
+        "repo.anaconda.com",
+        "pypi.org",
+        "files.pythonhosted.org"
+      ]
+    },
+
+    "__NOTE_mutable_env": [
+      "To let the agent INSTALL into an environment, add the environment",
+      "prefix and the package cache to allowWrite above:",
+      "",
+      "  \"~/miniforge3/envs/ai_sandbox\",",
+      "  \"~/miniforge3/pkgs\"",
+      "",
+      "Name ONE environment, never the whole envs directory: a wider entry",
+      "lets a task for this project break another project's environment.",
+      "Without the pkgs entry a solve downloads and then fails to write,",
+      "which presents as a confusing permission error.",
+      "",
+      "Better still, clone the real environment and grant write access only",
+      "to the clone, which is disposable:",
+      "",
+      "  mamba env create -f Py3p12_Clean.yml -n ai_sandbox",
+      "",
+      "DO NOT reach for sandbox.excludedCommands to make a build work. An",
+      "excluded command runs with your full access and no network proxy, and",
+      "a pattern covering an interpreter or a script inside the working",
+      "directory lets the agent write that script and then run it outside",
+      "the sandbox. Grant the directory or the host instead; the command",
+      "stays sandboxed."
+    ]
+  }
+}

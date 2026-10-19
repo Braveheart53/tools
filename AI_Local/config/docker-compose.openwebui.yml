@@ -1,0 +1,242 @@
+# ===========================================================================
+# docker-compose.openwebui.yml
+# ---------------------------------------------------------------------------
+# Author : William W. Wallace
+# Version: 0.0.1
+# Created: 2026-10-18
+#
+# Open WebUI + Open Terminal + Jupyter, as described on
+# local-code-build-test.html.
+#
+# WHAT THIS IS FOR
+# ----------------
+# The three execution paths that page covers, in one file, so they can be
+# brought up together and compared:
+#
+#   open-webui      the control plane, on :3000
+#   open-terminal   the recommended execution backend, on :8000
+#   jupyter         the legacy Jupyter engine, on :8888, kept for the case
+#                   where the point is to run against a host environment
+#
+# Start with:   docker compose -f docker-compose.openwebui.yml up -d
+# Check with:   docker compose -f docker-compose.openwebui.yml ps
+#
+# BEFORE YOU RUN THIS
+# -------------------
+# 1. Replace every REPLACE-ME value. They are deliberately invalid so the
+#    stack fails loudly rather than coming up with a guessable secret.
+# 2. Decide whether you want the jupyter service at all. If the model only
+#    needs a shell and a compiler, delete it: a Jupyter kernel can
+#    subprocess anything the kernel's user can run, and the Open WebUI
+#    documentation advises against the Jupyter engine for multi-tenant use
+#    because it has no per-user isolation by default.
+# 3. Read the PERSISTED CONFIG warning below. It is the single most common
+#    reason these variables appear to have no effect.
+#
+# PERSISTED CONFIG -- READ THIS
+# -----------------------------
+# Most CODE_* variables below are PERSISTED settings in Open WebUI. An
+# environment variable takes effect only on the FIRST start with a fresh
+# database; after that the value saved in the database wins, unless
+# ENABLE_PERSISTENT_CONFIG is False.
+#
+# So on an EXISTING install, changing a value here does nothing. Change it in
+#   Settings -> Admin -> Code Execution
+# instead, or set ENABLE_PERSISTENT_CONFIG=False to make the environment
+# authoritative on every start. The second option is the right one when this
+# file is the record of the configuration, which is the usual case when the
+# file lives in version control.
+# ===========================================================================
+
+services:
+
+  # -------------------------------------------------------------------------
+  # Open WebUI: the control plane. Serves the chat interface, holds the model
+  # and tool configuration, and talks to everything else over HTTP.
+  # -------------------------------------------------------------------------
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    volumes:
+      # Holds the database that the persisted settings live in. Do not delete
+      # this volume casually: it carries users, chats and all admin settings.
+      - open-webui:/app/backend/data
+    extra_hosts:
+      # Makes host.docker.internal resolve on Linux, which is how this
+      # container reaches a service running on the host rather than in the
+      # compose project. Harmless on Docker Desktop, where it already works.
+      - "host.docker.internal:host-gateway"
+    environment:
+      # ---- inference -----------------------------------------------------
+      # Ollama on the host. OLLAMA_BASE_URLS (plural) takes precedence over
+      # OLLAMA_BASE_URL and load-balances across semicolon-separated backends,
+      # which is how to add the llama-server node alongside Ollama.
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+      # OLLAMA_BASE_URLS: "http://host.docker.internal:11434;http://192.168.7.27:8080"
+
+      # ---- make this file authoritative ----------------------------------
+      # With this False, the variables below win on every start instead of
+      # being overridden by whatever was saved in the database. Set it True
+      # (or remove it) if you would rather manage settings in the admin UI.
+      ENABLE_PERSISTENT_CONFIG: "False"
+
+      # ---- tool servers, required for Open Terminal ------------------------
+      # The Open Terminal section of Admin -> Integrations is greyed out when
+      # this is False.
+      ENABLE_TOOL_SERVERS: "True"
+
+      # ---- code interpreter ------------------------------------------------
+      ENABLE_CODE_INTERPRETER: "True"
+
+      # Engine selection. BOTH of these must be set: CODE_INTERPRETER_ENGINE
+      # defaults to pyodide and does NOT inherit from CODE_EXECUTION_ENGINE.
+      # Getting this wrong is silent: the manual Run button uses Jupyter while
+      # the model keeps executing in the browser, and the symptom is a model
+      # that cannot see files it just wrote.
+      #
+      # Set both to "jupyter" for the Jupyter engine, or leave them at
+      # "pyodide" and drive execution through Open Terminal instead, which is
+      # the recommended arrangement.
+      CODE_EXECUTION_ENGINE: "jupyter"
+      CODE_INTERPRETER_ENGINE: "jupyter"
+
+      # Jupyter connection, for the code-execution (manual Run) path.
+      CODE_EXECUTION_JUPYTER_URL: "http://jupyter:8888"
+      # Accepts ONLY "token" or "password". Any other value sends no
+      # credentials at all, which presents as a connection that fails with no
+      # useful error.
+      CODE_EXECUTION_JUPYTER_AUTH: "token"
+      CODE_EXECUTION_JUPYTER_AUTH_TOKEN: "REPLACE-ME-JUPYTER-TOKEN"
+      # Seconds. Raise well above the default 60 for anything that compiles.
+      CODE_EXECUTION_JUPYTER_TIMEOUT: "900"
+
+      # Jupyter connection, for the code-interpreter (model-driven) path.
+      # These default to their CODE_EXECUTION_* counterparts, so they are
+      # stated here only to keep the configuration explicit and greppable.
+      CODE_INTERPRETER_JUPYTER_URL: "http://jupyter:8888"
+      CODE_INTERPRETER_JUPYTER_AUTH: "token"
+      CODE_INTERPRETER_JUPYTER_AUTH_TOKEN: "REPLACE-ME-JUPYTER-TOKEN"
+      CODE_INTERPRETER_JUPYTER_TIMEOUT: "900"
+
+      # Speeds output delivery on the Jupyter engine. Read at start-up, so a
+      # change needs a container restart.
+      ENABLE_ORJSON: "True"
+
+      # A guard rail, NOT a security boundary: the documentation states it
+      # only blocks direct top-level imports. Do not rely on it for
+      # containment; rely on the container.
+      # CODE_INTERPRETER_BLOCKED_MODULES: "socket,subprocess"
+
+    depends_on:
+      - open-terminal
+      - jupyter
+
+  # -------------------------------------------------------------------------
+  # Open Terminal: the recommended execution backend. A full Linux shell, so
+  # it can install packages, run git and ffmpeg, and drive a compiler.
+  #
+  # Connect it in Admin -> Integrations -> Open Terminal (NOT under
+  # "External Tools" or "Tool Servers", which skips the file browser and the
+  # terminal sidebar), with URL http://open-terminal:8000 and the API key
+  # below, Auth Type left as Bearer.
+  # -------------------------------------------------------------------------
+  open-terminal:
+    # Swap this for a locally built image when you want micromamba and a
+    # toolchain baked in; see the Dockerfile on local-code-build-test.html.
+    #   image: open-terminal-mamba:0.0.1
+    image: ghcr.io/open-webui/open-terminal
+    container_name: open-terminal
+    restart: unless-stopped
+    ports:
+      # Exposed on the host so the API page at /docs is reachable for
+      # verification. Remove this mapping once the stack works: Open WebUI
+      # reaches it over the compose network and does not need the host port.
+      - "8000:8000"
+    volumes:
+      # Workspace persistence. Files under /home/user survive a restart.
+      - open-terminal:/home/user
+      # Mount ONE project directory, not a home directory. Anything mounted
+      # here is writable by code a model wrote and a model ran.
+      # - /host/path/to/project:/workspace/project
+    environment:
+      # Set the key explicitly. Omitted, a key is generated and written to the
+      # container log, which is not a managed secret.
+      OPEN_TERMINAL_API_KEY: "REPLACE-ME-OPEN-TERMINAL-KEY"
+
+      # Egress firewall: "only allow outbound connections to these domains".
+      # UNSET MEANS UNRESTRICTED, so a model can reach anything you can.
+      # Listed here: the conda and PyPI indexes and nothing else.
+      OPEN_TERMINAL_ALLOWED_DOMAINS: "conda.anaconda.org,repo.anaconda.com,pypi.org,files.pythonhosted.org"
+
+      # Default is "*", and a start-up warning is emitted when it is unset.
+      OPEN_TERMINAL_CORS_ALLOWED_ORIGINS: "http://192.168.7.27:3000"
+
+      # Seconds to wait for command output. Unset plus a 40-minute build is
+      # an agent that appears to hang.
+      OPEN_TERMINAL_EXECUTE_TIMEOUT: "1800"
+
+      # Accepts "home", an explicit path, or "filesystem". "filesystem"
+      # exposes the whole container to the file browser.
+      OPEN_TERMINAL_FILE_BROWSER_ROOT: "/workspace"
+
+      # Caps concurrent terminal sessions, which also caps how many builds a
+      # model can start at once. 16 is the default; 4 is ample for one user.
+      OPEN_TERMINAL_MAX_SESSIONS: "4"
+
+      # Told to the model, so it does not try to install a compiler that is
+      # already present. The cheapest way to save an agent iteration.
+      OPEN_TERMINAL_EXECUTE_DESCRIPTION: >-
+        Debian with build-essential, cmake and ninja available.
+        Python lives in the micromamba environment 'Py3p12'; run Python only
+        as: micromamba run -n Py3p12 python ...
+        There is no display: Qt tests must set QT_QPA_PLATFORM=offscreen.
+
+      # Installed at every container start, so keep these short and put a
+      # real toolchain in a derived image instead.
+      OPEN_TERMINAL_PACKAGES: "build-essential cmake ninja-build git pkg-config"
+      OPEN_TERMINAL_PIP_PACKAGES: "pytest pytest-qt numpy h5py"
+
+    # Resource limits are not documented as Open Terminal settings, so they
+    # are applied by Docker. Without them a runaway build can take the host
+    # down with the model server on it.
+    cpus: "8.0"
+    mem_limit: "24g"
+
+    # Give the sandbox a DIFFERENT GPU from the one holding the model
+    # weights, or none at all. Sharing the card lets a test allocation
+    # exhaust VRAM and abort the model server.
+    # gpus:
+    #   - driver: nvidia
+    #     device_ids: ["1"]
+    #     capabilities: [gpu]
+
+  # -------------------------------------------------------------------------
+  # Jupyter: the legacy code-interpreter engine. Delete this service if you
+  # are using Open Terminal alone.
+  #
+  # Each run gets a fresh kernel which is deleted afterwards: variables do
+  # not persist between runs, but files written to disk do. Keep a whole
+  # build inside one cell, driven by subprocess.run, so it succeeds or fails
+  # as a unit.
+  # -------------------------------------------------------------------------
+  jupyter:
+    image: jupyter/minimal-notebook:latest
+    container_name: jupyter
+    restart: unless-stopped
+    ports:
+      # As above: useful for verification, removable afterwards.
+      - "8888:8888"
+    volumes:
+      - jupyter_data:/home/jovyan/work
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      # Must equal the CODE_*_JUPYTER_AUTH_TOKEN values above.
+      JUPYTER_TOKEN: "REPLACE-ME-JUPYTER-TOKEN"
+
+volumes:
+  open-webui:
+  open-terminal:
+  jupyter_data:

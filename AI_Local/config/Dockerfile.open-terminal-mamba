@@ -1,0 +1,101 @@
+# ===========================================================================
+# Dockerfile.open-terminal-mamba
+# ---------------------------------------------------------------------------
+# Author : William W. Wallace
+# Version: 0.0.1
+# Created: 2026-10-18
+#
+# Open Terminal with a C++ toolchain and a micromamba environment built from
+# this project's own YAML, so the container and the host resolve the same
+# specification. Route B on local-code-build-test.html section 5.2.
+#
+# BUILD
+#   Copy a mamba environment YAML next to this file first, then:
+#     docker build -f Dockerfile.open-terminal-mamba -t open-terminal-mamba:0.0.1 .
+#
+# WHY A DERIVED IMAGE RATHER THAN OPEN_TERMINAL_PACKAGES
+#   The OPEN_TERMINAL_PACKAGES, OPEN_TERMINAL_PIP_PACKAGES and
+#   OPEN_TERMINAL_NPM_PACKAGES variables install at every container start.
+#   That is fine for one late addition and wrong for a toolchain: it adds
+#   minutes to every restart and silently depends on the package index being
+#   reachable at start-up, which the egress allowlist may well forbid.
+# ===========================================================================
+
+FROM ghcr.io/open-webui/open-terminal
+
+# ---------------------------------------------------------------------------
+# 1. System build toolchain
+#
+# The base image runs as an unprivileged 'user'; switch to root for the
+# install and switch back at the end. Never leave the final image as root:
+# the whole point of the container is that a model's mistakes are bounded.
+# ---------------------------------------------------------------------------
+USER root
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential \
+      cmake \
+      ninja-build \
+      git \
+      pkg-config \
+      ca-certificates \
+      curl \
+      bzip2 \
+ && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# 2. micromamba
+#
+# A single static binary, so no shell initialisation and no base environment
+# to manage. MAMBA_ROOT_PREFIX is set for the image rather than per command
+# so that `micromamba run -n <name>` resolves without a --root-prefix flag.
+# ---------------------------------------------------------------------------
+ENV MAMBA_ROOT_PREFIX=/opt/micromamba
+
+RUN mkdir -p "${MAMBA_ROOT_PREFIX}" \
+ && curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+      | tar -xvj -C /usr/local bin/micromamba \
+ && /usr/local/bin/micromamba --version
+
+# ---------------------------------------------------------------------------
+# 3. The project environment, from the project's own YAML
+#
+# Copied in rather than specified here, so there is exactly one environment
+# specification shared with the host. Change the filename to match yours.
+# `clean --all` afterwards drops the package cache, which is a large part of
+# the image size and is not needed at run time.
+# ---------------------------------------------------------------------------
+COPY Py3p12_Clean.yml /tmp/env.yml
+
+RUN micromamba create -y -n Py3p12 -f /tmp/env.yml \
+ && micromamba install -y -n Py3p12 pytest pytest-qt \
+ && micromamba clean --all --yes \
+ && rm -f /tmp/env.yml
+
+# ---------------------------------------------------------------------------
+# 4. Tell the model what it has
+#
+# OPEN_TERMINAL_EXECUTE_DESCRIPTION is documented as custom text telling the
+# AI about installed tools. Three sentences here remove three whole classes
+# of wasted iteration: installing a compiler that exists, calling the system
+# python instead of the environment's, and trying to screenshot a window on
+# a machine with no display.
+# ---------------------------------------------------------------------------
+ENV OPEN_TERMINAL_EXECUTE_DESCRIPTION="Debian with build-essential, cmake and ninja installed. Python lives in the micromamba environment 'Py3p12': run it only as 'micromamba run -n Py3p12 python ...', never as bare 'python'. There is no display; Qt tests must set QT_QPA_PLATFORM=offscreen and must not attempt screenshots."
+
+# Bound the file browser to the work area rather than the whole container.
+ENV OPEN_TERMINAL_FILE_BROWSER_ROOT=/workspace
+
+# ---------------------------------------------------------------------------
+# 5. Workspace, owned by the unprivileged user
+# ---------------------------------------------------------------------------
+RUN mkdir -p /workspace && chown -R user:user /workspace
+
+USER user
+WORKDIR /workspace
+
+# Smoke test for the built image:
+#   docker run --rm open-terminal-mamba:0.0.1 \
+#     micromamba run -n Py3p12 python -c "import sys; print(sys.version)"
+#   docker run --rm open-terminal-mamba:0.0.1 cmake --version

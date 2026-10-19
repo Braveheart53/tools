@@ -1,0 +1,398 @@
+/* ==========================================================================
+   site.css  --  base stylesheet for the NEW AI_Local pages
+   --------------------------------------------------------------------------
+   Author : William W. Wallace
+   Version: 1.0.0
+
+   SCOPE
+   -----
+   This sheet styles only the pages written for the rebuild:
+
+       index.html
+       local-code-build-test.html
+       ollama-model-selection.html
+       claude-sandbox-local-env.html
+       references.html
+       CHANGELOG.html
+
+   The seven pre-existing guides keep their own inline stylesheets untouched;
+   they pick up only equations.css, sitenav.css and (where they had no dark
+   theme) legacy-dark.css.  Keeping this sheet off those pages is deliberate:
+   it means the rebuild cannot change how any existing guide looks.
+
+   The token names and the overall proportions follow the "Atomic Theory
+   Atlas" design system so that equations, variable tables and reference rows
+   read identically across both projects.  Token names here are the Atlas
+   --color-* / --space-* family; the equation component in equations.css uses
+   its own --eqc-* family and does not depend on these.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Design tokens -- light
+   -------------------------------------------------------------------------- */
+:root, :root[data-theme="light"] {
+  --text-xs:  clamp(.75rem, .71rem + .2vw,  .83rem);
+  --text-sm:  clamp(.86rem, .82rem + .25vw, .95rem);
+  --text-base:clamp(1rem,   .96rem + .2vw,  1.06rem);
+  --text-lg:  clamp(1.1rem, 1rem   + .5vw,  1.35rem);
+  --text-xl:  clamp(1.35rem,1.15rem+ .9vw,  1.9rem);
+  --text-2xl: clamp(1.8rem, 1.3rem + 2vw,   2.8rem);
+  --text-3xl: clamp(2.1rem, 1.4rem + 3vw,   3.4rem);
+
+  --space-1:.25rem; --space-2:.5rem;  --space-3:.75rem; --space-4:1rem;
+  --space-5:1.25rem;--space-6:1.5rem; --space-8:2rem;   --space-10:2.5rem;
+  --space-12:3rem;  --space-16:4rem;
+
+  --color-bg:            #f7f6f2;
+  --color-surface:       #fdfcfa;
+  --color-surface-2:     #f2efe9;
+  --color-surface-offset:#eceae4;
+  --color-border:        #d6d2c9;
+  --color-divider:       #e2dfd8;
+  --color-text:          #221f1a;
+  --color-text-muted:    #5f5c55;
+  --color-text-faint:    #8b8880;
+  --color-text-inverse:  #faf9f6;
+  --color-primary:       #0f5f66;
+  --color-primary-hover: #0a464b;
+  --color-primary-soft:  #e3efef;
+  --color-blue:          #1c5b8f;  --color-blue-soft:   #e4edf5;
+  --color-orange:        #a8560c;  --color-orange-soft: #f6ebdf;
+  --color-violet:        #5a3f8f;  --color-violet-soft: #ece7f6;
+  --color-red:           #a3242e;  --color-red-soft:    #f8e5e6;
+
+  --radius-sm:.35rem; --radius-md:.5rem; --radius-lg:.75rem; --radius-xl:1rem;
+  --shadow-sm:0 1px 2px rgba(30,25,15,.07);
+  --shadow-md:0 4px 14px rgba(30,25,15,.09);
+
+  --content:1120px; --content-wide:1400px;
+
+  --font-body:   'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display:'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --font-mono:   ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+/* --------------------------------------------------------------------------
+   2. Design tokens -- dark.  Declared twice for the same reason as in
+      equations.css: once for the operating-system preference (guarded so a
+      page pinned to light is not repainted) and once for the explicit
+      attribute set by the navigation strip's theme button.
+   -------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg:            #14130f;
+    --color-surface:       #1b1a16;
+    --color-surface-2:     #211f1a;
+    --color-surface-offset:#26241f;
+    --color-border:        #3b3831;
+    --color-divider:       #2b2924;
+    --color-text:          #e8e4da;
+    --color-text-muted:    #b0aca1;
+    --color-text-faint:    #87837a;
+    --color-text-inverse:  #14130f;
+    --color-primary:       #5fb3ba;
+    --color-primary-hover: #84cdd3;
+    --color-primary-soft:  #173438;
+    --color-blue:          #78b1de;  --color-blue-soft:   #152836;
+    --color-orange:        #e0913f;  --color-orange-soft: #332514;
+    --color-violet:        #a992e0;  --color-violet-soft: #241c36;
+    --color-red:           #e8737d;  --color-red-soft:    #35191b;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+    --shadow-md:0 4px 14px rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"] {
+  --color-bg:            #14130f;
+  --color-surface:       #1b1a16;
+  --color-surface-2:     #211f1a;
+  --color-surface-offset:#26241f;
+  --color-border:        #3b3831;
+  --color-divider:       #2b2924;
+  --color-text:          #e8e4da;
+  --color-text-muted:    #b0aca1;
+  --color-text-faint:    #87837a;
+  --color-text-inverse:  #14130f;
+  --color-primary:       #5fb3ba;
+  --color-primary-hover: #84cdd3;
+  --color-primary-soft:  #173438;
+  --color-blue:          #78b1de;  --color-blue-soft:   #152836;
+  --color-orange:        #e0913f;  --color-orange-soft: #332514;
+  --color-violet:        #a992e0;  --color-violet-soft: #241c36;
+  --color-red:           #e8737d;  --color-red-soft:    #35191b;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 4px 14px rgba(0,0,0,.45);
+}
+
+/* --------------------------------------------------------------------------
+   3. Document base
+   -------------------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: none; scroll-behavior: smooth; scroll-padding-top: 1rem; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.7;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+img, svg { max-width: 100%; display: block; }
+a { color: var(--color-primary); text-underline-offset: 3px; }
+button { font: inherit; }
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  line-height: 1.18;
+  margin: 0 0 .6rem;
+  font-weight: 700;
+}
+h1 { font-size: var(--text-3xl); letter-spacing: -.02em; }
+h2 { font-size: var(--text-2xl); letter-spacing: -.015em; }
+h3 { font-size: var(--text-xl); }
+h4 { font-size: var(--text-lg); }
+
+p { max-width: 76ch; margin: 0 0 1rem; }
+ul, ol { max-width: 76ch; }
+li { margin-bottom: .3rem; }
+
+.lead  { font-size: var(--text-lg); color: var(--color-text-muted); max-width: 72ch; }
+.small { font-size: var(--text-sm); }
+.xs    { font-size: var(--text-xs); }
+.muted { color: var(--color-text-muted); }
+.faint { color: var(--color-text-faint); }
+/* Long unbreakable identifiers -- settings keys such as
+   `permissions.blockReadsOutsideWorkingDirectories`, and file names such as
+   `Files_you_Will_need_that_areNot_here.txt` -- are wider than a phone
+   viewport and have no space to break at.  Without `overflow-wrap: anywhere`
+   they widen the whole document and the page scrolls sideways, which is the
+   one layout failure that makes a page feel broken rather than cramped.
+   `anywhere` rather than `break-word` because these tokens contain no break
+   opportunity at all, and because `anywhere` is also taken into account when
+   the browser computes min-content width, which is what stops the table
+   column from forcing the overflow in the first place. */
+.mono  { font-family: var(--font-mono); overflow-wrap: anywhere; }
+.nowrap{ white-space: nowrap; overflow-wrap: normal; }
+
+.skip { position: absolute; left: -9999px; }
+.skip:focus {
+  left: 1rem; top: 1rem; z-index: 60;
+  background: var(--color-primary); color: var(--color-text-inverse);
+  padding: .7rem 1rem; border-radius: var(--radius-md);
+}
+
+/* --------------------------------------------------------------------------
+   4. Containers and sections
+   -------------------------------------------------------------------------- */
+.container      { max-width: var(--content);      margin: auto; padding: 0 var(--space-5); }
+.container-wide { max-width: var(--content-wide); margin: auto; padding: 0 var(--space-5); }
+
+.hero {
+  padding: clamp(2rem, 5vw, 4rem) 0 clamp(1.5rem, 3vw, 2.5rem);
+  border-bottom: 1px solid var(--color-divider);
+}
+.eyebrow {
+  font-size: var(--text-xs); letter-spacing: .16em; text-transform: uppercase;
+  color: var(--color-primary); font-weight: 700; margin-bottom: .6rem;
+}
+section {
+  padding: clamp(1.75rem, 4vw, 3rem) 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+section:last-of-type { border-bottom: 0; }
+
+.grid-2 { display: grid; grid-template-columns: 1.35fr .65fr; gap: var(--space-8); align-items: start; }
+.two-col{ display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--space-5); }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: var(--space-4); margin: 1.2rem 0; }
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+}
+.card h3 { margin-top: 0; }
+.card p:last-child { margin-bottom: 0; }
+
+/* A card that is itself a link to another page in the set. */
+a.card { text-decoration: none; color: inherit; display: block; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+a.card:hover { border-color: var(--color-primary); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+a.card .card-kicker {
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  text-transform: uppercase; letter-spacing: .08em; color: var(--color-primary);
+  display: block; margin-bottom: .25rem;
+}
+
+.toc { display: grid; gap: .35rem; padding-left: 0; list-style: none; max-width: none; }
+.toc a { text-decoration: none; font-size: var(--text-sm); padding: .3rem .5rem; border-radius: var(--radius-sm); display: block; }
+.toc a:hover { background: var(--color-surface-2); }
+
+/* --------------------------------------------------------------------------
+   5. Code
+   -------------------------------------------------------------------------- */
+code {
+  font-family: var(--font-mono);
+  font-size: .875em;
+  background: var(--color-surface-offset);
+  color: var(--color-primary);
+  padding: .12em .38em;
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+pre {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  overflow-x: auto;
+  line-height: 1.6;
+  margin: 1rem 0;
+  color: var(--color-text);
+}
+pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+/* Caption line above a code block naming the file the block belongs in. */
+.code-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--color-text-faint);
+  margin: 1rem 0 -.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   6. Tables (general content tables; equation tables live in equations.css)
+   -------------------------------------------------------------------------- */
+table { border-collapse: collapse; width: 100%; font-size: var(--text-sm); }
+th, td {
+  padding: .6rem .7rem;
+  border: 1px solid var(--color-border);
+  vertical-align: top;
+  text-align: left;
+  /* Same reasoning as .mono above: a cell holding one long identifier must
+     be allowed to break it rather than widening the table past the wrapper. */
+  overflow-wrap: anywhere;
+}
+th { background: var(--color-surface-offset); font-weight: 700; }
+tbody tr:nth-child(even) { background: var(--color-surface-2); }
+caption { caption-side: bottom; text-align: left; padding-top: .5rem; font-size: var(--text-xs); color: var(--color-text-faint); }
+
+/* --------------------------------------------------------------------------
+   7. Callouts and disclosure panels
+   -------------------------------------------------------------------------- */
+.callout {
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-orange);
+  background: var(--color-orange-soft);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.2rem;
+  margin: 1.2rem 0;
+}
+.callout > :last-child { margin-bottom: 0; }
+.callout p { max-width: none; }
+.callout.info-box { border-left-color: var(--color-blue);    background: var(--color-blue-soft); }
+.callout.danger   { border-left-color: var(--color-red);     background: var(--color-red-soft); }
+.callout.ok       { border-left-color: var(--color-primary); background: var(--color-primary-soft); }
+
+details {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: .9rem 1.1rem;
+  margin: .8rem 0;
+}
+summary { cursor: pointer; font-weight: 700; font-family: var(--font-display); }
+details[open] summary { margin-bottom: .6rem; }
+
+/* --------------------------------------------------------------------------
+   8. Status / confidence badges used in the sourcing tables
+   -------------------------------------------------------------------------- */
+.badge {
+  display: inline-block;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  padding: .15rem .55rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.badge.high    { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+.badge.medium  { border-color: var(--color-orange);  color: var(--color-orange);  background: var(--color-orange-soft); }
+.badge.low     { border-color: var(--color-red);     color: var(--color-red);     background: var(--color-red-soft); }
+.badge.new     { border-color: var(--color-blue);    color: var(--color-blue);    background: var(--color-blue-soft); }
+
+/* --------------------------------------------------------------------------
+   9. Reference list (IEEE numbered rows, linkable with #rNN)
+   -------------------------------------------------------------------------- */
+.ref-table { font-size: var(--text-sm); }
+.ref-table td { vertical-align: top; }
+.ref-table tbody tr:target {
+  background: var(--color-primary-soft);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.ref-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--color-primary);
+  font-weight: 700;
+  width: 4.25rem;
+}
+.ref-cite { max-width: 62ch; line-height: 1.55; }
+.ref-link { margin-top: .3rem; }
+.ref-link a { font-family: var(--font-mono); font-size: .82em; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.ref-link a:hover { color: var(--color-primary); }
+.ref-cat {
+  display: inline-block; font-size: .72rem; line-height: 1.35;
+  padding: .2rem .5rem; border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2); color: var(--color-text-muted);
+  white-space: normal;
+}
+
+/* --------------------------------------------------------------------------
+   10. Change log entries
+   -------------------------------------------------------------------------- */
+.rel { border-left: 3px solid var(--color-primary); padding-left: 1.1rem; margin: 1.6rem 0; }
+.rel h3 { display: flex; align-items: baseline; gap: .7rem; flex-wrap: wrap; margin-bottom: .3rem; }
+.rel-ver { font-family: var(--font-mono); color: var(--color-primary); }
+.rel-date { font-size: var(--text-sm); color: var(--color-text-faint); font-family: var(--font-mono); font-weight: 400; }
+.rel ul { margin-top: .4rem; }
+
+/* --------------------------------------------------------------------------
+   11. Footer
+   -------------------------------------------------------------------------- */
+.foot {
+  padding: 2rem 0 2.5rem;
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-divider);
+  font-size: var(--text-sm);
+}
+.foot p { max-width: none; margin-bottom: .4rem; }
+
+/* --------------------------------------------------------------------------
+   12. Responsive and motion
+   -------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .grid-2, .two-col { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+@media print {
+  body { background: #fff; color: #000; }
+  .foot, .toc { break-inside: avoid; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .75em; word-break: break-all; }
+}

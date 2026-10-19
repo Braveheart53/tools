@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which Ollama models are worth running for local code work</title>
+<meta name="description" content="Selecting an Ollama model for local code generation and testing: published sizes and capabilities, and the memory and bandwidth arithmetic that decides whether a tag fits.">
+<meta name="author" content="William W. Wallace">
+<meta name="generator" content="build_ai_local_site.py 0.0.1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f5f66'/%3E%3Cg stroke='%23e3efef' stroke-width='2' fill='none'%3E%3Cpath d='M16 9v6M16 15l-6 6M16 15l6 6'/%3E%3C/g%3E%3Cg fill='%23e3efef'%3E%3Ccircle cx='16' cy='8' r='3'/%3E%3Ccircle cx='9' cy='23' r='3'/%3E%3Ccircle cx='23' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/equations.css">
+<link rel="stylesheet" href="assets/sitenav.css">
+</head>
+<body class="ail">
+<a class="skip" href="#content">Skip to content</a>
+<nav class="ailnav" aria-label="AI_Local page set">
+  <div class="ailnav-inner">
+    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
+    <span class="ailnav-ver">v0.0.1</span>
+    <div class="ailnav-links">
+      <a href="index.html">Overview</a><a href="local-code-build-test.html">Build &amp; test</a><a href="ollama-model-selection.html">Model choice</a><a href="claude-sandbox-local-env.html">Sandbox access</a><a href="monitoring-sizing.html">Monitor sizing</a><a href="llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="GPU_monitoring_setup.html">GPU metrics</a><a href="Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="references.html">References</a><a href="CHANGELOG.html">Change log</a>
+    </div>
+    <button class="ailnav-theme" type="button" aria-label="Switch theme" aria-pressed="false"><span class="ailnav-theme-icon" aria-hidden="true">☾</span><span class="ailnav-theme-label">Dark</span></button>
+  </div>
+</nav>
+<main id="content">
+<section class="hero">
+  <div class="container">
+    <div class="eyebrow">Model selection</div>
+    <h1>Which Ollama models are worth running for local code work</h1>
+    <p class="lead">A model that writes good code and will not fit on the card is no use, and a model that fits but cannot call a tool cannot drive a build. This page works the constraint from both ends: what the library actually offers for code and agent work, and what the hardware will hold once the key/value cache is accounted for.</p>
+    <p class="small muted">Sizes, context windows, capability labels and benchmark figures are quoted from the Ollama model pages cited inline and were read on 2026-10-18. Model pages are revised without notice, so re-check a tag before committing to it. Every computed figure is shown with its derivation.</p>
+  </div>
+</section>
+
+<section id="on-this-page">
+  <div class="container">
+    <h2>On this page</h2>
+    <ul class="toc">
+      <li><a href="#criteria">1. What actually matters when choosing</a></li>
+      <li><a href="#shortlist">2. The shortlist</a></li>
+      <li><a href="#fit">3. Does it fit? The memory arithmetic</a></li>
+      <li><a href="#speed">4. Will it be fast enough?</a></li>
+      <li><a href="#recommend">5. Recommendations by VRAM budget</a></li>
+      <li><a href="#distributed">6. When the model does not fit on one machine</a></li>
+      <li><a href="#measure">7. Measure it yourself</a></li>
+      <li><a href="#caveats">8. What this page does not tell you</a></li>
+    </ul>
+  </div>
+</section>
+
+<section id="criteria">
+  <div class="container">
+    <h2>1. What actually matters when choosing</h2>
+
+    <p>Five properties decide whether a model can drive the build loop described on the <a href="local-code-build-test.html">local build and test page</a>. Only two of them are about code quality.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Selection criteria for a model that will write, build and test code locally, in the order they eliminate candidates.</caption>
+        <thead><tr><th scope="col">Property</th><th scope="col">Why it decides</th><th scope="col">How to check it</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Tool calling</strong></td>
+            <td>Without it the model cannot invoke the terminal at all. Open WebUI's terminal integration needs native function calling<a class="cite" href="references.html#r5">[5]</a>, and a model with no tool support cannot satisfy that however good its code is</td>
+            <td>The <span class="mono">tools</span> capability label on the Ollama model page</td>
+          </tr>
+          <tr>
+            <td><strong>Context window</strong></td>
+            <td>Source under edit, plus a build log, plus the conversation. A template-heavy C++ error is thousands of tokens by itself</td>
+            <td>Stated per tag on the model page. Then check it against VRAM with the relation in &sect;3 &mdash; the advertised window is not the one you get</td>
+          </tr>
+          <tr>
+            <td><strong>Weight footprint</strong></td>
+            <td>Weights plus cache plus runtime must fit, or layers spill to system RAM and throughput drops by roughly an order of magnitude</td>
+            <td>Tag size on the model page, checked against the footprint relation</td>
+          </tr>
+          <tr>
+            <td><strong>Active parameters</strong></td>
+            <td>Decode rate tracks the parameters read per token, not the total. A routed mixture of experts occupies the card like its total size and streams like its active size</td>
+            <td>Stated on the model page for some models, for example 80B total with 3B active<a class="cite" href="references.html#r33">[33]</a></td>
+          </tr>
+          <tr>
+            <td><strong>Agentic training</strong></td>
+            <td>Multi-step tool loops are a distinct skill from single-shot code completion. The Open Terminal documentation notes that small models often struggle with the multi-step loop<a class="cite" href="references.html#r3">[3]</a></td>
+            <td>The model page's own description, and any SWE-Bench or Terminal&nbsp;Bench figure its author published</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout info-box">
+      <p><strong>Tool calling is the hard gate.</strong> Of the criteria above, four are tradeable and one is not. A 32B model with excellent code completion and no tool support cannot drive a build at all, while a 4B model with reliable tool calling can &mdash; slowly, and with more iterations, but it closes the loop. Filter on <span class="mono">tools</span> first and judge quality among what survives.</p>
+    </div>
+  </div>
+</section>
+
+<section id="shortlist">
+  <div class="container">
+    <h2>2. The shortlist</h2>
+
+    <p>Every row below carries the <span class="mono">tools</span> capability on its Ollama page, which is the gate from &sect;1. Sizes are the figures the tag listing shows.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Code and agent models from the Ollama library that carry tool-calling support, with the figures published on each model page. Sizes are as listed; a tag listing may show a range where several builds share a tag. "Quant" is given only where the page states it.</caption>
+        <thead>
+          <tr><th scope="col">Model</th><th scope="col">Tag</th><th scope="col">Size</th><th scope="col">Context</th><th scope="col">Quant</th><th scope="col">Capabilities</th><th scope="col">Published positioning</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td rowspan="2"><strong>qwen3-coder</strong><a class="cite" href="references.html#r11">[11]</a></td>
+            <td class="mono">30b</td><td class="mono">19 GB</td><td class="mono">256K</td><td class="faint">not stated</td><td>tools</td>
+            <td rowspan="2">Long-context coding and agent model. Page states 256K native, reaching 1M "using extrapolation methods"</td>
+          </tr>
+          <tr><td class="mono">480b</td><td class="mono">290 GB</td><td class="mono">256K</td><td class="faint">not stated</td><td>tools</td></tr>
+          <tr>
+            <td><strong>qwen3-coder-next</strong><a class="cite" href="references.html#r33">[33]</a></td>
+            <td class="mono">q4_K_M</td><td class="mono">52 GB</td><td class="mono">256K</td><td class="mono">q4_K_M</td><td>tools</td>
+            <td>80B total, <strong>3B active per token</strong>. Built on Qwen3-Next-80B-A3B-Base. Page states non-thinking mode only</td>
+          </tr>
+          <tr>
+            <td><strong>devstral-small-2</strong><a class="cite" href="references.html#r13">[13]</a></td>
+            <td class="mono">24b</td><td class="mono">15 GB</td><td class="mono">384K</td><td class="faint">not stated</td><td>tools, vision</td>
+            <td>"Excels at using tools to explore codebases, editing multiple files and power software engineering agents." Apache 2.0. Needs Ollama 0.13.3 or later</td>
+          </tr>
+          <tr>
+            <td rowspan="3"><strong>laguna-xs-2.1</strong><a class="cite" href="references.html#r15">[15]</a></td>
+            <td class="mono">q4_K_M</td><td class="mono">20 GB</td><td class="mono">256K</td><td class="mono">Q4_K_M</td><td>tools, thinking</td>
+            <td rowspan="3">Poolside. "Designed for agentic coding and long-horizon work on a local machine." The only shortlisted model that publishes a full quantisation ladder</td>
+          </tr>
+          <tr><td class="mono">q8_0</td><td class="mono">36 GB</td><td class="mono">256K</td><td class="mono">8-bit</td><td>tools, thinking</td></tr>
+          <tr><td class="mono">bf16</td><td class="mono">67 GB</td><td class="mono">256K</td><td class="mono">BF16</td><td>tools, thinking</td></tr>
+          <tr>
+            <td rowspan="2"><strong>qwen3.6</strong><a class="cite" href="references.html#r14">[14]</a></td>
+            <td class="mono">27b</td><td class="mono">18&ndash;19 GB</td><td class="mono">256K</td><td class="faint">not stated</td><td>tools, thinking, vision</td>
+            <td rowspan="2">General model with coding emphasis. Page cites better frontend workflows and repository-level reasoning, plus optional retention of reasoning context across turns</td>
+          </tr>
+          <tr><td class="mono">35b</td><td class="mono">23&ndash;24 GB</td><td class="mono">256K</td><td class="faint">not stated</td><td>tools, thinking, vision</td></tr>
+          <tr>
+            <td rowspan="2"><strong>gpt-oss</strong><a class="cite" href="references.html#r16">[16]</a></td>
+            <td class="mono">20b</td><td class="mono">14 GB</td><td class="mono">128K</td><td class="mono">MXFP4, 4.25 bit</td><td>tools, thinking</td>
+            <td rowspan="2">OpenAI open-weight reasoning and agent models. Apache 2.0. Page states MXFP4 lets the smaller model run "on systems with as little as 16GB memory" and the larger fit "on a single 80GB GPU"</td>
+          </tr>
+          <tr><td class="mono">120b</td><td class="mono">65 GB</td><td class="mono">128K</td><td class="mono">MXFP4, 4.25 bit</td><td>tools, thinking</td></tr>
+          <tr>
+            <td rowspan="2"><strong>nemotron-3-nano</strong><a class="cite" href="references.html#r34">[34]</a></td>
+            <td class="mono">4b</td><td class="mono">2.8&ndash;2.9 GB</td><td class="mono">256K</td><td class="faint">not stated</td><td>tools, thinking</td>
+            <td rowspan="2">NVIDIA, trained from scratch. "A new Standard for Efficient, Open, and Intelligent Agentic Models", unified for reasoning and non-reasoning tasks</td>
+          </tr>
+          <tr><td class="mono">30b</td><td class="mono">18&ndash;24 GB</td><td class="mono">1M</td><td class="faint">not stated</td><td>tools, thinking</td></tr>
+          <tr>
+            <td rowspan="3"><strong>qwen2.5-coder</strong><a class="cite" href="references.html#r12">[12]</a></td>
+            <td class="mono">7b</td><td class="mono">4.7 GB</td><td class="mono">32K</td><td class="faint">not stated</td><td>tools</td>
+            <td rowspan="3">Older generation, still the broadest size ladder: 0.5b, 1.5b, 3b, 7b, 14b, 32b. 32K context on every tag, which is the binding limit for agent work</td>
+          </tr>
+          <tr><td class="mono">14b</td><td class="mono">9.0 GB</td><td class="mono">32K</td><td class="faint">not stated</td><td>tools</td></tr>
+          <tr><td class="mono">32b</td><td class="mono">20 GB</td><td class="mono">32K</td><td class="faint">not stated</td><td>tools</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>2.1 The one benchmark comparison the library publishes</h3>
+
+    <p>Most model pages give no numbers. The <span class="mono">devstral-small-2</span> page is the exception among the shortlist: it publishes agentic software-engineering scores for itself, for the larger Devstral&nbsp;2, and for a proprietary comparator<a class="cite" href="references.html#r13">[13]</a>.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Agentic software-engineering figures as published on the <span class="mono">devstral-small-2</span> Ollama model page. These are the model author's own published figures, reproduced for comparison; they were not measured here and no equivalent figures are published for the other shortlisted models.</caption>
+        <thead><tr><th scope="col">Model</th><th scope="col">SWE-Bench Verified</th><th scope="col">SWE-Bench Multilingual</th><th scope="col">Terminal Bench</th><th scope="col">Runs locally?</th></tr></thead>
+        <tbody>
+          <tr><td>Devstral Small 2 (24B)</td><td class="mono">65.8 %</td><td class="mono">51.6 %</td><td class="mono">32.0 %</td><td>Yes, 15 GB</td></tr>
+          <tr><td>Devstral 2 (123B)</td><td class="mono">72.2 %</td><td class="mono">61.3 %</td><td class="mono">40.5 %</td><td>Only with substantial VRAM</td></tr>
+          <tr><td>Claude Sonnet 4.5 (comparator)</td><td class="mono">77.2 %</td><td class="faint">not listed</td><td class="faint">not listed</td><td>No</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p><strong>Read these as the author's published claims, not as an independent comparison.</strong> They are the figures on the distribution page, measured by the model's author under its own harness. Scores from different authors under different harnesses are not comparable, which is precisely why no cross-vendor ranking is attempted on this page. The useful signal is the gap between the 24B and the 123B at the same harness: roughly six points of SWE-Bench Verified for a model eight times the size.</p>
+    </div>
+
+    <h3>2.2 Deliberately excluded</h3>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Models that appear when searching the library for coding, and the reason each is not shortlisted for this deployment.</caption>
+        <thead><tr><th scope="col">Model</th><th scope="col">Reason</th></tr></thead>
+        <tbody>
+          <tr><td><span class="mono">deepseek-coder</span>, <span class="mono">starcoder2</span>, <span class="mono">codellama</span>, <span class="mono">codegemma</span>, <span class="mono">yi-coder</span>, <span class="mono">opencoder</span>, <span class="mono">dolphincoder</span>, <span class="mono">stable-code</span></td><td>Completion-oriented generations without a <span class="mono">tools</span> capability label on their library entries<a class="cite" href="references.html#r10">[10]</a>, so they cannot drive a terminal</td></tr>
+          <tr><td><span class="mono">sqlcoder</span>, <span class="mono">duckdb-nsql</span></td><td>Single-domain text-to-SQL</td></tr>
+          <tr><td><span class="mono">qwen3-coder:480b</span>, <span class="mono">devstral-2</span> (123b), <span class="mono">gpt-oss:120b</span></td><td>Listed for completeness. The 480b tag's page states a 250&nbsp;GB minimum of memory or unified memory to run locally<a class="cite" href="references.html#r11">[11]</a>; these are above a home deployment unless several nodes are pooled (&sect;6)</td></tr>
+          <tr><td>Any tag ending <span class="mono">-cloud</span></td><td>Served remotely. The point of this page set is that nothing leaves the network</td></tr>
+          <tr><td>Any tag ending <span class="mono">-mlx</span></td><td>Apple MLX builds. Irrelevant to the Windows and WSL2 nodes in this deployment</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="fit">
+  <div class="container">
+    <h2>3. Does it fit? The memory arithmetic</h2>
+
+    <p>Three terms compete for the same device memory: the weights, the key/value cache, and the runtime's own allocations. The published tag size is only the first of them, and the second is the one that moves when you change a command-line flag.</p>
+
+    <div class="eq" id="eq-quant-footprint">
+  <div class="eq-head">
+    <h3 class="eq-title">Quantised weight footprint of a local model</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-quant-footprint" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ S_{w} \;=\; \frac{P\,b_{q}}{8}\,\bigl(1+\varepsilon\bigr) \]</div>
+  <p class="eq-note">This is the number to compare against free VRAM before pulling a tag. It accounts for the whole weight file, not just the quantised tensors, because a GGUF keeps token embeddings and normalisation weights at higher precision and adds tensor metadata.</p>
+  <div class="deriv"><ol>
+    <li>A model quantised to \( b_{q} \) bits per weight stores \( P\,b_{q} \) bits of weights in total.</li>
+    <li>Convert bits to bytes: \( S_{w,\text{raw}} = P\,b_{q}/8 \).</li>
+    <li>A GGUF container also carries per-tensor metadata and tensors deliberately left at a higher precision. Collect both as a fractional overhead \( \varepsilon \), giving \( S_{w} = (P b_{q}/8)(1+\varepsilon) \).</li>
+    <li>Check against a published figure. Ollama lists <span class="mono">qwen3-coder:30b</span> at 19&nbsp;GB<a class="cite" href="references.html#r11">[11]</a>. Taking \( P = 30.5\times10^{9} \) and the mixed Q4_K_M rate \( b_{q}\approx 4.8\ \mathrm{bit/weight} \): \( (30.5\times10^{9})(4.8)/8 = 1.83\times10^{10}\ \mathrm{B} = 18.3\ \mathrm{GB} \), so \( \varepsilon \approx 0.04 \).</li>
+    <li>Treat \( \varepsilon \in [0.03,\,0.08] \) as the working range. The Ollama tag page does not state the quantisation level, so the \( b_{q} \) above is the library default rather than a published figure; confirm with <span class="mono">ollama show &lt;tag&gt;</span> before relying on the result.</li>
+  </ol></div>
+  <div class="vars" id="v-quant-footprint" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the quantised-footprint relation, with the units used throughout this page set.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(S_{w}\)</td><td>On-disk and in-VRAM size of the weight file</td><td>B (byte)</td></tr>
+      <tr><td>\(P\)</td><td>Total parameter count of the model, all experts included</td><td>dimensionless</td></tr>
+      <tr><td>\(b_{q}\)</td><td>Average bits stored per weight for the chosen quantisation. Representative values: Q4_K_M \(\approx 4.8\), Q5_K_M \(\approx 5.7\), Q8_0 \(\approx 8.5\), BF16 \(= 16\)</td><td>bit&middot;weight<sup>&minus;1</sup></td></tr>
+      <tr><td>\(\varepsilon\)</td><td>Container and high-precision-tensor overhead as a fraction of the raw weight bytes</td><td>dimensionless</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="eq" id="eq-moe-active">
+  <div class="eq-head">
+    <h3 class="eq-title">Active parameter count of a routed mixture-of-experts model</h3>
+    <div class="eq-tools"><span class="pill stated">Stated</span>
+      <button class="info" aria-controls="v-moe-active" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ P_{\text{act}} \;=\; P_{\text{shared}} \;+\; k\,P_{\text{expert}} \]</div>
+  <p class="eq-note">The distinction matters because the two halves of a sizing decision use different parameter counts: VRAM capacity is set by the total \( P \), while decode speed is set by \( P_{\text{act}} \). A 30B model that routes roughly 3B parameters per token occupies the card like a 30B model and streams like a 3B one.</p>
+  <div class="vars" id="v-moe-active" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the active-parameter relation for a top-\(k\) routed mixture-of-experts transformer.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(P_{\text{act}}\)</td><td>Parameters read while producing one token</td><td>dimensionless</td></tr>
+      <tr><td>\(P_{\text{shared}}\)</td><td>Parameters outside the expert blocks: attention, embeddings, normalisation, any always-on dense feed-forward</td><td>dimensionless</td></tr>
+      <tr><td>\(k\)</td><td>Experts the router selects per token, out of \(E\) available</td><td>dimensionless</td></tr>
+      <tr><td>\(P_{\text{expert}}\)</td><td>Parameters in a single expert block</td><td>dimensionless</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="eq" id="eq-kv-cache">
+  <div class="eq-head">
+    <h3 class="eq-title">Key/value cache footprint</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-kv-cache" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ S_{kv} \;=\; 2\,n_{\ell}\,n_{kv}\,d_{h}\,L_{\text{ctx}}\,n_{\text{seq}}\,b_{kv} \]</div>
+  <p class="eq-note">The cache is the term people forget. It is linear in context length and linear in the number of concurrent sequences, so raising <span class="mono">--ctx-size</span> from 8192 to 32768 while also raising <span class="mono">--parallel</span> from 1 to 4 multiplies this term by sixteen.</p>
+  <div class="deriv"><ol>
+    <li>Autoregressive attention caches one key vector and one value vector for every token already generated, for every attention layer. That is the leading factor of 2.</li>
+    <li>Grouped-query attention shares each key/value pair across several query heads, so the count that matters is \( n_{kv} \), the number of key/value heads, not the number of query heads.</li>
+    <li>Each cached vector has \( d_{h} \) components, so one token costs \( 2\,n_{\ell}\,n_{kv}\,d_{h} \) elements.</li>
+    <li>Multiply by the context length \( L_{\text{ctx}} \) that the cache is sized for, and by the number of concurrent sequences \( n_{\text{seq}} \) (<span class="mono">--parallel</span> in <span class="mono">llama-server</span>), each of which keeps its own cache.</li>
+    <li>Multiply by the bytes per cached element \( b_{kv} \). Ollama exposes this as <span class="mono">OLLAMA_KV_CACHE_TYPE</span>, documented with a default of <span class="mono">f16</span> and options <span class="mono">q8_0</span> and <span class="mono">q4_0</span><a class="cite" href="references.html#r9">[9]</a>, giving \( b_{kv} = 2,\ 1,\ 0.5\ \mathrm{B} \) respectively.</li>
+  </ol></div>
+  <div class="vars" id="v-kv-cache" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the key/value cache relation. The architectural quantities are read from the model card or from <span class="mono">ollama show &lt;tag&gt;</span>; the operational ones are set on the command line.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(S_{kv}\)</td><td>Total key/value cache size held in VRAM or RAM</td><td>B</td></tr>
+      <tr><td>\(n_{\ell}\)</td><td>Number of transformer layers</td><td>dimensionless</td></tr>
+      <tr><td>\(n_{kv}\)</td><td>Key/value heads per layer (equal to the query-head count only when grouped-query attention is not used)</td><td>dimensionless</td></tr>
+      <tr><td>\(d_{h}\)</td><td>Head dimension</td><td>dimensionless</td></tr>
+      <tr><td>\(L_{\text{ctx}}\)</td><td>Context length the cache is allocated for, <span class="mono">--ctx-size</span> or <span class="mono">OLLAMA_CONTEXT_LENGTH</span> (Ollama default 4096)<a class="cite" href="references.html#r9">[9]</a></td><td>token</td></tr>
+      <tr><td>\(n_{\text{seq}}\)</td><td>Concurrent sequences, <span class="mono">--parallel</span> in <span class="mono">llama-server</span> or <span class="mono">OLLAMA_NUM_PARALLEL</span></td><td>dimensionless</td></tr>
+      <tr><td>\(b_{kv}\)</td><td>Bytes per cached element, set by the cache data type</td><td>B</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="eq" id="eq-ctx-budget">
+  <div class="eq-head">
+    <h3 class="eq-title">Longest context a card can actually hold</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-ctx-budget" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ L_{\max} \;=\; \left\lfloor \frac{V_{\text{tot}} - S_{w} - V_{\text{rt}}}{2\,n_{\ell}\,n_{kv}\,d_{h}\,n_{\text{seq}}\,b_{kv}} \right\rfloor \]</div>
+  <p class="eq-note">A model card advertising a 256K window is stating what the weights were trained to attend over, not what the card in the machine can allocate. This inverts the cache relation to give the second number, which is the one that decides whether a repository-scale prompt fits.</p>
+  <div class="deriv"><ol>
+    <li>Start from \( S_{kv} = 2\,n_{\ell}\,n_{kv}\,d_{h}\,L_{\text{ctx}}\,n_{\text{seq}}\,b_{kv} \) as derived above.</li>
+    <li>The cache has to share the device with the weights \( S_{w} \) and with the runtime's own allocations \( V_{\text{rt}} \): compute scratch buffers, the CUDA or Vulkan context, and whatever the display driver has already reserved.</li>
+    <li>Set the available remainder equal to the cache: \( V_{\text{tot}} - S_{w} - V_{\text{rt}} = S_{kv} \).</li>
+    <li>Solve for \( L_{\text{ctx}} \) and take the floor, since a partial token cannot be cached.</li>
+    <li>Round down further in practice. Allocators fragment, and on Windows the WDDM display driver can page VRAM out from under the runtime, so leave headroom rather than sizing to the last megabyte.</li>
+  </ol></div>
+  <div class="vars" id="v-ctx-budget" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the context-budget relation. Symbols shared with the cache relation keep the same meaning and units.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(L_{\max}\)</td><td>Largest context length that fits once weights and runtime are placed</td><td>token</td></tr>
+      <tr><td>\(V_{\text{tot}}\)</td><td>Total device memory on the accelerator</td><td>B</td></tr>
+      <tr><td>\(S_{w}\)</td><td>Weight footprint, from the quantised-footprint relation</td><td>B</td></tr>
+      <tr><td>\(V_{\text{rt}}\)</td><td>Runtime, driver and compute-buffer reservation. Budget 0.8&ndash;1.5&nbsp;GB for a single-GPU llama.cpp or Ollama process and measure it rather than assuming</td><td>B</td></tr>
+      <tr><td>\(n_{\ell},\,n_{kv},\,d_{h},\,n_{\text{seq}},\,b_{kv}\)</td><td>As defined for the key/value cache relation</td><td>&mdash;</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <h3>3.1 Worked fit, 24 GB card</h3>
+
+    <p>Taking <span class="mono">qwen3-coder:30b</span> at its published 19&nbsp;GB<a class="cite" href="references.html#r11">[11]</a> on a 24&nbsp;GB card, with \( V_{\text{rt}} = 1.2\ \mathrm{GB} \), \( n_{\text{seq}} = 1 \) and <span class="mono">f16</span> cache so \( b_{kv} = 2\ \mathrm{B} \):</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Context budget on a 24&nbsp;GB card, evaluated from the context-budget relation above. The architectural quantities \(n_{\ell}\), \(n_{kv}\) and \(d_{h}\) are placeholders of a plausible shape for a 30B-class model and must be replaced with the values from <span class="mono">ollama show</span> before these numbers are trusted; the <em>method</em> is what this table demonstrates.</caption>
+        <thead><tr><th scope="col">Quantity</th><th scope="col">Value</th><th scope="col">Source</th></tr></thead>
+        <tbody>
+          <tr><td>\(V_{\text{tot}}\)</td><td class="mono">24 GB</td><td>Hardware</td></tr>
+          <tr><td>\(S_{w}\)</td><td class="mono">19 GB</td><td>Published tag size<a class="cite" href="references.html#r11">[11]</a></td></tr>
+          <tr><td>\(V_{\text{rt}}\)</td><td class="mono">1.2 GB</td><td><span class="badge medium">estimate</span> Planning figure; measure it</td></tr>
+          <tr><td>Remainder for cache</td><td class="mono">3.8 GB</td><td>Derived: \(24 - 19 - 1.2\)</td></tr>
+          <tr><td>Per-token cache cost at \(n_{\ell}=48,\ n_{kv}=8,\ d_{h}=128,\ b_{kv}=2\)</td><td class="mono">196 608 B</td><td>Derived: \(2 \times 48 \times 8 \times 128 \times 2\)</td></tr>
+          <tr><td>\(L_{\max}\)</td><td class="mono">&asymp; 19 300 token</td><td>Derived: \(3.8\times10^{9} / 196\,608\)</td></tr>
+          <tr><td>\(L_{\max}\) with <span class="mono">OLLAMA_KV_CACHE_TYPE=q8_0</span></td><td class="mono">&asymp; 38 600 token</td><td>Derived: \(b_{kv}\) halves to 1 B<a class="cite" href="references.html#r9">[9]</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p><strong>The 256K window on the model page is not available on this card.</strong> The page states 256K native<a class="cite" href="references.html#r11">[11]</a>; the arithmetic above gives roughly 19&nbsp;k tokens, or 39&nbsp;k with an 8-bit cache. The published figure describes what the weights were trained to attend over. The computed figure describes what the hardware can allocate. Both are correct and only the second one constrains your work.</p>
+    </div>
+
+    <h3>3.2 The mixture-of-experts case</h3>
+
+    <p><span class="mono">qwen3-coder-next</span> publishes 80B total with 3B active per token<a class="cite" href="references.html#r33">[33]</a>, and its <span class="mono">q4_K_M</span> tag is 52&nbsp;GB. Substituting the active count into the footprint relation gives the bytes read per token:</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Capacity and streaming cost for a routed mixture-of-experts model, showing why the two numbers must be tracked separately. Derived from the published parameter split and the footprint relation.</caption>
+        <thead><tr><th scope="col">Quantity</th><th scope="col">Value</th><th scope="col">Governs</th></tr></thead>
+        <tbody>
+          <tr><td>Total parameters \(P\)</td><td class="mono">80 &times; 10<sup>9</sup></td><td>&mdash;</td></tr>
+          <tr><td>Weight footprint \(S_{w}\)</td><td class="mono">52 GB (published)<a class="cite" href="references.html#r33">[33]</a></td><td><strong>Capacity.</strong> Needs 52 GB plus cache plus runtime</td></tr>
+          <tr><td>Active parameters \(P_{\text{act}}\)</td><td class="mono">3 &times; 10<sup>9</sup></td><td>&mdash;</td></tr>
+          <tr><td>Active bytes per token \(S_{\text{act}}\)</td><td class="mono">&asymp; 1.95 GB</td><td><strong>Speed.</strong> Derived: \((3\times10^{9})(4.8)/8 \times 1.04\)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>So this model needs the capacity of a 52&nbsp;GB model and streams like a 2&nbsp;GB one. On a machine with enough aggregate memory it is a strong candidate; on a single 24&nbsp;GB card it does not load at all. That asymmetry is exactly what the distributed setup in &sect;6 exists to exploit.</p>
+  </div>
+</section>
+
+<section id="speed">
+  <div class="container">
+    <h2>4. Will it be fast enough?</h2>
+
+    <div class="eq" id="eq-bandwidth-bound">
+  <div class="eq-head">
+    <h3 class="eq-title">Memory-bandwidth ceiling on single-stream decode rate</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-bandwidth-bound" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ r_{\max} \;=\; \frac{B_{\text{eff}}}{S_{\text{act}}} \qquad\text{and}\qquad r_{\text{obs}} \;\approx\; \eta\,r_{\max},\quad \eta \in [0.5,\,0.8] \]</div>
+  <p class="eq-note">Token generation is bandwidth-bound, not compute-bound. This single ratio predicts which of two candidate models will feel usable in an agent loop more reliably than any benchmark score does, and it is why an 8-bit quantisation of a model is roughly half the speed of a 4-bit quantisation of the same model.</p>
+  <div class="deriv"><ol>
+    <li>Generating one token in the decode phase requires reading every active weight from memory exactly once; with a batch of one there is no reuse to amortise that read against.</li>
+    <li>The time to read \( S_{\text{act}} \) bytes at an achieved bandwidth \( B_{\text{eff}} \) is \( S_{\text{act}}/B_{\text{eff}} \), so \( t_{\text{tok}} \ge S_{\text{act}}/B_{\text{eff}} \).</li>
+    <li>Take the reciprocal: \( r_{\max} = B_{\text{eff}}/S_{\text{act}} \) tokens per second.</li>
+    <li>For a dense model \( S_{\text{act}} = S_{w} \). For a routed mixture of experts, substitute \( P_{\text{act}} \) from the active-parameter relation into the quantised-footprint relation instead of \( P \).</li>
+    <li>Worked example. A 19&nbsp;GB dense weight set on a card delivering \( B_{\text{eff}} = 450\ \mathrm{GB\,s^{-1}} \): \( r_{\max} = 450/19 = 23.7\ \mathrm{token\,s^{-1}} \), and with \( \eta = 0.65 \) expect about \( 15\ \mathrm{token\,s^{-1}} \).</li>
+    <li>The same 19&nbsp;GB file spilled to system RAM at \( B_{\text{eff}} = 50\ \mathrm{GB\,s^{-1}} \) gives \( r_{\max} = 2.6\ \mathrm{token\,s^{-1}} \). That ninefold cliff is the reason the layer-offload count below is worth computing rather than guessing.</li>
+  </ol></div>
+  <div class="vars" id="v-bandwidth-bound" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the bandwidth-ceiling relation. \(B_{\text{eff}}\) is the achieved figure from a bandwidth test, not the number on the specification sheet.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(r_{\max}\)</td><td>Upper bound on sustained token generation rate</td><td>token&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(r_{\text{obs}}\)</td><td>Rate actually observed end to end</td><td>token&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(B_{\text{eff}}\)</td><td>Achieved memory bandwidth of the device holding the weights. Typically 0.7&ndash;0.9 of the theoretical peak</td><td>B&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(S_{\text{act}}\)</td><td>Bytes of weights read per token: the whole weight set for a dense model, the routed subset for a mixture of experts</td><td>B</td></tr>
+      <tr><td>\(\eta\)</td><td>Realisation factor covering attention over the cache, sampling, and framework overhead</td><td>dimensionless</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="eq" id="eq-ngl-layers">
+  <div class="eq-head">
+    <h3 class="eq-title">Layer count to pass to <span class="mono">--n-gpu-layers</span></h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-ngl-layers" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ n_{\text{gpu}} \;=\; \left\lfloor \frac{\bigl(V_{\text{tot}} - V_{\text{rt}} - S_{kv}\bigr)\,n_{\ell}}{S_{w}} \right\rfloor, \qquad 0 \le n_{\text{gpu}} \le n_{\ell} \]</div>
+  <p class="eq-note">The <span class="mono">-ngl</span> value in the service definitions on this page set was chosen by trial. This gives a starting value to try first, which matters because the failure mode of overshooting is an out-of-memory abort part-way through loading rather than a graceful fallback.</p>
+  <div class="deriv"><ol>
+    <li>llama.cpp offloads whole transformer blocks, so the granularity is one layer. Averaged over the stack, one layer is \( S_{w}/n_{\ell} \) bytes.</li>
+    <li>The device must also hold the runtime reservation \( V_{\text{rt}} \) and the whole key/value cache \( S_{kv} \), both of which are allocated regardless of how many layers are resident.</li>
+    <li>The bytes left for weights are therefore \( V_{\text{tot}} - V_{\text{rt}} - S_{kv} \).</li>
+    <li>Divide by the per-layer size and take the floor: \( n_{\text{gpu}} = \lfloor (V_{\text{tot}} - V_{\text{rt}} - S_{kv})\,n_{\ell}/S_{w} \rfloor \).</li>
+    <li>Clamp into \( [0,\,n_{\ell}] \), then subtract one or two before the first run. Layers are not uniform in size, the output projection is usually the largest single tensor, and allocator fragmentation costs real megabytes.</li>
+    <li>If the result equals \( n_{\ell} \), pass <span class="mono">-ngl 999</span> rather than the exact count so the setting survives a change of model.</li>
+  </ol></div>
+  <div class="vars" id="v-ngl-layers" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the layer-offload relation. All memory symbols carry the meanings established in the cache and footprint relations.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(n_{\text{gpu}}\)</td><td>Layers to place on the accelerator, the <span class="mono">-ngl</span> argument</td><td>dimensionless</td></tr>
+      <tr><td>\(n_{\ell}\)</td><td>Total transformer layers in the model</td><td>dimensionless</td></tr>
+      <tr><td>\(V_{\text{tot}}\)</td><td>Total device memory</td><td>B</td></tr>
+      <tr><td>\(V_{\text{rt}}\)</td><td>Runtime, driver and compute-buffer reservation</td><td>B</td></tr>
+      <tr><td>\(S_{kv}\)</td><td>Key/value cache size for the chosen context and parallelism</td><td>B</td></tr>
+      <tr><td>\(S_{w}\)</td><td>Total weight footprint</td><td>B</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="callout info-box">
+      <p><strong>The cliff is the thing to avoid.</strong> The derivation above shows the same 19&nbsp;GB weight set running about nine times slower from system RAM than from VRAM. Every other decision on this page &mdash; quantisation, cache type, context length, how many layers to offload &mdash; is in service of staying on the fast side of that cliff. A smaller model fully resident beats a larger model that spills, essentially always.</p>
+    </div>
+  </div>
+</section>
+
+<section id="recommend">
+  <div class="container">
+    <h2>5. Recommendations by VRAM budget</h2>
+
+    <p>These are judgements, not measurements. The reasoning is given for each so it can be disagreed with.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Suggested model per VRAM budget for local code generation and testing, with the reasoning. Sizes are the published tag sizes; headroom is what remains for the key/value cache and the runtime after the weights.</caption>
+        <thead><tr><th scope="col">VRAM</th><th scope="col">First choice</th><th scope="col">Size</th><th scope="col">Headroom</th><th scope="col">Reasoning</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>8 GB</strong></td>
+            <td><span class="mono">nemotron-3-nano:4b</span></td>
+            <td class="mono">2.8&ndash;2.9 GB<a class="cite" href="references.html#r34">[34]</a></td>
+            <td class="mono">&asymp; 4 GB</td>
+            <td>The only shortlisted model that leaves real cache headroom at this budget, and it carries both tools and thinking. Its page positions it explicitly as an agentic model rather than a shrunken chat model</td>
+          </tr>
+          <tr>
+            <td><strong>12 GB</strong></td>
+            <td><span class="mono">qwen2.5-coder:7b</span></td>
+            <td class="mono">4.7 GB<a class="cite" href="references.html#r12">[12]</a></td>
+            <td class="mono">&asymp; 6 GB</td>
+            <td>Generous cache headroom, which matters more than parameter count at this budget. The 32K ceiling on every <span class="mono">qwen2.5-coder</span> tag is the real limit, and 32K is workable for single-file edits</td>
+          </tr>
+          <tr>
+            <td><strong>16 GB</strong></td>
+            <td><span class="mono">gpt-oss:20b</span></td>
+            <td class="mono">14 GB<a class="cite" href="references.html#r16">[16]</a></td>
+            <td class="mono">tight</td>
+            <td>Its page states MXFP4 at 4.25 bit per parameter lets it run "on systems with as little as 16GB memory", so this is the vendor's own stated floor. 128K context and Apache 2.0. Budget an 8-bit cache to buy back headroom</td>
+          </tr>
+          <tr>
+            <td><strong>24 GB</strong></td>
+            <td><span class="mono">devstral-small-2:24b</span></td>
+            <td class="mono">15 GB<a class="cite" href="references.html#r13">[13]</a></td>
+            <td class="mono">&asymp; 8 GB</td>
+            <td><strong>The best fit in the set.</strong> It is the only shortlisted model whose page publishes agentic software-engineering scores, its description is specifically about exploring codebases and editing multiple files, the 384K window is the largest on the shortlist, it is Apache 2.0, and at 15 GB it leaves roughly 8 GB for cache. Needs Ollama 0.13.3 or later</td>
+          </tr>
+          <tr>
+            <td><strong>24 GB, alternative</strong></td>
+            <td><span class="mono">laguna-xs-2.1:q4_K_M</span></td>
+            <td class="mono">20 GB<a class="cite" href="references.html#r15">[15]</a></td>
+            <td class="mono">tight</td>
+            <td>Positioned for "agentic coding and long-horizon work on a local machine", and the only shortlisted model publishing a full quantisation ladder, so the quality-versus-size trade can be walked rather than guessed. At 20 GB on a 24 GB card an 8-bit cache is effectively mandatory</td>
+          </tr>
+          <tr>
+            <td><strong>32 GB</strong></td>
+            <td><span class="mono">qwen3-coder:30b</span> or <span class="mono">qwen3.6:35b</span></td>
+            <td class="mono">19 GB / 23&ndash;24 GB<a class="cite" href="references.html#r11">[11]</a><a class="cite" href="references.html#r14">[14]</a></td>
+            <td class="mono">&asymp; 12 GB / 7 GB</td>
+            <td>Pick <span class="mono">qwen3-coder</span> for code-only work and the headroom. Pick <span class="mono">qwen3.6</span> when the vision capability earns its keep &mdash; reading a schematic, a plot or a GUI screenshot &mdash; which for RF and instrumentation work it often does</td>
+          </tr>
+          <tr>
+            <td><strong>48 GB+ or pooled</strong></td>
+            <td><span class="mono">qwen3-coder-next:q4_K_M</span></td>
+            <td class="mono">52 GB<a class="cite" href="references.html#r33">[33]</a></td>
+            <td>&mdash;</td>
+            <td>80B total but only 3B active per token, so once it fits it streams like a small model. The best capacity-for-speed trade on the shortlist, and the natural target for the pooled configuration in &sect;6. Non-thinking mode only</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>5.1 Two models, not one</h3>
+
+    <p>Nothing requires a single choice. The loop equation on the <a href="local-code-build-test.html#eq-agent-loop">build page</a> shows that generation dominates fast Python iterations while the compiler dominates C++ ones, so a sensible local setup keeps two models loaded and routes by task.</p>
+
+    <div class="table-wrap">
+      <table>
+        <caption>A two-model arrangement, with the Ollama setting that makes it work. Both models stay resident so there is no reload penalty on switching.</caption>
+        <thead><tr><th scope="col">Role</th><th scope="col">Model</th><th scope="col">Used for</th></tr></thead>
+        <tbody>
+          <tr><td>Fast path</td><td><span class="mono">qwen2.5-coder:7b</span> or <span class="mono">nemotron-3-nano:4b</span></td><td>Single-file edits, test stubs, docstrings, quick refactors. Decode speed is what matters</td></tr>
+          <tr><td>Deep path</td><td><span class="mono">devstral-small-2:24b</span></td><td>Multi-file changes, build failures, anything where converging in fewer iterations is worth waiting for</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Keeping both resident needs <span class="mono">OLLAMA_MAX_LOADED_MODELS</span>, documented with a default of "3 * the number of GPUs or 3 for CPU inference"<a class="cite" href="references.html#r9">[9]</a>, so the default already permits two. The binding constraint is VRAM: the two footprints and both caches must fit simultaneously, or Ollama will evict one and reload it on every switch. <span class="mono">OLLAMA_KEEP_ALIVE</span>, with a documented default of five minutes<a class="cite" href="references.html#r9">[9]</a>, controls how long an idle model stays loaded.</p>
+  </div>
+</section>
+
+<section id="distributed">
+  <div class="container">
+    <h2>6. When the model does not fit on one machine</h2>
+
+    <p>llama.cpp's RPC backend splits the layer stack across machines<a class="cite" href="references.html#r17">[17]</a>, which is how this deployment runs models larger than any single card. The <a href="llama-rpc-vulkan-guide.html">RPC and Vulkan guide</a> covers the mechanics; the arithmetic below decides whether a given split is worth doing.</p>
+
+    <div class="eq" id="eq-rpc-token-time">
+  <div class="eq-head">
+    <h3 class="eq-title">Per-token wall clock across RPC workers</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-rpc-token-time" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ t_{\text{tok}} \;=\; \sum_{i=1}^{N}\frac{S_{i}}{B_{i}} \;+\; \sum_{i=1}^{N-1}\left(\frac{D_{\text{act}}}{R_{i}} + 2\tau_{i}\right), \qquad r \;=\; \frac{1}{t_{\text{tok}}} \]</div>
+  <p class="eq-note">llama.cpp's RPC backend splits the layer stack across machines<a class="cite" href="references.html#r17">[17]</a>. This separates the part of a token's cost that the split reduces from the part it adds, which is the only way to answer whether a fourth node is worth switching on.</p>
+  <div class="deriv"><ol>
+    <li>Node \( i \) holds \( S_{i} \) bytes of the weight set and streams them from its own memory at \( B_{i} \), so its contribution to one token is \( S_{i}/B_{i} \) by the bandwidth-ceiling argument above.</li>
+    <li>A pipeline split is sequential for a single token: layer \( j+1 \) cannot start before layer \( j \) has produced its output. The per-node times therefore add rather than overlap.</li>
+    <li>At each of the \( N-1 \) boundaries the activation tensor of \( D_{\text{act}} \) bytes crosses the link at throughput \( R_{i} \), costing \( D_{\text{act}}/R_{i} \), plus \( 2\tau_{i} \) for the request and response legs.</li>
+    <li>Summing both contributions gives \( t_{\text{tok}} \), and \( r = 1/t_{\text{tok}} \).</li>
+    <li>Scale of the link term on a home network. One activation row for a hidden size of 4096 in <span class="mono">f16</span> is \( 4096 \times 2 = 8192\ \mathrm{B} \). Over gigabit Ethernet at an achieved \( R = 940\ \mathrm{Mbit\,s^{-1}} = 1.18\times10^{8}\ \mathrm{B\,s^{-1}} \) that is \( 69\ \mathrm{\mu s} \), against \( 2\tau \approx 400\ \mathrm{\mu s} \) for a typical switched round trip. Latency dominates transfer, so the number of hops matters more than the hidden size.</li>
+    <li>Prompt processing behaves differently. It submits many tokens at once, so \( D_{\text{act}} \) scales with the batch and the transfer term stops being negligible.</li>
+  </ol></div>
+  <div class="vars" id="v-rpc-token-time" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the distributed per-token relation for an \(N\)-node llama.cpp RPC pipeline.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(t_{\text{tok}}\)</td><td>Wall-clock time to produce one token</td><td>s</td></tr>
+      <tr><td>\(r\)</td><td>Sustained generation rate</td><td>token&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(N\)</td><td>Nodes in the pipeline, host included</td><td>dimensionless</td></tr>
+      <tr><td>\(S_{i}\)</td><td>Weight bytes resident on node \(i\)</td><td>B</td></tr>
+      <tr><td>\(B_{i}\)</td><td>Achieved memory bandwidth on node \(i\) for the memory actually holding those weights</td><td>B&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(D_{\text{act}}\)</td><td>Activation tensor crossing one boundary, hidden size times bytes per element</td><td>B</td></tr>
+      <tr><td>\(R_{i}\)</td><td>Achieved link throughput at boundary \(i\)</td><td>B&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(\tau_{i}\)</td><td>One-way link latency at boundary \(i\)</td><td>s</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="eq" id="eq-rpc-breakeven">
+  <div class="eq-head">
+    <h3 class="eq-title">Break-even condition for adding an RPC worker</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-rpc-breakeven" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ \frac{S_{m}}{B_{\text{host}}} \;>\; \frac{S_{m}}{B_{\text{worker}}} \;+\; \frac{D_{\text{act}}}{R} + 2\tau \]</div>
+  <p class="eq-note">Read as: moving \( S_{m} \) bytes of weights onto a worker pays only when the time the host stops spending on them exceeds the time the worker spends plus the cost of the extra hop. The condition is almost always satisfied when the bytes were spilling to host RAM, and almost never when they already fit in host VRAM.</p>
+  <div class="deriv"><ol>
+    <li>Write \( t_{\text{tok}} \) from the relation above for the configuration before the move, with \( S_{m} \) bytes still on the host: the host contributes \( S_{m}/B_{\text{host}} \).</li>
+    <li>Write it again after the move: the worker contributes \( S_{m}/B_{\text{worker}} \), and one new boundary contributes \( D_{\text{act}}/R + 2\tau \).</li>
+    <li>Every other term is common to both expressions and cancels.</li>
+    <li>The move reduces \( t_{\text{tok}} \) exactly when the removed term exceeds the two added terms, which is the inequality stated.</li>
+    <li>Case that pays. \( S_{m} = 6\ \mathrm{GB} \) spilling to host RAM at \( B_{\text{host}} = 50\ \mathrm{GB\,s^{-1}} \) costs \( 120\ \mathrm{ms} \) per token. On a worker GPU at \( B_{\text{worker}} = 400\ \mathrm{GB\,s^{-1}} \) it costs \( 15\ \mathrm{ms} \), plus roughly \( 0.5\ \mathrm{ms} \) of link cost from the figures above. The move saves about \( 105\ \mathrm{ms} \) per token.</li>
+    <li>Case that does not. The same \( 6\ \mathrm{GB} \) already resident in host VRAM at \( 450\ \mathrm{GB\,s^{-1}} \) costs \( 13.3\ \mathrm{ms} \). A worker at \( 400\ \mathrm{GB\,s^{-1}} \) costs \( 15\ \mathrm{ms} \) plus the hop, so the move loses about \( 2.2\ \mathrm{ms} \) per token and adds a failure domain.</li>
+  </ol></div>
+  <div class="vars" id="v-rpc-breakeven" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the break-even condition. Link symbols carry the meanings established in the per-token relation.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(S_{m}\)</td><td>Weight bytes being moved from host to worker</td><td>B</td></tr>
+      <tr><td>\(B_{\text{host}}\)</td><td>Achieved bandwidth of the host memory those bytes currently sit in</td><td>B&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(B_{\text{worker}}\)</td><td>Achieved bandwidth of the worker memory they would move to</td><td>B&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(D_{\text{act}}\)</td><td>Activation tensor crossing the new boundary</td><td>B</td></tr>
+      <tr><td>\(R\)</td><td>Achieved link throughput to the worker</td><td>B&middot;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(\tau\)</td><td>One-way link latency to the worker</td><td>s</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+
+    <div class="callout info-box">
+      <p><strong>The rule the break-even condition reduces to.</strong> Distribute to escape a spill, never to add bandwidth. Moving weights that were spilling to host RAM onto a worker GPU is a large win; moving weights that already sat in host VRAM is a small loss plus a new failure domain. Check which case you are in before switching a worker on.</p>
+    </div>
+  </div>
+</section>
+
+<section id="measure">
+  <div class="container">
+    <h2>7. Measure it yourself</h2>
+
+    <p>Every rate on this page is computed from a bandwidth figure, and a computed rate is a prediction. The script shipped with this page set, <span class="mono">scripts/probe_model_throughput.py</span>, measures the real thing through the Ollama API and prints the measured rates alongside what the relations predict.</p>
+
+<pre><code># Measure the shortlisted models against the relations on this page.
+# --repeat 3 is the minimum worth reporting: the first call pays the model
+# load, so it is discarded as a warm-up.
+micromamba run -n Py3p12 python scripts/probe_model_throughput.py `
+  --host http://192.168.7.27:11434 `
+  --models devstral-small-2:24b qwen2.5-coder:7b `
+  --repeat 3 `
+  --out results/throughput.json</code></pre>
+
+    <div class="table-wrap">
+      <table>
+        <caption>What to read off a model before trusting any figure on this page, and the command that produces it.</caption>
+        <thead><tr><th scope="col">Quantity</th><th scope="col">Command</th><th scope="col">Feeds</th></tr></thead>
+        <tbody>
+          <tr><td>Quantisation, layer count, head counts, head dimension</td><td class="mono">ollama show &lt;tag&gt;</td><td>\(b_{q}\), \(n_{\ell}\), \(n_{kv}\), \(d_{h}\) in every relation on this page</td></tr>
+          <tr><td>Decode and prefill rate</td><td class="mono">scripts/probe_model_throughput.py</td><td>\(r\) and \(r_{p}\) in the loop equation</td></tr>
+          <tr><td>Resident footprint, and whether anything spilled</td><td class="mono">ollama ps</td><td>Confirms \(S_{w}\) and reveals a CPU/GPU split</td></tr>
+          <tr><td>Device memory in use</td><td class="mono">nvidia-smi</td><td>\(V_{\text{rt}}\) by subtraction</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <p><strong><span class="mono">ollama ps</span> is the check that catches the expensive mistake.</strong> It reports whether a model is resident on the GPU or split with the CPU. A quiet CPU/GPU split is exactly the ninefold slowdown in &sect;4, and it is invisible unless you look.</p>
+    </div>
+  </div>
+</section>
+
+<section id="caveats">
+  <div class="container">
+    <h2>8. What this page does not tell you</h2>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Deliberate omissions, with the reason each figure is absent and what to do instead.</caption>
+        <thead><tr><th scope="col">Not stated here</th><th scope="col">Why</th><th scope="col">Instead</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Tokens per second for named hardware</td>
+            <td>It depends on the card, the driver, the quantisation, the context, the batch and the build. A published number would be wrong for most readers</td>
+            <td>Compute a bound with the relation in &sect;4, then measure with &sect;7</td>
+          </tr>
+          <tr>
+            <td>A quality ranking across the shortlist</td>
+            <td>Scores from different authors under different harnesses are not comparable. Only <span class="mono">devstral-small-2</span> publishes figures at all<a class="cite" href="references.html#r13">[13]</a></td>
+            <td>Run your own tasks. Count iterations to convergence, which is the term that dominates the loop equation</td>
+          </tr>
+          <tr>
+            <td>Quantisation level for most tags</td>
+            <td><span class="mono">qwen3-coder</span>, <span class="mono">devstral-small-2</span>, <span class="mono">qwen3.6</span> and <span class="mono">nemotron-3-nano</span> state no per-tag quantisation; <span class="mono">laguna-xs-2.1</span>, <span class="mono">qwen3-coder-next</span> and <span class="mono">gpt-oss</span> do</td>
+            <td><span class="mono">ollama show &lt;tag&gt;</span></td>
+          </tr>
+          <tr>
+            <td>Which model is "best"</td>
+            <td>It is task-dependent and the library changes monthly. The library index listed 256 models when this page was written<a class="cite" href="references.html#r10">[10]</a></td>
+            <td>Apply the criteria in &sect;1 to the current library, and re-run the fit arithmetic in &sect;3</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout danger">
+      <p><strong>This page has a shelf life.</strong> Model pages are revised in place: a tag's size changes when it is requantised, and tags are added and withdrawn. Every figure here was read on 2026-10-18 and is cited to the page it came from. Treat the <em>method</em> &mdash; the criteria in &sect;1 and the relations in &sect;3 and &sect;4 &mdash; as the durable part, and re-read the tag pages before committing hardware.</p>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="foot">
+  <div class="container">
+    <p><strong>AI_Local</strong> v0.0.1 &middot; William W. Wallace &middot;
+       <a href="CHANGELOG.html">change log</a> &middot;
+       <a href="references.html">references</a></p>
+    <p class="small">Equations typeset offline with KaTeX. Every page in this set opens
+       from local disk with no network access, and nothing here uses browser storage.</p>
+  </div>
+</footer>
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="assets/equations.js"></script>
+<script src="assets/sitenav.js"></script>
+</body>
+</html>

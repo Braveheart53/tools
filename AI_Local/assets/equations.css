@@ -1,0 +1,375 @@
+/* ==========================================================================
+   equations.css  --  AI_Local shared equation / variable-definition component
+   --------------------------------------------------------------------------
+   Author : William W. Wallace
+   Version: 1.0.0
+   Purpose: Reproduce the equation-block pattern used in "Atomic Theory Atlas"
+            (eq / eq-head / eq-body / eq-note / deriv / vars) so that every
+            AI_Local page presents equations and their variable tables the
+            same way.
+
+   DESIGN CONSTRAINT
+   -----------------
+   Each AI_Local page keeps its own inline <style> block and its own CSS custom
+   property names (--bg-card, --surface, --card-bg, ... all differ page to
+   page).  This file therefore MUST NOT depend on the host page's variables.
+   It declares a private, prefixed token set (--eqc-*) with light and dark
+   values resolved in three ways, in increasing order of specificity:
+
+     1. :root                                  -> light defaults
+     2. @media (prefers-color-scheme: dark)    -> follow the OS when the host
+                                                  page has not pinned a theme
+     3. [data-theme="dark"] / [data-theme="light"]
+                                               -> follow the host page's own
+                                                  theme toggle, which every
+                                                  AI_Local page sets on <html>
+
+   That ordering means the component is correct whether the host page pins a
+   theme on <html data-theme="...">, toggles it at runtime, or leaves it to the
+   operating system.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Light-theme tokens (the default)
+   -------------------------------------------------------------------------- */
+:root {
+  --eqc-surface:        #fdfcfa;  /* equation card background                */
+  --eqc-surface-2:      #f2efe9;  /* math strip + derivation background      */
+  --eqc-surface-offset: #eceae4;  /* table header background                 */
+  --eqc-border:         #d6d2c9;  /* card and table borders                  */
+  --eqc-text:           #221f1a;  /* primary text inside the card            */
+  --eqc-text-muted:     #5f5c55;  /* eq-note text                            */
+  --eqc-text-faint:     #8b8880;  /* table captions                          */
+  --eqc-text-inverse:   #faf9f6;  /* text on a filled accent button          */
+  --eqc-primary:        #0f5f66;  /* accent: left rule, info button          */
+  --eqc-primary-soft:   #e3efef;  /* accent background wash                  */
+  --eqc-blue:           #1c5b8f;  /* "Stated" pill                           */
+  --eqc-blue-soft:      #e4edf5;
+  --eqc-orange:         #a8560c;  /* "Derived here" pill + callout rule      */
+  --eqc-orange-soft:    #f6ebdf;
+  --eqc-violet:         #5a3f8f;  /* "Measured value" pill                   */
+  --eqc-violet-soft:    #ece7f6;
+
+  --eqc-radius-sm: .35rem;
+  --eqc-radius-md: .5rem;
+  --eqc-radius-lg: .75rem;
+  --eqc-shadow-sm: 0 1px 2px rgba(30, 25, 15, .07);
+
+  --eqc-font-display: 'Zodiak', 'Iowan Old Style', Georgia, serif;
+  --eqc-font-mono:    ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, monospace;
+
+  --eqc-text-xs: clamp(.75rem, .71rem + .2vw, .83rem);
+  --eqc-text-sm: clamp(.86rem, .82rem + .25vw, .95rem);
+}
+
+/* --------------------------------------------------------------------------
+   2. Dark tokens, applied when the OS asks for dark AND the host page has not
+      explicitly pinned itself to light.  The :root:not([data-theme="light"])
+      guard is what keeps a page that hard-codes <html data-theme="light">
+      from being repainted dark by the operating system.
+   -------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --eqc-surface:        #1b1a16;
+    --eqc-surface-2:      #211f1a;
+    --eqc-surface-offset: #26241f;
+    --eqc-border:         #3b3831;
+    --eqc-text:           #e8e4da;
+    --eqc-text-muted:     #b0aca1;
+    --eqc-text-faint:     #87837a;
+    --eqc-text-inverse:   #14130f;
+    --eqc-primary:        #5fb3ba;
+    --eqc-primary-soft:   #173438;
+    --eqc-blue:           #78b1de;
+    --eqc-blue-soft:      #152836;
+    --eqc-orange:         #e0913f;
+    --eqc-orange-soft:    #332514;
+    --eqc-violet:         #a992e0;
+    --eqc-violet-soft:    #241c36;
+    --eqc-shadow-sm:      0 1px 2px rgba(0, 0, 0, .35);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. Explicit dark, set by the host page's own theme toggle.  Repeated rather
+      than combined with the media query above because a page toggled to dark
+      on a light-preference OS must still get these values.
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --eqc-surface:        #1b1a16;
+  --eqc-surface-2:      #211f1a;
+  --eqc-surface-offset: #26241f;
+  --eqc-border:         #3b3831;
+  --eqc-text:           #e8e4da;
+  --eqc-text-muted:     #b0aca1;
+  --eqc-text-faint:     #87837a;
+  --eqc-text-inverse:   #14130f;
+  --eqc-primary:        #5fb3ba;
+  --eqc-primary-soft:   #173438;
+  --eqc-blue:           #78b1de;
+  --eqc-blue-soft:      #152836;
+  --eqc-orange:         #e0913f;
+  --eqc-orange-soft:    #332514;
+  --eqc-violet:         #a992e0;
+  --eqc-violet-soft:    #241c36;
+  --eqc-shadow-sm:      0 1px 2px rgba(0, 0, 0, .35);
+}
+
+/* --------------------------------------------------------------------------
+   4. The equation card itself
+   -------------------------------------------------------------------------- */
+.eq {
+  background: var(--eqc-surface);
+  color: var(--eqc-text);
+  border: 1px solid var(--eqc-border);
+  border-left: 3px solid var(--eqc-primary);
+  border-radius: var(--eqc-radius-lg);
+  padding: 1rem 1.25rem;
+  margin: 1.4rem 0;
+  box-shadow: var(--eqc-shadow-sm);
+  /* The host page may set a narrow max-width on <p>; the card must not
+     inherit that, so an explicit full-width declaration is used. */
+  max-width: none;
+}
+
+.eq-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: .35rem;
+}
+
+.eq-title {
+  font-family: var(--eqc-font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
+  color: var(--eqc-text);
+}
+
+.eq-tools {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* The math strip.  overflow-x:auto lets a wide expression pan horizontally on
+   a phone instead of forcing the whole page to scroll. */
+.eq-body {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: .7rem .2rem;
+  background: var(--eqc-surface-2);
+  border-radius: var(--eqc-radius-md);
+  margin: .5rem 0;
+}
+
+.eq-note {
+  font-size: var(--eqc-text-sm);
+  color: var(--eqc-text-muted);
+  margin: .35rem 0 0;
+  max-width: none;
+}
+
+/* An equation note or a variable table routinely holds a long settings key
+   or file name with no break opportunity. Allow it to break rather than
+   widening the card past the viewport. Scoped to .eq so a host page's own
+   .mono (if it ever gains one) is untouched. */
+.eq .mono,
+.eq-note .mono { overflow-wrap: anywhere; }
+
+/* --------------------------------------------------------------------------
+   5. Provenance pills -- Stated / Derived here / Measured value
+
+   SCOPING, AND WHY IT IS NOT OPTIONAL
+   -----------------------------------
+   `.pill` is NOT a safe global class name in this page set:
+   Promethius_Grafana_windows11-llama-monitoring-tutorial.html already defines
+   and uses `.pill` for its own badges.  An unscoped rule here would repaint
+   them, which is the one thing this rebuild must not do.
+
+   So the pill rules are scoped two ways, and the selector list is the union:
+     .eq .pill  -- a pill inside an equation card, on ANY page
+     .ail .pill -- a pill anywhere on a page generated by this rebuild, which
+                   carries class="ail" on <body>.  Needed because the landing
+                   page shows the pills in its conventions table, outside any
+                   equation card.
+   A pre-existing page has neither ancestor, so not one declaration below
+   reaches it.  verify_class_collisions() in the build script enforces this.
+   -------------------------------------------------------------------------- */
+.eq .pill,
+.ail .pill {
+  display: inline-block;
+  padding: .28rem .6rem;
+  border-radius: 999px;
+  background: var(--eqc-primary-soft);
+  color: var(--eqc-primary);
+  font-size: var(--eqc-text-xs);
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.eq .pill.stated,  .ail .pill.stated  { background: var(--eqc-blue-soft);   color: var(--eqc-blue); }
+.eq .pill.derived, .ail .pill.derived { background: var(--eqc-orange-soft); color: var(--eqc-orange); }
+.eq .pill.data,    .ail .pill.data    { background: var(--eqc-violet-soft); color: var(--eqc-violet); }
+
+/* --------------------------------------------------------------------------
+   6. "Define variables" disclosure button and the variable table it reveals
+   -------------------------------------------------------------------------- */
+.eq .info {
+  border: 1px solid var(--eqc-primary);
+  background: var(--eqc-primary-soft);
+  color: var(--eqc-primary);
+  border-radius: 999px;
+  min-width: 38px;
+  height: 32px;
+  padding: 0 .7rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--eqc-text-xs);
+  font-weight: 700;
+  letter-spacing: .04em;
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+}
+.eq .info:hover { background: var(--eqc-primary); color: var(--eqc-text-inverse); }
+.eq .info:focus-visible { outline: 2px solid var(--eqc-primary); outline-offset: 3px; }
+
+.vars { margin-top: .7rem; }
+.vars[hidden] { display: none; }
+
+/* --------------------------------------------------------------------------
+   7. Derivation step list -- required whenever the pill reads "Derived here"
+   -------------------------------------------------------------------------- */
+.deriv {
+  margin-top: .8rem;
+  border: 1px solid var(--eqc-border);
+  border-radius: var(--eqc-radius-md);
+  background: var(--eqc-surface-2);
+  padding: .8rem 1rem;
+}
+.deriv ol { margin: .4rem 0 0; padding-left: 1.2rem; }
+.deriv li { margin-bottom: .35rem; font-size: var(--eqc-text-sm); }
+
+/* --------------------------------------------------------------------------
+   8. Tables inside equation cards and anywhere .table-wrap is used.
+      Scoped to .eq and .table-wrap so the host page's own table styling for
+      ordinary content tables is left untouched.
+   -------------------------------------------------------------------------- */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--eqc-radius-lg);
+  margin: 1rem 0;
+}
+.eq .table-wrap table,
+.table-wrap.eqc table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--eqc-text-sm);
+  background: var(--eqc-surface);
+  color: var(--eqc-text);
+}
+.eq .table-wrap th, .eq .table-wrap td,
+.table-wrap.eqc th, .table-wrap.eqc td {
+  padding: .6rem .7rem;
+  border: 1px solid var(--eqc-border);
+  vertical-align: top;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.eq .table-wrap th,
+.table-wrap.eqc th {
+  background: var(--eqc-surface-offset);
+  font-weight: 700;
+}
+.eq .table-wrap caption,
+.table-wrap.eqc caption {
+  caption-side: bottom;
+  text-align: left;
+  padding-top: .5rem;
+  font-size: var(--eqc-text-xs);
+  color: var(--eqc-text-faint);
+}
+
+/* --------------------------------------------------------------------------
+   9. Citation superscripts, matching the Atlas convention [n] -> references
+
+   `a.cite` and `.table-wrap` (section 8) are left as global selectors because
+   no page in this set uses either name; that is checked on every build by
+   verify_class_collisions().  If a future page introduces one, scope it the
+   way the pills in section 5 are scoped rather than renaming the markup.
+   -------------------------------------------------------------------------- */
+a.cite {
+  font-size: .78em;
+  vertical-align: super;
+  text-decoration: none;
+  font-weight: 700;
+  padding: 0 .1em;
+  color: var(--eqc-primary);
+}
+a.cite:hover { text-decoration: underline; }
+
+/* --------------------------------------------------------------------------
+   10. Callouts used alongside equations
+   -------------------------------------------------------------------------- */
+.eqc-callout {
+  border: 1px solid var(--eqc-border);
+  border-left: 3px solid var(--eqc-orange);
+  background: var(--eqc-orange-soft);
+  color: var(--eqc-text);
+  border-radius: var(--eqc-radius-lg);
+  padding: 1rem 1.2rem;
+  margin: 1.2rem 0;
+}
+.eqc-callout p { margin: 0; max-width: none; }
+.eqc-callout.info-box {
+  border-left-color: var(--eqc-blue);
+  background: var(--eqc-blue-soft);
+}
+
+/* --------------------------------------------------------------------------
+   11. KaTeX fit-and-finish
+   -------------------------------------------------------------------------- */
+.eq .katex { font-size: 1.03em; }
+.eq .katex-display { margin: .4rem 0; overflow-x: auto; overflow-y: hidden; }
+
+/* Horizontal scroll shadows so a wide equation advertises that it pans. */
+.eq .katex-display {
+  background-image:
+    linear-gradient(to right, var(--eqc-surface-2) 40%, transparent),
+    linear-gradient(to left,  var(--eqc-surface-2) 40%, transparent),
+    linear-gradient(to right, rgba(128, 128, 128, .22), transparent),
+    linear-gradient(to left,  rgba(128, 128, 128, .22), transparent);
+  background-position: left center, right center, left center, right center;
+  background-repeat: no-repeat;
+  background-size: 26px 100%, 26px 100%, 11px 100%, 11px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/* --------------------------------------------------------------------------
+   12. Responsive and print behaviour
+   -------------------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .eq { padding: .85rem .9rem; }
+  .eq .katex-display .katex { font-size: .92em; }
+  .eq-body { padding-left: .55rem; padding-right: .55rem; }
+}
+
+@media print {
+  /* Variable tables are collapsed on screen but must always print, otherwise
+     a printed copy of a page loses every symbol definition. */
+  .vars { display: block !important; }
+  .vars[hidden] { display: block !important; }
+  .eq .info { display: none; }
+  .eq { break-inside: avoid; box-shadow: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eq, .eq .info { transition: none !important; }
+}

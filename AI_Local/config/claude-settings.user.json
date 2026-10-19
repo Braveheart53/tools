@@ -1,0 +1,133 @@
+{
+  "__README": [
+    "claude-settings.user.json  --  version 0.0.1  --  William W. Wallace",
+    "",
+    "USER-LEVEL sandbox policy: the restrictions that must hold for every",
+    "project on this machine. Copy the 'sandbox' object below into",
+    "~/.claude/settings.json. See claude-sandbox-local-env.html section 8.",
+    "",
+    "This JSON carries __README and __NOTE keys because JSON has no comment",
+    "syntax. Unknown keys are ignored, so the file is valid as-is, but strip",
+    "them if you prefer a clean settings file.",
+    "",
+    "PLATFORM WARNING: on NATIVE WINDOWS the sandbox does not apply and",
+    "commands run unsandboxed, so none of the rules below take effect there.",
+    "Run inside a WSL2 distribution, or use the container backends on",
+    "local-code-build-test.html instead.",
+    "",
+    "Replace ~/miniforge3 with your own mamba root before using this."
+  ],
+
+  "sandbox": {
+    "enabled": true,
+
+    "__NOTE_allowUnsandboxed": [
+      "false means a command that fails inside the sandbox is NOT retried",
+      "with full access, and the dangerouslyDisableSandbox parameter is",
+      "ignored entirely. The agent then reports the blocked host or path",
+      "instead of routing around the policy, which is what you want."
+    ],
+    "allowUnsandboxedCommands": false,
+
+    "__NOTE_failIfUnavailable": [
+      "If the sandbox itself cannot start, stop rather than running",
+      "unconfined. Shown as 'Strict sandbox mode' in the /sandbox Overrides",
+      "tab. On Linux and WSL2 the usual cause is a missing socat."
+    ],
+    "failIfUnavailable": true,
+
+    "filesystem": {
+      "__NOTE_reads": [
+        "Reads reach MOST OF THE MACHINE by default, credential files",
+        "included. That asymmetry is why the work here is restricting reads",
+        "rather than granting them.",
+        "",
+        "Overlap rule: the narrower path wins, EXCEPT that a deny holds",
+        "inside a wider allow, so a broad allow cannot silently re-expose a",
+        "secret. The wildcard denies below therefore survive the allowRead",
+        "entries that follow them.",
+        "",
+        "Path convention here is standard: /tmp/build absolute, ~/.kube",
+        "home-relative. This DIFFERS from Read and Edit permission rules,",
+        "where //path is absolute and /path is project-relative. Two",
+        "conventions in adjacent settings blocks is a reliable source of",
+        "rules that silently never match."
+      ],
+      "denyRead": [
+        "~/",
+        "~/**/.env",
+        "~/**/*.pem",
+        "~/**/id_rsa*",
+        "~/**/*.p12",
+        "~/**/credentials"
+      ],
+      "allowRead": [
+        "~/miniforge3",
+        "~/projects",
+        "~/.condarc",
+        "~/.mambarc"
+      ],
+      "__NOTE_writes": [
+        "Writes already reach the working directory, a per-user temp",
+        "directory, and anything added with --add-dir, /add-dir or",
+        "permissions.additionalDirectories. Nothing needs granting here for",
+        "the common case of building inside a project.",
+        "",
+        "The base environment is denied explicitly even though no allowWrite",
+        "entry includes it, so that a project-level file cannot widen into",
+        "it: deny entries merge across scopes and only ever narrow."
+      ],
+      "denyWrite": [
+        "~/miniforge3/envs/base",
+        "~/miniforge3/condabin"
+      ]
+    },
+
+    "__NOTE_credentials": [
+      "THERE IS NO BUILT-IN DENY LIST. Only the files and variables listed",
+      "here are restricted; nothing is protected by default.",
+      "",
+      "A deny entry denies the path for reads inside the sandbox and unsets",
+      "the variable before each sandboxed command runs. Deny entries merge",
+      "across every settings scope and only ever narrow, so any scope can",
+      "add one and no scope can remove one.",
+      "",
+      "File denial is part of the filesystem layer, so it does NOT apply if",
+      "filesystem.disabled is true. Environment-variable scrubbing still",
+      "does.",
+      "",
+      "Add this machine's own credentials: instrument licence files, VPN",
+      "profiles, signing keys, and any contracting-system session material."
+    ],
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh",              "mode": "deny" },
+        { "path": "~/.aws/credentials",  "mode": "deny" },
+        { "path": "~/.config/gh",        "mode": "deny" },
+        { "path": "~/.netrc",            "mode": "deny" },
+        { "path": "~/.docker/config.json", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "GITHUB_TOKEN",        "mode": "deny" },
+        { "name": "GH_TOKEN",            "mode": "deny" },
+        { "name": "NPM_TOKEN",           "mode": "deny" },
+        { "name": "AWS_SECRET_ACCESS_KEY", "mode": "deny" },
+        { "name": "ANTHROPIC_API_KEY",   "mode": "deny" }
+      ]
+    },
+
+    "__NOTE_network": [
+      "Allowed domains START EMPTY, and connections go through a proxy on",
+      "this machine that checks each host. So a sandboxed build is OFFLINE",
+      "until told otherwise. That is the correct default and also the first",
+      "thing that looks broken.",
+      "",
+      "Kept empty here on purpose: a project that needs to install packages",
+      "opens the specific indexes in its OWN settings file, so the hole is",
+      "scoped to the project that needs it. See claude-settings.project.json."
+    ],
+    "network": {
+      "allowedDomains": []
+    }
+  }
+}

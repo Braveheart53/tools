@@ -140,7 +140,7 @@ _MEMORY_EQUATIONS["kv-cache"] = r"""
       <tr><td>\(n_{\ell}\)</td><td>Number of transformer layers</td><td>dimensionless</td></tr>
       <tr><td>\(n_{kv}\)</td><td>Key/value heads per layer (equal to the query-head count only when grouped-query attention is not used)</td><td>dimensionless</td></tr>
       <tr><td>\(d_{h}\)</td><td>Head dimension</td><td>dimensionless</td></tr>
-      <tr><td>\(L_{\text{ctx}}\)</td><td>Context length the cache is allocated for, <span class="mono">--ctx-size</span> or <span class="mono">OLLAMA_CONTEXT_LENGTH</span> (Ollama default 4096)<a class="cite" href="references.html#r9">[9]</a></td><td>token</td></tr>
+      <tr><td>\(L_{\text{ctx}}\)</td><td>Context length the cache is allocated for, <span class="mono">--ctx-size</span> or <span class="mono">OLLAMA_CONTEXT_LENGTH</span>. Ollama's default is chosen from available VRAM &mdash; 4k below 24&nbsp;GiB, 32k from 24 to 48&nbsp;GiB, 256k at 48&nbsp;GiB and above &mdash; and its documentation asks for at least 64000 for agent and coding work<a class="cite" href="references.html#r35">[35]</a></td><td>token</td></tr>
       <tr><td>\(n_{\text{seq}}\)</td><td>Concurrent sequences, <span class="mono">--parallel</span> in <span class="mono">llama-server</span> or <span class="mono">OLLAMA_NUM_PARALLEL</span></td><td>dimensionless</td></tr>
       <tr><td>\(b_{kv}\)</td><td>Bytes per cached element, set by the cache data type</td><td>B</td></tr>
     </tbody>
@@ -254,7 +254,7 @@ _THROUGHPUT_EQUATIONS["rpc-token-time"] = r"""
       <button class="info" aria-controls="v-rpc-token-time" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
   </div>
   <div class="eq-body">\[ t_{\text{tok}} \;=\; \sum_{i=1}^{N}\frac{S_{i}}{B_{i}} \;+\; \sum_{i=1}^{N-1}\left(\frac{D_{\text{act}}}{R_{i}} + 2\tau_{i}\right), \qquad r \;=\; \frac{1}{t_{\text{tok}}} \]</div>
-  <p class="eq-note">llama.cpp's RPC backend splits the layer stack across machines<a class="cite" href="references.html#r17">[17]</a>. This separates the part of a token's cost that the split reduces from the part it adds, which is the only way to answer whether a fourth node is worth switching on.</p>
+  <p class="eq-note">llama.cpp's RPC backend splits the layer stack across machines<a class="cite" href="references.html#r17">[17]</a>. This separates the part of a token's cost that the split reduces from the part it adds, which is the only way to answer whether a fourth node is worth switching on. Note that \( S_{i} \) is chosen for you by default: the runtime distributes weights and the cache across every local and remote device in proportion to free memory, unless <span class="mono">--tensor-split</span> says otherwise<a class="cite" href="references.html#r37">[37]</a>.</p>
   <div class="deriv"><ol>
     <li>Node \( i \) holds \( S_{i} \) bytes of the weight set and streams them from its own memory at \( B_{i} \), so its contribution to one token is \( S_{i}/B_{i} \) by the bandwidth-ceiling argument above.</li>
     <li>A pipeline split is sequential for a single token: layer \( j+1 \) cannot start before layer \( j \) has produced its output. The per-node times therefore add rather than overlap.</li>

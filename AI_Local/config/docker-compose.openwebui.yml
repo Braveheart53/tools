@@ -161,14 +161,40 @@ services:
       # Mount ONE project directory, not a home directory. Anything mounted
       # here is writable by code a model wrote and a model ran.
       # - /host/path/to/project:/workspace/project
+    # ---- REQUIRED for OPEN_TERMINAL_ALLOWED_DOMAINS below ----------------
+    # Egress filtering installs dnsmasq and iptables inside the container, so
+    # it needs NET_ADMIN. WITHOUT THIS BLOCK THE ALLOWLIST SILENTLY DOES
+    # NOTHING, and an unfiltered container that looks filtered is worse than
+    # an obviously unfiltered one.
+    #
+    # The container drops the capability again once the rules are installed:
+    # the start-up log ends with "Egress firewall active - dropping
+    # CAP_NET_ADMIN permanently". On a host where it cannot be dropped the
+    # container exits with "unable to raise CAP_SETPCAP for BSET changes",
+    # which points at the host's seccomp and capability settings.
+    #
+    # If this container does not need to fetch anything, delete both this and
+    # the allowlist and use the internal-network shape at the end of this
+    # file instead: there is no list to get wrong.
+    cap_add:
+      - NET_ADMIN
+
     environment:
-      # Set the key explicitly. Omitted, a key is generated and written to the
-      # container log, which is not a managed secret.
+      # REQUIRED. As of v0.11.30 the server refuses to start without a key:
+      # uvicorn exits, and the CLI auto-generates one. A generated key is a
+      # starting point, not a password. OPEN_TERMINAL_API_KEY_FILE reads it
+      # from a file or a Docker secret instead, which is what to use in
+      # production so the key never reaches the command line.
       OPEN_TERMINAL_API_KEY: "REPLACE-ME-OPEN-TERMINAL-KEY"
 
-      # Egress firewall: "only allow outbound connections to these domains".
-      # UNSET MEANS UNRESTRICTED, so a model can reach anything you can.
-      # Listed here: the conda and PyPI indexes and nothing else.
+      # Egress firewall. Only these domains AND THEIR SUBDOMAINS are
+      # reachable; everything else is blocked. UNSET MEANS UNRESTRICTED.
+      #
+      # Requires cap_add: NET_ADMIN above. Verify it took effect:
+      #   docker logs open-terminal | grep -i egress
+      # then test it from inside, which is the check people skip:
+      #   docker exec open-terminal curl -sS -m 5 https://example.com/
+      # That must FAIL.
       OPEN_TERMINAL_ALLOWED_DOMAINS: "conda.anaconda.org,repo.anaconda.com,pypi.org,files.pythonhosted.org"
 
       # Default is "*", and a start-up warning is emitted when it is unset.
@@ -199,11 +225,21 @@ services:
       OPEN_TERMINAL_PACKAGES: "build-essential cmake ninja-build git pkg-config"
       OPEN_TERMINAL_PIP_PACKAGES: "pytest pytest-qt numpy h5py"
 
-    # Resource limits are not documented as Open Terminal settings, so they
-    # are applied by Docker. Without them a runaway build can take the host
-    # down with the model server on it.
-    cpus: "8.0"
-    mem_limit: "24g"
+    # Resource limits. The documentation gives these as the way to stop a
+    # runaway process consuming the machine: Docker throttles on CPU and
+    # kills on memory, so a bad build fails instead of taking the host down
+    # with the model server on it. Confirm the cap is in force rather than
+    # assuming it:
+    #   docker stats --no-stream open-terminal
+    #
+    # These are the Compose-spec keys the Open Terminal documentation shows.
+    # The older top-level `cpus:` / `mem_limit:` still work with
+    # `docker compose` but are not what it documents.
+    deploy:
+      resources:
+        limits:
+          cpus: "8.0"
+          memory: 24G
 
     # Give the sandbox a DIFFERENT GPU from the one holding the model
     # weights, or none at all. Sharing the card lets a test allocation
@@ -240,3 +276,43 @@ volumes:
   open-webui:
   open-terminal:
   jupyter_data:
+
+# ===========================================================================
+# STRONGER ALTERNATIVE: no route out at all
+# ---------------------------------------------------------------------------
+# The allowlist above is the right tool when the container genuinely needs to
+# install packages. When it does not -- and a container whose toolchain and
+# environment are baked into its image does not -- a private network is a
+# harder boundary than a domain list, because there is no list to get wrong.
+#
+# To use this shape instead:
+#   1. delete the `ports:` block from open-terminal, so nothing outside the
+#      compose project can reach it;
+#   2. delete `cap_add: NET_ADMIN` and OPEN_TERMINAL_ALLOWED_DOMAINS, which
+#      have nothing to filter on a network with no egress;
+#   3. uncomment the networks below and add these to each service:
+#
+#        open-webui:     networks: [public, internal]
+#        open-terminal:  networks: [internal]
+#        jupyter:        networks: [internal]
+#
+# Open WebUI then sits on both networks, which is what lets it serve users
+# and still reach the terminal at http://open-terminal:8000, while the
+# terminal is unreachable from outside and cannot call out.
+#
+# networks:
+#   public:
+#   internal:
+#     internal: true   # no route to the internet from this network
+#
+# ---------------------------------------------------------------------------
+# WHAT IS DELIBERATELY ABSENT
+# ---------------------------------------------------------------------------
+# The Docker socket. Mounting /var/run/docker.sock would let the model build
+# images and run containers, and the documentation is unambiguous about the
+# price: it hands the container full control over the host's Docker, which is
+# effectively root on the machine -- containers that mount the whole
+# filesystem, the host network, and every other container. On a workstation
+# that also holds contracting and instrument material, that is not a trade
+# worth making so a model can run `docker build`.
+# ===========================================================================

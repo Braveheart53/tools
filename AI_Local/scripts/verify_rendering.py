@@ -464,9 +464,19 @@ def assess(report: PageReport, generated: bool, in_nav: bool) -> None:
 # %% Orchestration -----------------------------------------------------------
 async def run(out_dir: Path, src_dir: Optional[Path],
               generated_names: Sequence[str],
-              archived_names: Sequence[str]) -> int:
-    """Measure every page under ``out_dir`` and print the report."""
+              not_in_nav_names: Sequence[str],
+              home_page: Optional[Path] = None) -> int:
+    """Measure every page under ``out_dir`` and print the report.
+
+    ``home_page`` is the repository-root index.html.  It is passed explicitly
+    rather than discovered, because it sits one level ABOVE ``out_dir`` and a
+    scan of the AI_Local directory cannot see it.
+    """
     pages = sorted(p for p in out_dir.rglob("*.html"))
+    if home_page is not None:
+        # Prepended so the homepage is measured first: it is the page a
+        # reader hits before any other, so a failure there matters most.
+        pages.insert(0, home_page)
     if not pages:
         print(f"No .html files under {out_dir}", file=sys.stderr)
         return 2
@@ -477,7 +487,13 @@ async def run(out_dir: Path, src_dir: Optional[Path],
         browser = await pw.chromium.launch()
         try:
             for path in pages:
-                rel = path.relative_to(out_dir).as_posix()
+                # The homepage is outside out_dir, so relative_to() would
+                # raise. It is identified by the name the rest of the tooling
+                # uses for it.
+                if home_page is not None and path == home_page:
+                    rel = "../index.html"
+                else:
+                    rel = path.relative_to(out_dir).as_posix()
                 print(f"  measuring {rel} ...", flush=True)
 
                 data = await measure_page(browser, path.as_uri())
@@ -496,7 +512,7 @@ async def run(out_dir: Path, src_dir: Optional[Path],
 
                 assess(report,
                        generated=rel in generated_names,
-                       in_nav=rel not in archived_names)
+                       in_nav=rel not in not_in_nav_names)
                 reports.append(report)
         finally:
             await browser.close()
@@ -577,6 +593,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         description="Browser-based checks for the AI_Local page set.")
     parser.add_argument("--out", required=True, type=Path,
                         help="the AI_Local directory holding the built pages")
+    parser.add_argument("--home", type=Path, default=None,
+                        help="the repository-root index.html, which sits one "
+                             "level above the AI_Local directory and is "
+                             "therefore not found by scanning --out")
     parser.add_argument("--src", type=Path, default=None,
                         help="optional: directory holding the ORIGINAL pages, "
                              "so an overflow can be attributed to the rebuild "
@@ -595,14 +615,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "index.html", "local-code-build-test.html",
         "ollama-model-selection.html", "claude-sandbox-local-env.html",
         "monitoring-sizing.html", "references.html", "CHANGELOG.html",
+        "../index.html",
     )
-    # Pages deliberately kept out of the navigation strip.
-    archived = (
+    # Pages that are deliberately NOT entries in the navigation strip, and
+    # therefore correctly have no link marked aria-current=page:
+    #   the two archived pages, which are kept out of the strip to stop it
+    #     growing past a readable length;
+    #   the repository homepage, whose strip lists the AI_Local pages it
+    #     links INTO. It is the level above them, not one of them.
+    not_in_nav = (
         "Archive/Jupyter_Code_Eval_Setup.html",
         "Archive/Windows_Exporter_Grafana_dashboard.html",
+        "../index.html",
     )
 
-    status = asyncio.run(run(out_dir, src_dir, generated, archived))
+    home = args.home.resolve() if args.home else None
+    if home is not None and not home.is_file():
+        parser.error(f"--home is not a file: {home}")
+
+    status = asyncio.run(run(out_dir, src_dir, generated, not_in_nav, home))
 
     if args.json:
         # Written after the run so a failure still leaves the report on disk.

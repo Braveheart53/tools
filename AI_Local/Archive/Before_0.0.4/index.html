@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running AI on your own hardware, end to end</title>
+<meta name="description" content="Landing page for the AI_Local set: deploying language models across a home or lab network, and letting them build and test code on hardware you own.">
+<meta name="author" content="William W. Wallace">
+<meta name="generator" content="build_ai_local_site.py 0.0.1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f5f66'/%3E%3Cg stroke='%23e3efef' stroke-width='2' fill='none'%3E%3Cpath d='M16 9v6M16 15l-6 6M16 15l6 6'/%3E%3C/g%3E%3Cg fill='%23e3efef'%3E%3Ccircle cx='16' cy='8' r='3'/%3E%3Ccircle cx='9' cy='23' r='3'/%3E%3Ccircle cx='23' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/equations.css">
+<link rel="stylesheet" href="assets/sitenav.css">
+</head>
+<body class="ail">
+<a class="skip" href="#content">Skip to content</a>
+<nav class="ailnav" aria-label="AI_Local page set">
+  <div class="ailnav-inner">
+    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
+    <span class="ailnav-ver">v0.0.1</span>
+    <div class="ailnav-links">
+      <a href="index.html">Overview</a><a href="local-code-build-test.html">Build &amp; test</a><a href="ollama-model-selection.html">Model choice</a><a href="claude-sandbox-local-env.html">Sandbox access</a><a href="monitoring-sizing.html">Monitor sizing</a><a href="llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="GPU_monitoring_setup.html">GPU metrics</a><a href="Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="references.html">References</a><a href="CHANGELOG.html">Change log</a>
+    </div>
+    <button class="ailnav-theme" type="button" aria-label="Switch theme" aria-pressed="false"><span class="ailnav-theme-icon" aria-hidden="true">☾</span><span class="ailnav-theme-label">Dark</span></button>
+  </div>
+</nav>
+<main id="content">
+<section class="hero">
+  <div class="container">
+    <div class="eyebrow">AI_Local &middot; v0.0.1</div>
+    <h1>Running AI on your own hardware, end to end</h1>
+    <p class="lead">A working set for deploying language models across a home or lab network: serving them, distributing them across several machines when one is not enough, monitoring what the hardware is doing, and &mdash; the part this revision adds &mdash; letting a model write, build and test code on machines you own, with nothing leaving the network.</p>
+    <p class="small muted">Scientific and code-building work is the focus. Every page cites its sources to a numbered row in <a href="references.html">one reference table</a>, every equation carries a variable table with units, and every figure that is an estimate rather than a citation says so.</p>
+  </div>
+</section>
+
+<section id="start-here">
+  <div class="container">
+    <h2>Start here</h2>
+    <div class="grid-2">
+      <div>
+        <p>The set assumes one inference host with optional worker nodes. If you are building this from nothing, the order below gets you to a working loop with the fewest dead ends.</p>
+        <ol>
+          <li><strong>Pick a model that fits.</strong> <a href="ollama-model-selection.html">Model selection</a> has the criteria and the memory arithmetic. Doing this first avoids installing a stack around a model your card cannot hold.</li>
+          <li><strong>Serve it.</strong> Ollama alone on one machine, or <a href="llama-rpc-vulkan-guide.html">llama.cpp with RPC workers</a> when the model is larger than any single card.</li>
+          <li><strong>Give it a shell.</strong> <a href="local-code-build-test.html">Local build and test</a> covers Open Terminal, the Jupyter engine and wiring in a mamba environment.</li>
+          <li><strong>Decide the boundary.</strong> <a href="claude-sandbox-local-env.html">Sandboxed access to local environments</a> covers the other containment model, for work that needs the host itself.</li>
+          <li><strong>Watch it.</strong> The <a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Prometheus and Grafana</a> pages, which is how you find out a model quietly spilled to system RAM.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">What this revision adds</h3>
+        <p class="small">The set previously stopped at serving and monitoring a model. Three pages now cover the loop from a prompt to a passing test suite:</p>
+        <ul class="small">
+          <li>Execution backends and their variables, quoted verbatim</li>
+          <li>Named mamba environments reached from a sandbox</li>
+          <li>C++ and Python build and test paths</li>
+          <li>Model selection with the fit arithmetic shown</li>
+          <li>What each containment model actually contains</li>
+        </ul>
+        <p class="small muted" style="margin-bottom:0">See the <a href="CHANGELOG.html">change log</a> for the full list.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="g-build">
+  <div class="container">
+    <h2>Local code generation and testing</h2>
+    <p>Giving a local model a real shell, a real compiler and a real Python environment, and choosing the model that will fit.</p>
+    <div class="card-grid">
+      <a class="card" href="local-code-build-test.html">
+        <span class="card-kicker"><span class="badge new">new</span> Build & test</span>
+        <h3>Letting a local model build and test code on your own hardware</h3>
+        <p class="small muted">The execution backends Open WebUI offers, their full variable sets, wiring in a named mamba environment, C++ and Python build paths, and what each containment model actually contains.</p>
+      </a>
+      <a class="card" href="ollama-model-selection.html">
+        <span class="card-kicker"><span class="badge new">new</span> Model choice</span>
+        <h3>Which Ollama models are worth running for local code work</h3>
+        <p class="small muted">Tool-calling models in the Ollama library with every published size, context window and benchmark figure cited, plus the memory and throughput arithmetic that decides what will fit and run.</p>
+      </a>
+      <a class="card" href="claude-sandbox-local-env.html">
+        <span class="card-kicker"><span class="badge new">new</span> Sandbox access</span>
+        <h3>Giving a sandboxed agent access to local mamba environments</h3>
+        <p class="small muted">The OS-enforced command sandbox: what it restricts, how it differs from a container, the settings that grant environment access, and the denial checks that prove a policy took effect.</p>
+      </a>
+      <a class="card" href="Jupyter_Server_Setup_wsl.html">
+        <span class="card-kicker">Jupyter WSL2</span>
+        <h3>Open WebUI + Jupyter GPU Server Setup (Windows 10/11 + WSL2)</h3>
+        <p class="small muted">A Jupyter GPU server under WSL2, wired to Open WebUI for code execution.</p>
+      </a>
+      <a class="card" href="Dockler_Jupyter_withGPU_Passthru_nssm.html">
+        <span class="card-kicker">Docker Jupyter</span>
+        <h3>Open WebUI + Dockerized Jupyter GPU Server (Windows 10/11)</h3>
+        <p class="small muted">The same Jupyter server in Docker with GPU passthrough, run as a Windows service through NSSM.</p>
+      </a>
+      <a class="card" href="Archive/Jupyter_Code_Eval_Setup.html">
+        <span class="card-kicker">Archive: Jupyter</span>
+        <h3>Archived — Jupyter code-evaluation setup</h3>
+        <p class="small muted">Earlier revision of the Jupyter code-evaluation setup, kept for reference.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section id="g-inference">
+  <div class="container">
+    <h2>Serving the model</h2>
+    <p>Getting a model answering on the network, including across several machines when it will not fit on one.</p>
+    <div class="card-grid">
+      <a class="card" href="llama-rpc-vulkan-guide.html">
+        <span class="card-kicker">llama.cpp RPC</span>
+        <h3>llama.cpp RPC + Vulkan — 4-node home network guide</h3>
+        <p class="small muted">Building llama.cpp with RPC and Vulkan, and splitting a model across four machines when it will not fit on one card.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section id="g-monitoring">
+  <div class="container">
+    <h2>Monitoring</h2>
+    <p>Knowing what the hardware is doing while it serves, on Windows and on Linux.</p>
+    <div class="card-grid">
+      <a class="card" href="monitoring-sizing.html">
+        <span class="card-kicker"><span class="badge new">new</span> Monitor sizing</span>
+        <h3>Sizing the monitoring stack, and getting the queries right</h3>
+        <p class="small muted">The four relations the monitoring install pages assume but never state: retention disk cost, ingest rate, the range-vector window lower bound, and counters versus gauges.</p>
+      </a>
+      <a class="card" href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">
+        <span class="card-kicker">Monitoring W11</span>
+        <h3>Windows 11 Prometheus + Grafana — Multi-Node llama-server</h3>
+        <p class="small muted">End-to-end monitoring of a multi-node llama-server deployment on Windows 11.</p>
+      </a>
+      <a class="card" href="GPU_monitoring_setup.html">
+        <span class="card-kicker">GPU metrics</span>
+        <h3>Multi-Vendor GPU Monitoring Documentation</h3>
+        <p class="small muted">GPU exporters for NVIDIA and AMD, including the WSL2 bridge AMD requires on Windows.</p>
+      </a>
+      <a class="card" href="Grafana_Prometheus_install_windows.html">
+        <span class="card-kicker">Install (Win)</span>
+        <h3>Install & Use Prometheus + Grafana on Windows / WSL2</h3>
+        <p class="small muted">Installing Prometheus, windows_exporter and Grafana on Windows, with a WSL2 node_exporter alternative.</p>
+      </a>
+      <a class="card" href="Grafan_Promethius_install_linux.html">
+        <span class="card-kicker">Install (Linux)</span>
+        <h3>Install & Use Prometheus + Grafana on Node A</h3>
+        <p class="small muted">The same stack on a systemd Linux host, with node_exporter and a first dashboard.</p>
+      </a>
+      <a class="card" href="Archive/Windows_Exporter_Grafana_dashboard.html">
+        <span class="card-kicker">Archive: dashboard</span>
+        <h3>Archived — windows_exporter Grafana dashboard</h3>
+        <p class="small muted">Earlier revision of the windows_exporter dashboard notes, kept for reference.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section id="g-meta">
+  <div class="container">
+    <h2>Reference</h2>
+    <p>Sources and revision history for the whole set.</p>
+    <div class="card-grid">
+      <a class="card" href="index.html">
+        <span class="card-kicker"><span class="badge new">new</span> Overview</span>
+        <h3>Running AI on your own hardware, end to end</h3>
+        <p class="small muted">Landing page for the set, with a suggested build order and the reading conventions used throughout.</p>
+      </a>
+      <a class="card" href="references.html">
+        <span class="card-kicker"><span class="badge new">new</span> References</span>
+        <h3>Sources — AI_Local</h3>
+        <p class="small muted">One IEEE-format reference table for the whole set, with a sourcing-confidence class per row and a list of the figures that are estimates rather than citations.</p>
+      </a>
+      <a class="card" href="CHANGELOG.html">
+        <span class="card-kicker"><span class="badge new">new</span> Change log</span>
+        <h3>Version history — AI_Local</h3>
+        <p class="small muted">What changed in each revision of the set, what was deliberately left alone, and the candidates for the next revision.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section id="conventions">
+  <div class="container">
+    <h2>Conventions used across the set</h2>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Reading conventions. The provenance pills and the variable-table disclosure follow the pattern established in the <em>Atomic Theory Atlas</em> page set in this repository.</caption>
+        <thead><tr><th scope="col">Convention</th><th scope="col">Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill stated">Stated</span></td><td>Quoted from a cited source. Nothing was algebraically manipulated</td></tr>
+          <tr><td><span class="pill derived">Derived here</span></td><td>Algebra or a numerical evaluation performed on these pages. Always followed by an explicit step list</td></tr>
+          <tr><td><span class="pill data">Measured value</span></td><td>A tabulated experimental or defined number</td></tr>
+          <tr><td><span class="badge high">primary</span></td><td>A normative or first-party specification: vendor documentation, a standards body, a reference manual</td></tr>
+          <tr><td><span class="badge medium">vendor</span></td><td>First-party but commercial and revised without notice: a model card, a product page</td></tr>
+          <tr><td><span class="badge medium">estimate</span></td><td>A planning figure for this class of hardware, stated as a range. Measure it before relying on it</td></tr>
+          <tr><td><em>Define variables</em> button</td><td>Opens a table of every symbol in the equation with its SI or stated unit. Variable tables are always expanded when a page is printed</td></tr>
+          <tr><td>Citation <span class="mono">[n]</span></td><td>Links to row <span class="mono">n</span> of the <a href="references.html">reference table</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Offline by design</h3>
+    <p>Every page in the set opens from a local disk with no network access. KaTeX<a class="cite" href="references.html#r31">[31]</a> is vendored into <span class="mono">assets/katex/</span> rather than loaded from a content-delivery network &mdash; it has no dependencies and is designed to be bundled with a site's own resources &mdash; and nothing in the set uses browser storage &mdash; so the pages also render correctly inside a sandboxed frame, where storage access throws. The theme follows the operating-system preference and can be overridden for the current page view.</p>
+
+    <h3>Files you will need that are not in the repository</h3>
+    <p>Installers specific to your hardware &mdash; CUDA, the Vulkan SDK, Docker Desktop, the Grafana MSI &mdash; are listed in <span class="mono">Files_you_Will_need_that_areNot_here.txt</span> alongside these pages<a class="cite" href="references.html#r32">[32]</a>.</p>
+  </div>
+</section>
+</main>
+<footer class="foot">
+  <div class="container">
+    <p><strong>AI_Local</strong> v0.0.1 &middot; William W. Wallace &middot;
+       <a href="CHANGELOG.html">change log</a> &middot;
+       <a href="references.html">references</a></p>
+    <p class="small">Equations typeset offline with KaTeX. Every page in this set opens
+       from local disk with no network access, and nothing here uses browser storage.</p>
+  </div>
+</footer>
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="assets/equations.js"></script>
+<script src="assets/sitenav.js"></script>
+</body>
+</html>

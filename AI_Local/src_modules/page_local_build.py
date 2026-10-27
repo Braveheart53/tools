@@ -209,20 +209,50 @@ def build() -> str:
     <p>The documented Docker invocation is below. The volume at <span class="mono">/home/user</span> is what makes a workspace survive a container restart<a class="cite" href="references.html#r4">[4]</a>.</p>
 
     <p class="code-label">PowerShell, on the host that will run builds</p>
-<pre><code># Open Terminal, with an explicit API key so it is reproducible.
-# If OPEN_TERMINAL_API_KEY is omitted a key is generated and printed to the
-# container log, which you would then have to read back with docker logs.
+<pre><code># Open Terminal, with an explicit API key, resource caps, and the capability
+# the egress allowlist requires.
+#
+# --cap-add NET_ADMIN is NOT optional once OPEN_TERMINAL_ALLOWED_DOMAINS is
+# set: egress filtering installs dnsmasq and iptables inside the container,
+# so without the capability the allowlist does not take effect. Setting the
+# variable without the capability gives an unfiltered container that looks
+# filtered, which is the worst of the three possible outcomes.
+#
+# --memory and --cpus are the documented way to stop a runaway build taking
+# the host down with it.
 docker run -d `
   --name open-terminal `
   --restart unless-stopped `
   -p 8000:8000 `
+  --memory 24g `
+  --cpus 8 `
+  --cap-add NET_ADMIN `
   -v open-terminal:/home/user `
   -e OPEN_TERMINAL_API_KEY=replace-with-a-long-random-string `
+  -e OPEN_TERMINAL_ALLOWED_DOMAINS="conda.anaconda.org,repo.anaconda.com,pypi.org,files.pythonhosted.org" `
   ghcr.io/open-webui/open-terminal
 
 # Confirm the API is up. The documented check is the interactive API page.
 # Expect the Open Terminal API documentation to render.
 Start-Process http://localhost:8000/docs</code></pre>
+
+    <div class="callout danger">
+      <p><strong>The API key is no longer optional.</strong> As of v0.11.30 the server refuses to start without one: running <span class="mono">uvicorn</span> directly exits unless <span class="mono">OPEN_TERMINAL_API_KEY</span> is set, and the CLI auto-generates one when you do not supply your own<a class="cite" href="references.html#r36">[36]</a>. The documentation calls a generated key &ldquo;a starting point, not a password&rdquo;. Set your own, and in production keep it off the command line with a config file or a Docker secret &mdash; <span class="mono">OPEN_TERMINAL_API_KEY_FILE</span> reads it from one.</p>
+    </div>
+
+    <div class="callout ok">
+      <p><strong>Confirm the egress firewall actually came up.</strong> It announces itself at start-up, and the absence of these lines is how you discover the missing capability<a class="cite" href="references.html#r36">[36]</a>:</p>
+<pre><code>docker logs open-terminal
+
+Egress: DNS whitelist &mdash; conda.anaconda.org,pypi.org
+  &#10003; conda.anaconda.org (+ subdomains)
+  &#10003; pypi.org (+ subdomains)
+dnsmasq started (upstream: 1.1.1.1)
+Egress firewall active &mdash; dropping CAP_NET_ADMIN permanently</code></pre>
+      <p>Note the last line: the capability is dropped once the rules are installed, so the container does not keep it. On a host where it cannot be dropped, the container exits at start-up with <span class="mono">unable to raise CAP_SETPCAP for BSET changes</span>, and the documentation points at the host's seccomp and capability settings<a class="cite" href="references.html#r36">[36]</a>. Then test it from inside, which is &sect;11 step&nbsp;11:</p>
+<pre><code>docker exec open-terminal curl -sS -m 5 https://pypi.org/simple/    # allowed
+docker exec open-terminal curl -sS -m 5 https://example.com/        # DNS fails</code></pre>
+    </div>
 
     <p>Verify the service from inside the Open WebUI container, which is the check the connection guide gives. A working connection prints <span class="mono">{"status": "ok"}</span><a class="cite" href="references.html#r5">[5]</a>.</p>
 
@@ -257,7 +287,7 @@ Start-Process http://localhost:8000/docs</code></pre>
         <caption>Open Terminal settings with a direct bearing on blast radius, with the documented default and the value recommended for a home network.</caption>
         <thead><tr><th scope="col">Setting</th><th scope="col">Default</th><th scope="col">Recommended</th><th scope="col">Why</th></tr></thead>
         <tbody>
-          <tr><td class="mono">OPEN_TERMINAL_ALLOWED_DOMAINS</td><td>None</td><td>Your package indexes only</td><td>Documented as an egress firewall: "only allow outbound connections to these domains"<a class="cite" href="references.html#r6">[6]</a>. Unset means unrestricted egress</td></tr>
+          <tr><td class="mono">OPEN_TERMINAL_ALLOWED_DOMAINS</td><td>None</td><td>Your package indexes only, <strong>with <span class="mono">--cap-add NET_ADMIN</span></strong></td><td>An egress firewall: only the listed domains <em>and their subdomains</em> are reachable<a class="cite" href="references.html#r36">[36]</a>. Unset means unrestricted egress. <strong>It installs dnsmasq and iptables in the container, so it needs <span class="mono">NET_ADMIN</span>; set without it, the allowlist silently does nothing</strong></td></tr>
           <tr><td class="mono">OPEN_TERMINAL_CORS_ALLOWED_ORIGINS</td><td class="mono">*</td><td>Your Open WebUI origin</td><td>A start-up warning is emitted when it is unset<a class="cite" href="references.html#r6">[6]</a></td></tr>
           <tr><td class="mono">OPEN_TERMINAL_EXECUTE_TIMEOUT</td><td>Unset</td><td>Longer than your slowest clean build</td><td>Seconds to wait for command output<a class="cite" href="references.html#r6">[6]</a>. Unset plus a 40-minute build is an agent that appears to hang</td></tr>
           <tr><td class="mono">OPEN_TERMINAL_FILE_BROWSER_ROOT</td><td class="mono">home</td><td class="mono">/workspace</td><td>Accepts <span class="mono">home</span>, an explicit path, or <span class="mono">filesystem</span><a class="cite" href="references.html#r6">[6]</a>. <span class="mono">filesystem</span> exposes the whole container</td></tr>
@@ -733,20 +763,57 @@ docker exec open-terminal nvidia-smi</code></pre>
             <td>The model writes code and never runs it</td>
           </tr>
           <tr>
+            <td class="mono">ENABLE_CODE_EXECUTION</td>
+            <td>Open WebUI environment</td>
+            <td><span class="mono">true</span> only if you want the in-chat Run button</td>
+            <td>Separate from <span class="mono">ENABLE_CODE_INTERPRETER</span>: this one governs executing code blocks in a response, that one governs the model running code as part of its reasoning. Both default to <span class="mono">true</span> on the Pyodide engine, and the hardening guidance is to set them <span class="mono">false</span> where code execution is not required<a class="cite" href="references.html#r36">[36]</a>. On a deployment driving Open Terminal, neither is needed</td>
+          </tr>
+          <tr>
             <td class="mono">OLLAMA_CONTEXT_LENGTH</td>
             <td>Ollama server environment</td>
-            <td>32768 or more for agent work</td>
-            <td>Default is 4096<a class="cite" href="references.html#r9">[9]</a>. A build log plus source plus history overruns it, the prompt is truncated, and the model loses the error it was fixing</td>
+            <td><strong>64000 or more</strong>, which is the figure Ollama's own documentation gives for agents and coding tools<a class="cite" href="references.html#r35">[35]</a></td>
+            <td>The default is chosen from VRAM, not fixed: under 24&nbsp;GiB it is 4k, which a build log plus source plus history overruns immediately &mdash; the prompt is truncated and the model loses the error it was fixing. See the note below</td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <div class="callout danger">
-      <p><strong>The 4096-token default is the single most common cause of a local agent that "goes in circles".</strong> Ollama documents the default context window as 4096 tokens<a class="cite" href="references.html#r9">[9]</a>. A C++ compiler error with template instantiation backtraces can be several thousand tokens by itself. Raise <span class="mono">OLLAMA_CONTEXT_LENGTH</span> before concluding a model is incapable &mdash; then size the result against VRAM with the context-budget relation on the <a href="ollama-model-selection.html#eq-ctx-budget">model selection page</a>, because the cache grows linearly with it.</p>
+      <p><strong>A short context window is the single most common cause of a local agent that "goes in circles".</strong> A C++ compiler error with template instantiation backtraces can be several thousand tokens by itself. Raise <span class="mono">OLLAMA_CONTEXT_LENGTH</span> before concluding a model is incapable &mdash; then size the result against VRAM with the context-budget relation on the <a href="ollama-model-selection.html#eq-ctx-budget">model selection page</a>, because the cache grows linearly with it.</p>
+    </div>
+
+    <div class="callout info-box">
+      <p><strong>The default is no longer a single number, and the widely repeated &ldquo;4096&rdquo; is now only the bottom rung.</strong> Ollama selects a default context length from the available VRAM<a class="cite" href="references.html#r35">[35]</a>:</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Ollama's VRAM-tiered default context length, quoted from its context-length documentation. The practical consequence is that the same <span class="mono">ollama serve</span> on two machines gives two different windows, so the default cannot be assumed from one node to another.</caption>
+        <thead><tr><th scope="col">Available VRAM</th><th scope="col">Default context</th><th scope="col">Enough for an agent loop?</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">&lt; 24 GiB</td><td class="mono">4k</td><td><strong>No.</strong> One compiler error can exhaust it</td></tr>
+          <tr><td class="mono">24&ndash;48 GiB</td><td class="mono">32k</td><td>Workable for single-file edits, short of the documented 64000 for agent work</td></tr>
+          <tr><td class="mono">&ge; 48 GiB</td><td class="mono">256k</td><td>Yes, and likely more than the cache budget actually allows &mdash; check it</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>The documentation states plainly that &ldquo;tasks which require large context like web search, agents, and coding tools should be set to at least 64000 tokens&rdquo;, and that raising it increases the memory required<a class="cite" href="references.html#r35">[35]</a>. Those two sentences pull in opposite directions, which is exactly what the context-budget relation is for: 64000 tokens is the target, and the relation tells you whether the card can allocate it.</p>
+
+    <div class="callout ok">
+      <p><strong>Verify rather than assume, with one command.</strong> <span class="mono">ollama ps</span> now reports the allocated context alongside the processor split<a class="cite" href="references.html#r35">[35]</a>, so both failure modes &mdash; a window shorter than you set, and weights spilled to the CPU &mdash; are visible in the same output:</p>
+<pre><code>ollama ps
+
+NAME             ID              SIZE      PROCESSOR    CONTEXT    UNTIL
+gemma4:latest    c6eb396dbd59    9.6 GB    100% GPU     131072     2 minutes from now</code></pre>
+      <p>Read the <span class="mono">PROCESSOR</span> column for residency and the <span class="mono">CONTEXT</span> column for the window actually allocated. If <span class="mono">CONTEXT</span> is lower than the value you set, the server trimmed it to fit, which is the quiet version of the problem this section describes.</p>
     </div>
 
     <p>Also relevant: <span class="mono">OLLAMA_NUM_PARALLEL</span> has a documented default of 1<a class="cite" href="references.html#r9">[9]</a>. An agent loop is bursty rather than concurrent, so 1 is usually right; raising it multiplies the cache term in the same relation.</p>
+
+    <div class="callout info-box">
+      <p><strong>Native tool calling is already the default, and there is no variable named what you would expect.</strong> Open WebUI's own tool documentation notes that Native is the default and that only an explicit <span class="mono">legacy</span> opts out of it, so the per-model setting in &sect;9 is a check rather than a change. To set the mode globally the key lives inside a JSON blob &mdash; <span class="mono">DEFAULT_MODEL_PARAMS: '{"function_calling": "legacy"}'</span> &mdash; and the documentation states explicitly that <em>there is no standalone <span class="mono">FUNCTION_CALLING_MODE</span> variable</em>. If you went looking for one and could not find it, that is why.</p>
+    </div>
 
     <p>For the model to reach tools other than the terminal, <span class="mono">mcpo</span> proxies an MCP server's stdio interface to REST and OpenAPI. The documented invocations are <span class="mono">uvx mcpo --port 8000 -- your_mcp_server_command</span> and the published image <span class="mono">ghcr.io/open-webui/mcpo:main</span><a class="cite" href="references.html#r8">[8]</a>, with interactive documentation served at <span class="mono">/docs</span>.</p>
   </div>
@@ -791,12 +858,71 @@ docker exec open-terminal nvidia-smi</code></pre>
       </table>
     </div>
 
-    <h3>10.1 Minimum set for a home network</h3>
+    <h3>10.1 The stronger pattern: put it on a network with no route out</h3>
+
+    <p>The egress allowlist is the right tool when the container genuinely needs to install packages. When it does not &mdash; and for a container that only builds and tests against an environment baked into the image, it does not &mdash; a private Docker network is a harder boundary than a domain list, because there is no list to get wrong.</p>
+
+    <p class="code-label">docker-compose.yml &mdash; the documented network-isolation shape</p>
+<pre><code>services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+      - "3000:8080"
+    networks: [public, internal]
+
+  open-terminal:
+    image: ghcr.io/open-webui/open-terminal
+    # No ports published: nothing outside the compose project can reach it.
+    networks: [internal]
+
+networks:
+  public:
+  internal:
+    internal: true   # no route to the internet from this network</code></pre>
+
+    <p>With this shape Open WebUI reaches the terminal at <span class="mono">http://open-terminal:8000</span>, nothing on the network can reach the terminal, and the terminal cannot make outbound requests at all<a class="cite" href="references.html#r36">[36]</a>. Open WebUI sits on both networks, which is what lets it serve users and still reach the terminal.</p>
+
+    <div class="callout info-box">
+      <p><strong>Which to use.</strong> Start with <span class="mono">internal: true</span> and no allowlist. Move to the allowlist only when a task genuinely needs to fetch something, and then list the indexes and nothing else. The two are alternatives rather than layers: a container on an internal network has no egress to filter.</p>
+    </div>
+
+    <div class="callout danger">
+      <p><strong>Do not mount the Docker socket.</strong> Mounting <span class="mono">/var/run/docker.sock</span> lets the model build images and run containers, and the documentation is unambiguous about what it costs: it gives the container full control over the host's Docker, which is &ldquo;effectively root access on your machine&rdquo;. Anyone with terminal access could run containers that mount the entire filesystem, reach the host network, and manage every container on the machine<a class="cite" href="references.html#r36">[36]</a>. On a workstation that also holds contracting and instrument material, that is not a trade worth making for the convenience of letting a model run <span class="mono">docker build</span>.</p>
+    </div>
+
+    <h3>10.2 Two more defaults worth knowing</h3>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Behaviour that is on or off by default in Open Terminal and is easy to miss, with what it means for this deployment.</caption>
+        <thead><tr><th scope="col">Behaviour</th><th scope="col">Default</th><th scope="col">What it means</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Port previews are sandboxed</td>
+            <td>On</td>
+            <td>When the model starts a server, the preview frame is a separate origin from Open WebUI, which keeps whatever is running away from your session. <strong>Settings &rarr; Interface &rarr; Terminal Preview Allow Same Origin</strong> relaxes it and is off unless you turn it on<a class="cite" href="references.html#r36">[36]</a>. Leave it off: the code being previewed is usually code the model just wrote</td>
+          </tr>
+          <tr>
+            <td>Admin-configured connections</td>
+            <td>Prefer them</td>
+            <td>An admin-configured connection keeps the API key on the server and routes requests through Open WebUI's backend; a user-configured one stores the key in each user's browser and requires every user's machine to reach the terminal directly<a class="cite" href="references.html#r36">[36]</a>. This is why &sect;3.4 adds the connection under <strong>Admin &rarr; Integrations</strong></td>
+          </tr>
+          <tr>
+            <td><span class="mono">OPEN_TERMINAL_MULTI_USER</span></td>
+            <td><span class="mono">false</span></td>
+            <td>Gives each user their own account and home folder inside one container, which keeps people and their agents out of each other's files. It is a workspace split, not an isolation boundary: everyone still shares the kernel<a class="cite" href="references.html#r36">[36]</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>10.3 Minimum set for a home network</h3>
 
     <ol>
       <li><strong>Run Open Terminal in Docker, not bare metal.</strong> The documentation's own guidance: use Docker for isolation, bare metal only when the agent should work directly on the host<a class="cite" href="references.html#r3">[3]</a>.</li>
       <li><strong>Set an API key explicitly.</strong> <span class="mono">OPEN_TERMINAL_API_KEY</span>, or <span class="mono">OPEN_TERMINAL_API_KEY_FILE</span> to read it from a Docker secret<a class="cite" href="references.html#r6">[6]</a>. An auto-generated key in a container log is not a managed secret.</li>
-      <li><strong>Bound egress.</strong> <span class="mono">OPEN_TERMINAL_ALLOWED_DOMAINS</span> listing your package indexes and nothing else. Unset means a model can reach anything you can.</li>
+      <li><strong>Bound egress, and give it the capability it needs.</strong> Either put the container on an <span class="mono">internal: true</span> network, or set <span class="mono">OPEN_TERMINAL_ALLOWED_DOMAINS</span> to your package indexes <em>with</em> <span class="mono">--cap-add NET_ADMIN</span>, then confirm the firewall announced itself in the container log. Unset means a model can reach anything you can; set without the capability means the same thing while looking safe.</li>
+      <li><strong>Cap CPU and memory.</strong> <span class="mono">--memory</span> and <span class="mono">--cpus</span> on the container, or <span class="mono">deploy.resources.limits</span> in compose. Docker throttles CPU and kills on memory, so a runaway build fails instead of taking the host down<a class="cite" href="references.html#r36">[36]</a>. Confirm with <span class="mono">docker stats --no-stream open-terminal</span>.</li>
       <li><strong>Pin CORS.</strong> <span class="mono">OPEN_TERMINAL_CORS_ALLOWED_ORIGINS</span> to your Open WebUI origin; the default is <span class="mono">*</span> and a start-up warning says so<a class="cite" href="references.html#r6">[6]</a>.</li>
       <li><strong>Firewall per host, not per subnet.</strong> Port 8000 admits the Open WebUI host only. The existing rules in this deployment use the whole <span class="mono">192.168.7.0/24</span> for several services; an execution endpoint deserves narrower.</li>
       <li><strong>Mount source read-write, credentials never.</strong> Mount the one project directory. Do not mount a home directory, and keep <span class="mono">.ssh</span>, cloud credentials and token files out of the container entirely.</li>
@@ -804,7 +930,7 @@ docker exec open-terminal nvidia-smi</code></pre>
       <li><strong>Treat the workspace as untrusted output.</strong> Code a model wrote and a model ran has not been reviewed. Review before it leaves the sandbox.</li>
     </ol>
 
-    <h3>10.2 A note on the other direction: agent harnesses that enforce a boundary</h3>
+    <h3>10.4 A note on the other direction: agent harnesses that enforce a boundary</h3>
 
     <p>Open WebUI's backends are containment by deployment choice. A harness such as Claude Code takes the other approach and enforces a boundary at the operating-system level around shell commands, with filesystem and network allowlists in <span class="mono">settings.json</span><a class="cite" href="references.html#r21">[21]</a>. The <a href="claude-sandbox-local-env.html">companion page</a> covers that model and how it maps onto the same mamba environments, because the two can be run side by side against one project.</p>
   </div>
@@ -831,13 +957,15 @@ docker exec open-terminal nvidia-smi</code></pre>
           <tr><td>8</td><td>Model can run one command</td><td>Ask: "run <span class="mono">uname -a</span> and show the output"</td><td>Real output, not a description of what it would do</td></tr>
           <tr><td>9</td><td>Model can build</td><td>Ask: "configure and build this project, then report the first error"</td><td>CMake and compiler output</td></tr>
           <tr><td>10</td><td>Model can close the loop</td><td>Ask: "run the tests, fix the first failure, re-run"</td><td>Two test runs with an edit between them</td></tr>
-          <tr><td>11</td><td>Egress is bounded</td><td class="mono">docker exec open-terminal curl -sS -m 5 https://example.com</td><td><strong>Failure</strong>, if allowed-domains is set correctly</td></tr>
+          <tr><td>11a</td><td>Egress firewall came up at all</td><td class="mono">docker logs open-terminal | grep -i egress</td><td>The DNS whitelist and <span class="mono">Egress firewall active</span>. Nothing here means <span class="mono">NET_ADMIN</span> is missing</td></tr>
+          <tr><td>11b</td><td>Egress is bounded</td><td class="mono">docker exec open-terminal curl -sS -m 5 https://example.com</td><td><strong>Failure</strong>, if allowed-domains took effect</td></tr>
+          <tr><td>11c</td><td>An allowed host still works</td><td class="mono">docker exec open-terminal curl -sSI -m 10 https://pypi.org/simple/</td><td>Succeeds. Without this, 11b passing could just mean the container has no network at all</td></tr>
           <tr><td>12</td><td>Context is sufficient</td><td>Ask the model to summarise a 3000-line build log</td><td>Reference to content from both ends of the log</td></tr>
         </tbody>
       </table>
     </div>
 
-    <p>Step 11 is the one most often skipped, and it is the one that fails. Confirm the egress restriction works rather than assuming the variable took effect.</p>
+    <p>Step 11 is the one most often skipped, and it is the one that fails. It is split into three parts for a reason: 11b passing on its own proves nothing, because a container with no working network at all also fails to reach <span class="mono">example.com</span>. 11a says the firewall started, 11b that it blocks, 11c that it still lets the indexes through. Confirm all three rather than assuming the variable took effect.</p>
   </div>
 </section>
 
@@ -845,7 +973,7 @@ docker exec open-terminal nvidia-smi</code></pre>
   <div class="container">
     <h2>12. Known gaps in the public documentation</h2>
 
-    <p>Recorded here so a reader does not waste time looking for something that is not published. Each row was confirmed against the cited page on """ + r"""2026-10-18.</p>
+    <p>Recorded here so a reader does not waste time looking for something that is not published. Each row was confirmed against the cited page on """ + r"""2026-10-18 and re-checked against the upstream documentation repositories on 2026-10-26. The re-check closed the Ollama row below and left the rest standing.</p>
 
     <div class="table-wrap">
       <table>
@@ -871,6 +999,11 @@ docker exec open-terminal nvidia-smi</code></pre>
             <td>Compose <span class="mono">deploy.resources.reservations.devices</span> form for GPUs not on the GPU-access page</td>
             <td>Docker GPU access page covers <span class="mono">docker run --gpus</span> only<a class="cite" href="references.html#r26">[26]</a></td>
             <td>Use <span class="mono">docker run --gpus device=N</span>, or follow Docker's separate Compose GPU guide</td>
+          </tr>
+          <tr>
+            <td><s>Ollama's context-length default and how to verify it</s> &mdash; <strong>closed</strong></td>
+            <td>Previously only the FAQ's flat &ldquo;4096&rdquo;, with no guidance for agent work</td>
+            <td><strong>Now documented.</strong> A context-length page gives the VRAM-tiered defaults, asks for at least 64000 for agents and coding tools, and shows the <span class="mono">CONTEXT</span> column of <span class="mono">ollama ps</span><a class="cite" href="references.html#r35">[35]</a>. &sect;9 was corrected against it</td>
           </tr>
           <tr>
             <td>Quantisation level is not stated on Ollama tag pages</td>

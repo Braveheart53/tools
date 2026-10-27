@@ -60,9 +60,17 @@ from typing import Dict, List, Tuple
 
 
 # %% Metadata ----------------------------------------------------------------
-#: Date on which every URL in this file was retrieved and its quoted content
-#: confirmed.  Printed on references.html.
+#: Date on which the original reference set was retrieved and its quoted
+#: content confirmed.  Printed on references.html.
 ACCESSED: str = "2026-10-18"
+
+#: Date of the re-verification pass against the upstream documentation
+#: repositories.  Three references were added on this date and several
+#: figures elsewhere in the set were corrected against them; see the v0.0.4
+#: changelog entry.  Carried separately from ACCESSED rather than replacing
+#: it, because a reader checking a claim needs to know which date applies to
+#: the reference they are looking at.
+RECHECKED: str = "2026-10-26"
 
 #: Display labels for the category keys used in :data:`REFS`.
 CAT_LABEL: Dict[str, str] = {
@@ -329,6 +337,31 @@ REFS: List[Tuple[int, str, str, str]] = [
      '[Online]. Available: see URL below. Accessed: ' + ACCESSED + '.',
      'models',
      'https://ollama.com/library/nemotron-3-nano'),
+
+    # --- Re-verified 2026-10-26 against the upstream repositories ---- 35-37
+    (35,
+     'Ollama, &ldquo;Context length,&rdquo; <em>Ollama Documentation</em>, '
+     '<span class="mono">docs/context-length.mdx</span>. '
+     '[Online]. Available: see URL below. Accessed: ' + RECHECKED + '.',
+     'models',
+     'https://github.com/ollama/ollama/blob/main/docs/context-length.mdx'),
+
+    (36,
+     'Open WebUI, &ldquo;Security Best Practices&rdquo; (Open Terminal), '
+     '<em>Open WebUI Documentation</em>, '
+     '<span class="mono">docs/features/open-terminal/advanced/security.md</span>. '
+     '[Online]. Available: see URL below. Accessed: ' + RECHECKED + '.',
+     'openwebui',
+     'https://github.com/open-webui/docs/blob/main/docs/features/open-terminal/advanced/security.md'),
+
+    (37,
+     'ggml-org, &ldquo;RPC backend&rdquo; '
+     '(<span class="mono">ggml-rpc-server</span>), <em>llama.cpp</em> source '
+     'tree, <span class="mono">tools/rpc/README.md</span>, re-read for the '
+     'renamed binary, the upstream security warning and the RDMA transport. '
+     '[Online]. Available: see URL below. Accessed: ' + RECHECKED + '.',
+     'inference',
+     'https://github.com/ggml-org/llama.cpp/blob/master/tools/rpc/README.md'),
 ]
 
 

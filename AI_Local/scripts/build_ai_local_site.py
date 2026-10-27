@@ -4,7 +4,7 @@
 build_ai_local_site.py -- generator and verifier for the AI_Local page set.
 
 Author  : William W. Wallace
-Version : 0.0.1
+Version : 0.0.3
 Created : 2026-10-18
 
 WHAT THIS DOES
@@ -150,7 +150,10 @@ def _brand_svg() -> str:
 def build_nav(manifest: Sequence[PageSpec],
               version: str,
               depth: int,
-              with_theme_button: bool) -> str:
+              with_theme_button: bool,
+              *,
+              at_repo_root: bool = False,
+              repo_home: bool = True) -> str:
     """Return the shared navigation strip markup.
 
     Parameters
@@ -163,26 +166,65 @@ def build_nav(manifest: Sequence[PageSpec],
         Directory depth of the page being built, relative to the AI_Local
         directory.  0 for a top-level page, 1 for a page under ``Archive/``.
         Used to prefix every href with the right number of ``../`` segments,
-        so the same strip works from both levels.
+        so the same strip works from both levels.  Ignored when
+        ``at_repo_root`` is True.
     with_theme_button
         True to include the strip's own theme control.  Passed False for a
         page that already has a theme toggle of its own, so no page ever
         shows two.
+    at_repo_root
+        True when the page being built is the repository-root homepage, which
+        sits one level ABOVE the AI_Local directory.  Its links therefore need
+        an ``AI_Local/`` prefix rather than a ``../`` one, and its own entry
+        is ``index.html`` rather than ``AI_Local/index.html``.
+    repo_home
+        True to prepend a link back to the repository homepage.  The link is
+        what makes the integration two-way: without it a reader who lands on
+        an AI_Local page has no route to the rest of the repository.  Passed
+        False only when no repository homepage is being generated, so the
+        AI_Local set remains self-contained if it is published alone.
 
     Returns
     -------
     str
         The ``<nav class="ailnav">`` element.
     """
-    up = "../" * depth
+    # Two different prefixings, because the strip is used from two levels:
+    #   an AI_Local page    -> "../" * depth reaches the AI_Local directory,
+    #                          and the repo root is one further up
+    #   the repo homepage   -> AI_Local pages need an "AI_Local/" prefix
+    if at_repo_root:
+        up = ""                      # unused, but keeps the brand href simple
+        page_prefix = "AI_Local/"
+        home_href = "index.html"
+        brand_href = "index.html"
+        # The brand names where it leads. On the repository homepage that is
+        # the repository, and labelling it "AI_Local" there would say the
+        # reader is inside a page set they have not entered yet.
+        brand_label = "tools"
+    else:
+        up = "../" * depth
+        page_prefix = up
+        home_href = up + "../index.html"
+        brand_href = up + "index.html"
+        brand_label = "AI_Local"
 
     links: List[str] = []
+
+    if repo_home:
+        # First entry, so the route out of the set is always in the same
+        # place. Marked with a leading glyph so it reads as a level change
+        # rather than as another page in the set.
+        links.append(
+            f'<a href="{home_href}" class="ailnav-home">'
+            f'<span aria-hidden="true">\u2302</span>&nbsp;Repo home</a>')
+
     for spec in manifest:
         if not spec.in_nav:
             continue
         label = html.escape(spec.nav_label)
         # A nav entry for a page in a subdirectory needs its own prefix too.
-        href = up + spec.filename
+        href = page_prefix + spec.filename
         links.append(f'<a href="{href}">{label}</a>')
 
     theme = ""
@@ -198,8 +240,8 @@ def build_nav(manifest: Sequence[PageSpec],
     return (
         '<nav class="ailnav" aria-label="AI_Local page set">\n'
         '  <div class="ailnav-inner">\n'
-        f'    <a class="ailnav-brand" href="{up}index.html">'
-        f'{_brand_svg()}<span>AI_Local</span></a>\n'
+        f'    <a class="ailnav-brand" href="{brand_href}">'
+        f'{_brand_svg()}<span>{html.escape(brand_label)}</span></a>\n'
         f'    <span class="ailnav-ver">v{html.escape(version)}</span>\n'
         '    <div class="ailnav-links">\n'
         f'      {"".join(links)}\n'
@@ -264,7 +306,8 @@ def asset_scripts(depth: int) -> str:
 def wrap_page(spec: PageSpec,
               body: str,
               manifest: Sequence[PageSpec],
-              version: str) -> str:
+              version: str,
+              repo_home: bool = False) -> str:
     """Wrap a body fragment in the full page shell.
 
     Used for generated pages only.  Produces a complete, valid, standalone
@@ -272,7 +315,8 @@ def wrap_page(spec: PageSpec,
     """
     depth = spec.filename.count("/")
     up = "../" * depth
-    nav = build_nav(manifest, version, depth, with_theme_button=True)
+    nav = build_nav(manifest, version, depth, with_theme_button=True,
+                    repo_home=repo_home)
     title = html.escape(spec.title)
     desc = html.escape(spec.description or spec.blurb)
 
@@ -304,6 +348,97 @@ def wrap_page(spec: PageSpec,
   </div>
 </footer>
 {asset_scripts(depth)}
+</body>
+</html>
+"""
+
+
+def wrap_repo_home(body: str,
+                   manifest: Sequence[PageSpec],
+                   version: str,
+                   home_version: str) -> str:
+    """Wrap the repository homepage body in its own page shell.
+
+    Separate from :func:`wrap_page` because the homepage sits one directory
+    ABOVE the AI_Local set and therefore differs in three ways:
+
+    * every asset and page reference needs an ``AI_Local/`` prefix;
+    * it loads two extra stylesheets of its own, ``home.css`` and ``home.js``;
+    * it carries the repository version, not the AI_Local set version, while
+      still showing the set version in the navigation strip so a reader can
+      see which page set they are about to enter.
+
+    Parameters
+    ----------
+    body
+        Body fragment from ``page_home.build()``.
+    manifest
+        The AI_Local page manifest, for the navigation strip.
+    version
+        AI_Local page-set version, shown in the strip.
+    home_version
+        Repository homepage version, shown in the footer.
+
+    Returns
+    -------
+    str
+        A complete HTML document for the repository root.
+    """
+    nav = build_nav(manifest, version, depth=0, with_theme_button=True,
+                    at_repo_root=True, repo_home=False)
+
+    # Asset paths are written by hand here rather than through asset_links(),
+    # because that helper only knows about "../" depth prefixes and this page
+    # needs a "AI_Local/" prefix instead.
+    assets = "\n".join([
+        '<link rel="stylesheet" href="AI_Local/assets/site.css">',
+        '<link rel="stylesheet" href="AI_Local/assets/katex/katex.min.css">',
+        '<link rel="stylesheet" href="AI_Local/assets/equations.css">',
+        '<link rel="stylesheet" href="AI_Local/assets/sitenav.css">',
+        '<link rel="stylesheet" href="AI_Local/assets/home.css">',
+    ])
+    scripts = "\n".join([
+        '<script src="AI_Local/assets/katex/katex.min.js"></script>',
+        '<script src="AI_Local/assets/katex/contrib/auto-render.min.js"></script>',
+        '<script src="AI_Local/assets/equations.js"></script>',
+        '<script src="AI_Local/assets/sitenav.js"></script>',
+        '<script src="AI_Local/assets/home.js"></script>',
+    ])
+
+    title = "Local AI and engineering tools \u2014 Braveheart53/tools"
+    desc = ("A staged implementation flow for deploying language models on "
+            "your own hardware and pointing them at real engineering code, "
+            "plus a catalogue of every tool in this repository.")
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<meta name="description" content="{desc}">
+<meta name="author" content="William W. Wallace">
+<meta name="generator" content="build_ai_local_site.py 0.0.1">
+<link rel="icon" href="{_FAVICON}" type="image/svg+xml">
+{assets}
+</head>
+<body class="ail">
+<a class="skip" href="#content">Skip to content</a>
+{nav}
+<main id="content">
+{body.strip()}
+</main>
+<footer class="foot">
+  <div class="container">
+    <p><strong>Braveheart53/tools</strong> homepage v{html.escape(home_version)}
+       &middot; AI_Local page set v{html.escape(version)}
+       &middot; William W. Wallace</p>
+    <p class="small">Every page in this repository opens from local disk with no
+       network access. Equations are typeset offline with KaTeX, and nothing here
+       uses browser storage.</p>
+  </div>
+</footer>
+{scripts}
 </body>
 </html>
 """
@@ -387,7 +522,8 @@ def unwrap_artifact_shell(source: str) -> Tuple[str, bool]:
 def retrofit_page(source: str,
                   spec: PageSpec,
                   manifest: Sequence[PageSpec],
-                  version: str) -> Tuple[str, Dict[str, bool]]:
+                  version: str,
+                  repo_home: bool = False) -> Tuple[str, Dict[str, bool]]:
     """Add the shared navigation and stylesheets to a pre-existing page.
 
     The page's own stylesheet, layout, content, scripts and theme control are
@@ -443,7 +579,8 @@ def retrofit_page(source: str,
 
     # --- 2. navigation strip, after <body ...> --------------------------
     nav = build_nav(manifest, version, depth,
-                    with_theme_button=not owns_theme)
+                    with_theme_button=not owns_theme,
+                    repo_home=repo_home)
     match = _BODY_OPEN.search(out)
     if match:
         out = out[:match.end()] + "\n" + nav + "\n" + out[match.end():]
@@ -473,6 +610,50 @@ class Problem:
         return f"[{self.kind}] {self.page}: {self.detail}"
 
 
+def iter_equation_cards(text: str):
+    """Yield ``(eq_id, card_html)`` for every equation card on a page.
+
+    WHY NOT A REGULAR EXPRESSION
+    ----------------------------
+    The obvious slice -- from one ``<div class="eq" id=`` to the next, or to
+    the end of the document -- is wrong for the LAST card on a page: it has
+    no following card, so the slice runs to the end of the file and swallows
+    everything after it.  That produced a real false failure, where a page's
+    conventions table further down contributed its own ``.pill`` elements to
+    the last equation's pill count.
+
+    This walks the tag stream from the card's opening ``<div>`` and tracks
+    depth, so a card ends at its own matching ``</div>`` whatever follows it.
+
+    Parameters
+    ----------
+    text : str
+        The page's HTML.
+
+    Yields
+    ------
+    (str, str)
+        The card's ``id`` attribute and its complete HTML.
+    """
+    opener = re.compile(r'<div class="eq" id="(eq-[^"]+)"\s*>', re.IGNORECASE)
+    any_div = re.compile(r'<div\b[^>]*>|</div\s*>', re.IGNORECASE)
+
+    for match in opener.finditer(text):
+        eq_id = match.group(1)
+        depth = 1
+        position = match.end()
+
+        for tag in any_div.finditer(text, position):
+            depth += 1 if tag.group(0).lower().startswith("<div") else -1
+            if depth == 0:
+                yield eq_id, text[match.start():tag.end()]
+                break
+        else:
+            # Unbalanced markup: yield what is there so the other checks can
+            # still run, and let verify_structure report the imbalance.
+            yield eq_id, text[match.start():]
+
+
 def verify_equation_blocks(page: str, text: str) -> List[Problem]:
     """Check every equation block against the Atomic Theory Atlas pattern.
 
@@ -490,8 +671,7 @@ def verify_equation_blocks(page: str, text: str) -> List[Problem]:
     # Split on the opening of each .eq card.  A non-greedy slice to the next
     # card start (or end of text) is sufficient here because the cards are
     # emitted by eq_library and are never nested.
-    cards = re.findall(r'<div class="eq" id="(eq-[^"]+)">(.*?)(?=<div class="eq" id="|\Z)',
-                       text, re.DOTALL)
+    cards = list(iter_equation_cards(text))
 
     seen_var_ids: Dict[str, int] = {}
 
@@ -555,9 +735,7 @@ def verify_dollar_math(page: str, text: str) -> List[Problem]:
     mistake, rather than to the whole page, where ``$`` is legitimate shell.
     """
     problems: List[Problem] = []
-    for eq_id, card in re.findall(
-            r'<div class="eq" id="(eq-[^"]+)">(.*?)(?=<div class="eq" id="|\Z)',
-            text, re.DOTALL):
+    for eq_id, card in iter_equation_cards(text):
         body = re.search(r'<div class="eq-body">(.*?)</div>', card, re.DOTALL)
         if body and "$" in body.group(1):
             problems.append(Problem(
@@ -634,12 +812,21 @@ def verify_structure(page: str, text: str, *, generated: bool) -> List[Problem]:
         problems.append(Problem(
             page, "struct", f"{n_body_open} <body> / {n_body_close} </body>, expected 1 each"))
 
-    # Shared assets present
+    # Shared assets present. The repository homepage references them with an
+    # "AI_Local/" prefix rather than a "../" one, so the bare suffix is what
+    # is tested; verify_links() separately proves each one resolves on disk.
     for needed in ("assets/equations.css", "assets/sitenav.css",
                    "assets/katex/katex.min.css", "assets/equations.js",
                    "assets/sitenav.js", "assets/katex/katex.min.js"):
         if needed not in text:
             problems.append(Problem(page, "assets", f"missing reference to {needed}"))
+
+    # The homepage additionally owns two assets nothing else loads.
+    if page == "../index.html":
+        for needed in ("assets/home.css", "assets/home.js"):
+            if needed not in text:
+                problems.append(Problem(
+                    page, "assets", f"missing reference to {needed}"))
 
     # Navigation strip present, exactly once.  Counted on the full text, not
     # the stripped text, because the strip is real markup.
@@ -744,6 +931,111 @@ def verify_class_collisions(page: str, original: str) -> List[Problem]:
     return problems
 
 
+def verify_catalog_consistency(pages: Dict[str, str],
+                               catalog) -> List[Problem]:
+    """Fail if the homepage planner and the prose shortlist disagree.
+
+    The model shortlist exists in two places that must agree:
+
+    * ``ollama-model-selection.html`` -- a prose table, hand-written in
+      ``page_models.py``, with every figure cited to its Ollama model page.
+    * ``index.html`` -- the planner, generated from ``model_catalog.py``.
+
+    Two hand-maintained copies of one table diverge; it is only a question of
+    when.  This check makes divergence a build failure instead:
+
+    1. every tag in the catalogue must appear on the model-selection page;
+    2. every catalogue size must appear on that page too, so a requantised
+       tag cannot be updated in one place and not the other;
+    3. every reference number the catalogue cites must be defined.
+
+    The check is one-directional on purpose.  The prose page legitimately
+    discusses models the planner does not carry -- the 480b and 123b tags
+    that no home deployment can run, and the models excluded for having no
+    tool support -- so a tag on the page but not in the catalogue is fine.
+    A tag in the catalogue but not on the page is not: the planner would be
+    recommending something the documentation never justifies.
+
+    Parameters
+    ----------
+    pages
+        Built pages, keyed by manifest filename.
+    catalog
+        The imported ``model_catalog`` module.
+
+    Returns
+    -------
+    list of Problem
+        One entry per disagreement.
+    """
+    problems: List[Problem] = []
+
+    page_name = "ollama-model-selection.html"
+    prose = pages.get(page_name)
+    if prose is None:
+        # Not an error in verify-only mode against a partial tree.
+        return problems
+
+    for model in catalog.MODELS:
+        # Tag presence. The page writes tags inside <span class="mono"> and
+        # in table cells, so a plain substring test is the right breadth.
+        if model.tag not in prose:
+            problems.append(Problem(
+                "index.html", "catalog",
+                f"planner offers {model.tag!r}, which never appears on "
+                f"{page_name}; add it there or drop it from model_catalog.py"))
+            continue
+
+        # Size agreement.
+        #
+        # The obvious test -- does the catalogue's number appear anywhere on
+        # the page -- is useless here, because the page is full of unrelated
+        # numbers: VRAM budgets, other models' sizes, context lengths. A
+        # wrong size sails through it. (That is not hypothetical: the first
+        # version of this check did exactly that, and a deliberate 15 -> 16
+        # GB corruption went undetected because "16" appears in the 16 GB
+        # VRAM budget row.)
+        #
+        # So the search is scoped to the table row that mentions the tag.
+        # The page writes one row per tag, with the size in a cell of that
+        # row, which makes the row the correct unit of comparison. When the
+        # tag appears outside any row -- in prose, in a recommendation -- a
+        # character window around the mention is used instead.
+        size = model.size_gb
+        # The page writes "15 GB", "18-19 GB", "2.8-2.9 GB": a bare integer
+        # where the value is whole, one decimal otherwise, never "15.0".
+        candidates = {f"{size:g}", f"{size:.1f}"}
+
+        rows = [row for row in re.findall(r"<tr\b.*?</tr>", prose, re.DOTALL)
+                if model.tag in row]
+        if rows:
+            haystacks = rows
+        else:
+            # No row carries the tag, so compare against the text around
+            # each mention. 400 characters is about one table cell plus its
+            # neighbours, which is the span a size would legitimately sit in.
+            haystacks = [prose[max(0, m.start() - 400):m.end() + 400]
+                         for m in re.finditer(re.escape(model.tag), prose)]
+
+        if not any(c in h for h in haystacks for c in candidates):
+            where = "its table row" if rows else "the text around its mention"
+            problems.append(Problem(
+                "index.html", "catalog",
+                f"planner lists {model.tag} at {size} GB, which does not "
+                f"appear in {where} on {page_name}; one of the two is out "
+                f"of date"))
+
+        # The citation the planner prints must resolve.
+        if f'#r{model.reference}"' not in prose and \
+                f"#r{model.reference}" not in prose:
+            problems.append(Problem(
+                "index.html", "catalog",
+                f"planner cites [{model.reference}] for {model.tag}, which "
+                f"{page_name} does not cite"))
+
+    return problems
+
+
 def verify_tables(page: str, text: str) -> List[Problem]:
     """Check every table has a caption and is wrapped for horizontal scroll.
 
@@ -765,12 +1057,51 @@ def verify_tables(page: str, text: str) -> List[Problem]:
     return problems
 
 
-def verify_links(out_dir: Path, page: str, text: str) -> List[Problem]:
-    """Check every relative link and asset reference resolves on disk."""
-    problems: List[Problem] = []
-    page_dir = (out_dir / page).parent
+def verify_links(out_dir: Path, page: str, text: str,
+                 repo_tree: Optional[Path] = None) -> List[Problem]:
+    """Check every relative link and asset reference resolves on disk.
 
-    # href and src attributes, excluding absolute URLs, data URIs and anchors
+    THE BUILD OUTPUT IS NOT THE WHOLE REPOSITORY
+    --------------------------------------------
+    This script writes the AI_Local directory and the repository homepage.
+    It does NOT write the rest of the repository: ``ISP_Speed_Test``,
+    ``DWG_2_PDF``, ``Educational`` and the others already exist and are not
+    the build's to produce.  The homepage links into all of them.
+
+    So a homepage link into a sibling project is expected not to resolve
+    inside the build output, and reporting it as broken would be a false
+    failure -- the kind that trains a reader to ignore the link check.
+
+    ``repo_tree`` resolves that honestly: point it at the real repository and
+    every such link is checked for real.  Leave it unset and a link escaping
+    the build output is SKIPPED, with the skip reported once per page so the
+    gap is visible rather than silent.
+
+    Parameters
+    ----------
+    out_dir
+        The AI_Local directory, which page paths are relative to.
+    page
+        Manifest-style page path.  ``"../index.html"`` is the repository
+        homepage, one level above ``out_dir``.
+    text
+        The page's HTML.
+    repo_tree
+        Optional path to the real repository root.  When given, a link that
+        leaves the build output is resolved against it instead of skipped.
+
+    Returns
+    -------
+    list of Problem
+        One entry per genuinely broken reference, plus at most one
+        informational ``link-skipped`` entry per page.
+    """
+    problems: List[Problem] = []
+    page_dir = (out_dir / page).parent.resolve()
+    build_root = out_dir.resolve()
+
+    skipped: List[str] = []
+
     refs = re.findall(r'(?:href|src)="([^"]+)"', text)
     for ref in refs:
         if ref.startswith(("http://", "https://", "data:", "#", "mailto:")):
@@ -778,9 +1109,41 @@ def verify_links(out_dir: Path, page: str, text: str) -> List[Problem]:
         target = ref.split("#", 1)[0].split("?", 1)[0]
         if not target:
             continue
-        resolved = (page_dir / target).resolve()
-        if not resolved.exists():
-            problems.append(Problem(page, "link", f"broken reference: {ref}"))
+
+        # Undo the URL escaping applied when the link was written, so the
+        # filesystem sees the real name: "GBO%20Sidelobe" -> "GBO Sidelobe".
+        decoded = (target.replace("%20", " ")
+                         .replace("%E2%80%94", "\u2014")
+                         .replace("%25", "%"))
+
+        resolved = (page_dir / decoded).resolve()
+        if resolved.exists():
+            continue
+
+        inside_build = (resolved == build_root or build_root in resolved.parents)
+
+        if not inside_build:
+            if repo_tree is not None:
+                # The homepage sits at the repository root, so its relative
+                # links resolve from there directly.
+                if (repo_tree / decoded).resolve().exists():
+                    continue
+                problems.append(Problem(
+                    page, "link",
+                    f"not found in the repository tree: {ref}"))
+            else:
+                skipped.append(ref)
+            continue
+
+        problems.append(Problem(page, "link", f"broken reference: {ref}"))
+
+    if skipped:
+        problems.append(Problem(
+            page, "link-skipped",
+            f"{len(skipped)} link(s) point outside the build output and were "
+            f"NOT checked; pass --repo-tree to verify them "
+            f"(first: {skipped[0]})"))
+
     return problems
 
 
@@ -809,27 +1172,58 @@ def collect_anchor_index(pages: Dict[str, str]) -> Dict[str, set]:
 
 
 def run(src: Path, out: Path, modules_dir: Path,
-        verify_only: bool = False) -> int:
-    """Generate and verify the page set.
+        verify_only: bool = False,
+        repo_root: Optional[Path] = None,
+        repo_tree: Optional[Path] = None) -> int:
+    """Generate and verify the page set, and optionally the repository home.
+
+    Parameters
+    ----------
+    src
+        Directory holding the ORIGINAL pages to retrofit.
+    out
+        Output AI_Local directory.
+    modules_dir
+        Directory holding the page-content modules.
+    verify_only
+        Check an already-built tree without generating anything.
+    repo_root
+        When given, also generate the repository-root ``index.html`` there and
+        add a "Repo home" back-link to every AI_Local navigation strip.  This
+        is normally ``out.parent``.  Omitting it produces a self-contained
+        AI_Local set with no outward links, which is what you want if the set
+        is ever published on its own.
+    repo_tree
+        Optional path to the real repository working tree.  When given, every
+        homepage link into a sibling project is verified against it.  Without
+        it those links are skipped and the skip is reported, because the build
+        output holds only the AI_Local directory.
 
     Returns
     -------
     int
         Process exit status: 0 when every check passed, 1 otherwise.
     """
+    # Whether the AI_Local strips carry the back-link is decided once here, so
+    # the generated pages and the retrofitted ones cannot disagree.
+    with_home_link = repo_root is not None
     sys.path.insert(0, str(modules_dir))
 
     # Imported here, after the path is set, so the script can be read and
     # linted without the content modules present.
     import eq_library            # noqa: F401  (imported for its side effects)
     import page_local_build
+    import page_home
+    import model_catalog
     import page_meta
     import page_models
     import page_monitoring
     import page_sandbox
+    import repo_inventory
     import references
 
     references.validate()
+    model_catalog.validate()
     version = page_meta.current_version()
 
     def check_manifest_plaintext(specs) -> None:
@@ -1068,7 +1462,8 @@ def run(src: Path, out: Path, modules_dir: Path,
             if not spec.generated:
                 continue
             assert spec.builder is not None, f"{spec.filename} has no builder"
-            text = wrap_page(spec, spec.builder(), manifest, version)
+            text = wrap_page(spec, spec.builder(), manifest, version,
+                             repo_home=with_home_link)
             (out / spec.filename).write_text(text, encoding="utf-8")
             pages[spec.filename] = text
             report.append(f"  generated  {spec.filename:58s} {len(text):7d} B")
@@ -1087,7 +1482,8 @@ def run(src: Path, out: Path, modules_dir: Path,
             # it was before anything was injected into it.
             originals[spec.filename] = raw
             inner, unwrapped = unwrap_artifact_shell(raw)
-            text, actions = retrofit_page(inner, spec, manifest, version)
+            text, actions = retrofit_page(inner, spec, manifest, version,
+                                          repo_home=with_home_link)
 
             (out / spec.filename).parent.mkdir(parents=True, exist_ok=True)
             (out / spec.filename).write_text(text, encoding="utf-8")
@@ -1104,6 +1500,23 @@ def run(src: Path, out: Path, modules_dir: Path,
                 f"  retrofit   {spec.filename:58s} {len(text):7d} B"
                 f"  {', '.join(notes) if notes else '-'}"
             )
+        # ---- repository homepage ---------------------------------------
+        # Generated last, so the manifest it renders is the final one and so
+        # a failure here cannot leave the AI_Local set half-written.
+        if repo_root is not None:
+            repo_root.mkdir(parents=True, exist_ok=True)
+            home_text = wrap_repo_home(
+                page_home.build(), manifest, version,
+                repo_inventory.HOME_VERSION)
+            (repo_root / "index.html").write_text(home_text, encoding="utf-8")
+            # Keyed by a path RELATIVE TO out, so the link checker resolves
+            # its hrefs from the right directory: the homepage lives one
+            # level above the AI_Local directory.
+            pages["../index.html"] = home_text
+            report.append(
+                f"  generated  {'../index.html (repository home)':58s} "
+                f"{len(home_text):7d} B")
+
     else:
         for spec in manifest:
             path = out / spec.filename
@@ -1117,24 +1530,38 @@ def run(src: Path, out: Path, modules_dir: Path,
                     originals[spec.filename] = source_path.read_text(
                         encoding="utf-8", errors="replace")
 
+        if repo_root is not None:
+            home_path = repo_root / "index.html"
+            if home_path.exists():
+                pages["../index.html"] = home_path.read_text(
+                    encoding="utf-8", errors="replace")
+
     # ---- verify ---------------------------------------------------------
     valid_refs = references.numbers()
     anchor_index = collect_anchor_index(pages)
     problems: List[Problem] = []
 
     generated_names = {s.filename for s in manifest if s.generated}
+    if repo_root is not None:
+        # The homepage is held to the same standard as the other generated
+        # pages: captioned tables, no raw math delimiters, a skip link.
+        generated_names.add("../index.html")
 
     for name, text in sorted(pages.items()):
         problems += verify_structure(name, text, generated=name in generated_names)
         problems += verify_equation_blocks(name, text)
         problems += verify_dollar_math(name, text)
         problems += verify_citations(name, text, valid_refs)
-        problems += verify_links(out, name, text)
+        problems += verify_links(out, name, text, repo_tree=repo_tree)
         problems += verify_anchors(out, name, text, anchor_index)
         if name in originals:
             problems += verify_class_collisions(name, originals[name])
         if name in generated_names:
             problems += verify_tables(name, text)
+
+    # Cross-page: the planner and the prose shortlist must agree. Run once
+    # over the whole set rather than per page, because it compares two.
+    problems += verify_catalog_consistency(pages, model_catalog)
 
     # ---- print the report ----------------------------------------------
     print("=" * 78)
@@ -1157,6 +1584,18 @@ def run(src: Path, out: Path, modules_dir: Path,
     print(f"  citations   : {n_cite} occurrences of {len(cited)} distinct references")
     print(f"  references  : {len(valid_refs)} defined, {len(uncited)} never cited"
           + (f" -> {uncited}" if uncited else ""))
+
+    # A skipped link is a reported GAP, not a defect: it says the build
+    # could not check something and names the flag that would. Separating the
+    # two keeps a pass meaningful.
+    informational = [p for p in problems if p.kind == "link-skipped"]
+    problems = [p for p in problems if p.kind != "link-skipped"]
+
+    if informational:
+        print("-" * 78)
+        print("NOT CHECKED:")
+        for note in informational:
+            print(f"  {note.page}: {note.detail}")
 
     print("-" * 78)
     if problems:
@@ -1190,6 +1629,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                              "(default: this script's parent's parent)")
     parser.add_argument("--verify-only", action="store_true",
                         help="verify an already-built tree without generating")
+    parser.add_argument("--repo-tree", type=Path, default=None,
+                        help="path to the real repository working tree. The "
+                             "homepage links into sibling projects that this "
+                             "build does not produce; with this they are "
+                             "verified, without it they are skipped and the "
+                             "skip is reported.")
+    parser.add_argument("--repo-root", type=Path, default=None,
+                        help="also generate the repository-root index.html "
+                             "here, and add a 'Repo home' back-link to every "
+                             "AI_Local navigation strip. Normally the parent "
+                             "of --out. Omit it to build a self-contained "
+                             "AI_Local set with no outward links.")
     args = parser.parse_args(argv)
 
     src = args.src.resolve()
@@ -1200,7 +1651,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     modules = (args.modules or Path(__file__).resolve().parent.parent).resolve()
 
-    return run(src, out, modules, verify_only=args.verify_only)
+    repo_root = args.repo_root.resolve() if args.repo_root else None
+    if repo_root is not None and repo_root == out:
+        parser.error("--repo-root must differ from --out: the homepage sits "
+                     "one level above the AI_Local directory")
+
+    repo_tree = args.repo_tree.resolve() if args.repo_tree else None
+    if repo_tree is not None and not repo_tree.is_dir():
+        parser.error(f"--repo-tree is not a directory: {repo_tree}")
+
+    return run(src, out, modules, verify_only=args.verify_only,
+               repo_root=repo_root, repo_tree=repo_tree)
 
 
 if __name__ == "__main__":

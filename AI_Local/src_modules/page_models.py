@@ -229,6 +229,10 @@ def build() -> str:
 
     """ + eq_library.get("ctx-budget") + r"""
 
+    <div class="callout info-box">
+      <p><strong>Unit convention on this page: binary, throughout.</strong> Every quantity in GB below is a <em>gibibyte</em>, \(2^{30} = 1\,073\,741\,824\) bytes. This matters because the two conventions differ by 7&nbsp;%, which is comfortably enough to turn a model that does not fit into one that appears to. Binary is the right choice here because it is what the tools report: <span class="mono">nvidia-smi</span> reports MiB, and allocation happens in binary units. Treat a vendor's decimal "GB" as the optimistic figure and convert before comparing it against a card. The <a href="../index.html#fit">calculator on the repository homepage</a> uses this same convention, so its results and this page's agree.</p>
+    </div>
+
     <h3>3.1 Worked fit, 24 GB card</h3>
 
     <p>Taking <span class="mono">qwen3-coder:30b</span> at its published 19&nbsp;GB<a class="cite" href="references.html#r11">[11]</a> on a 24&nbsp;GB card, with \( V_{\text{rt}} = 1.2\ \mathrm{GB} \), \( n_{\text{seq}} = 1 \) and <span class="mono">f16</span> cache so \( b_{kv} = 2\ \mathrm{B} \):</p>
@@ -241,16 +245,16 @@ def build() -> str:
           <tr><td>\(V_{\text{tot}}\)</td><td class="mono">24 GB</td><td>Hardware</td></tr>
           <tr><td>\(S_{w}\)</td><td class="mono">19 GB</td><td>Published tag size<a class="cite" href="references.html#r11">[11]</a></td></tr>
           <tr><td>\(V_{\text{rt}}\)</td><td class="mono">1.2 GB</td><td><span class="badge medium">estimate</span> Planning figure; measure it</td></tr>
-          <tr><td>Remainder for cache</td><td class="mono">3.8 GB</td><td>Derived: \(24 - 19 - 1.2\)</td></tr>
+          <tr><td>Remainder for cache</td><td class="mono">3.8 GiB = 4.080&times;10<sup>9</sup> B</td><td>Derived: \(24 - 19 - 1.2\)</td></tr>
           <tr><td>Per-token cache cost at \(n_{\ell}=48,\ n_{kv}=8,\ d_{h}=128,\ b_{kv}=2\)</td><td class="mono">196 608 B</td><td>Derived: \(2 \times 48 \times 8 \times 128 \times 2\)</td></tr>
-          <tr><td>\(L_{\max}\)</td><td class="mono">&asymp; 19 300 token</td><td>Derived: \(3.8\times10^{9} / 196\,608\)</td></tr>
-          <tr><td>\(L_{\max}\) with <span class="mono">OLLAMA_KV_CACHE_TYPE=q8_0</span></td><td class="mono">&asymp; 38 600 token</td><td>Derived: \(b_{kv}\) halves to 1 B<a class="cite" href="references.html#r9">[9]</a></td></tr>
+          <tr><td>\(L_{\max}\)</td><td class="mono">&asymp; 20 750 token</td><td>Derived: \(4.080\times10^{9} / 196\,608\)</td></tr>
+          <tr><td>\(L_{\max}\) with <span class="mono">OLLAMA_KV_CACHE_TYPE=q8_0</span></td><td class="mono">&asymp; 41 500 token</td><td>Derived: \(b_{kv}\) halves to 1 B<a class="cite" href="references.html#r9">[9]</a></td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="callout">
-      <p><strong>The 256K window on the model page is not available on this card.</strong> The page states 256K native<a class="cite" href="references.html#r11">[11]</a>; the arithmetic above gives roughly 19&nbsp;k tokens, or 39&nbsp;k with an 8-bit cache. The published figure describes what the weights were trained to attend over. The computed figure describes what the hardware can allocate. Both are correct and only the second one constrains your work.</p>
+      <p><strong>The 256K window on the model page is not available on this card.</strong> The page states 256K native<a class="cite" href="references.html#r11">[11]</a>; the arithmetic above gives roughly 21&nbsp;k tokens, or 41&nbsp;k with an 8-bit cache. The published figure describes what the weights were trained to attend over. The computed figure describes what the hardware can allocate. Both are correct and only the second one constrains your work.</p>
     </div>
 
     <h3>3.2 The mixture-of-experts case</h3>
@@ -377,6 +381,21 @@ def build() -> str:
 
     <p>llama.cpp's RPC backend splits the layer stack across machines<a class="cite" href="references.html#r17">[17]</a>, which is how this deployment runs models larger than any single card. The <a href="llama-rpc-vulkan-guide.html">RPC and Vulkan guide</a> covers the mechanics; the arithmetic below decides whether a given split is worth doing.</p>
 
+    <div class="callout danger">
+      <p><strong>Read the upstream warning before exposing a worker.</strong> The RPC README marks the backend as a proof of concept and states plainly: &ldquo;the functionality is fragile and insecure. <strong>Never run the RPC server on an open network or in a sensitive environment!</strong>&rdquo;<a class="cite" href="references.html#r37">[37]</a> There is no authentication on the worker port. The firewall rules this deployment uses admit only the inference host by address, which is the minimum that makes this safe, and the workers should not be reachable from anywhere else on the network.</p>
+    </div>
+
+    <div class="callout info-box">
+      <p><strong>The worker binary has been renamed.</strong> It is now <span class="mono">ggml-rpc-server</span>, not <span class="mono">rpc-server</span><a class="cite" href="references.html#r37">[37]</a>, and started with no arguments it exposes every accelerator it finds. Restrict that with <span class="mono">--device CUDA0</span> or <span class="mono">CUDA_VISIBLE_DEVICES</span>, which the README gives as equivalent:</p>
+<pre><code>$ CUDA_VISIBLE_DEVICES=0 bin/ggml-rpc-server -p 50052
+$ bin/ggml-rpc-server --device CUDA0 -p 50052</code></pre>
+      <p>Two further options are worth knowing. <span class="mono">-c</span> enables a local tensor cache, which avoids re-transferring large tensors over the network and speeds model loading noticeably; it lives under <span class="mono">$HOME/.cache/llama.cpp/rpc</span> and follows <span class="mono">LLAMA_CACHE</span>. <span class="mono">GGML_RPC_DEBUG</span> raises log verbosity on either end when a split misbehaves<a class="cite" href="references.html#r37">[37]</a>.</p>
+    </div>
+
+    <div class="callout">
+      <p><strong>The default split is proportional, not manual.</strong> llama.cpp distributes model weights <em>and the key/value cache</em> across every available device, local and remote, in proportion to each device's free memory, and <span class="mono">--tensor-split</span> overrides those proportions<a class="cite" href="references.html#r37">[37]</a>. This matters for the relations below: the per-node weight term \( S_{i} \) is something the runtime chooses for you unless you set it, and the cache is split too rather than sitting entirely on the host.</p>
+    </div>
+
     """ + eq_library.get("rpc-token-time") + r"""
 
     """ + eq_library.get("rpc-breakeven") + r"""
@@ -409,14 +428,16 @@ micromamba run -n Py3p12 python scripts/probe_model_throughput.py `
         <tbody>
           <tr><td>Quantisation, layer count, head counts, head dimension</td><td class="mono">ollama show &lt;tag&gt;</td><td>\(b_{q}\), \(n_{\ell}\), \(n_{kv}\), \(d_{h}\) in every relation on this page</td></tr>
           <tr><td>Decode and prefill rate</td><td class="mono">scripts/probe_model_throughput.py</td><td>\(r\) and \(r_{p}\) in the loop equation</td></tr>
-          <tr><td>Resident footprint, and whether anything spilled</td><td class="mono">ollama ps</td><td>Confirms \(S_{w}\) and reveals a CPU/GPU split</td></tr>
+          <tr><td>Resident footprint, the processor split, and the context actually allocated</td><td class="mono">ollama ps</td><td>Confirms \(S_{w}\), reveals a CPU/GPU split, and reports \(L_{\text{ctx}}\) in its <span class="mono">CONTEXT</span> column<a class="cite" href="references.html#r35">[35]</a></td></tr>
           <tr><td>Device memory in use</td><td class="mono">nvidia-smi</td><td>\(V_{\text{rt}}\) by subtraction</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="callout">
-      <p><strong><span class="mono">ollama ps</span> is the check that catches the expensive mistake.</strong> It reports whether a model is resident on the GPU or split with the CPU. A quiet CPU/GPU split is exactly the ninefold slowdown in &sect;4, and it is invisible unless you look.</p>
+      <p><strong><span class="mono">ollama ps</span> is the check that catches the expensive mistake.</strong> It reports whether a model is resident on the GPU or split with the CPU, and &mdash; in its <span class="mono">CONTEXT</span> column &mdash; the context length actually allocated<a class="cite" href="references.html#r35">[35]</a>. A quiet CPU/GPU split is exactly the ninefold slowdown in &sect;4; a <span class="mono">CONTEXT</span> value below what you asked for means the server trimmed the window to make the model fit. Both are invisible unless you look, and both are in this one output:</p>
+<pre><code>NAME             ID              SIZE      PROCESSOR    CONTEXT    UNTIL
+gemma4:latest    c6eb396dbd59    9.6 GB    100% GPU     131072     2 minutes from now</code></pre>
     </div>
   </div>
 </section>

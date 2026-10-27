@@ -41,6 +41,176 @@ import references
 #: The first entry's version is the version stamped on every page.
 RELEASES: List[Tuple[str, str, str, Dict[str, List[str]]]] = [
     (
+        "0.0.4",
+        "2026-10-26",
+        "Re-verified against the upstream documentation, and one security defect fixed",
+        {
+            "Fixed": [
+                "<strong>A security defect in the shipped Compose file.</strong> It set "
+                "<span class=\"mono\">OPEN_TERMINAL_ALLOWED_DOMAINS</span> without "
+                "<span class=\"mono\">cap_add: NET_ADMIN</span>. Egress filtering installs dnsmasq "
+                "and iptables inside the container, so without that capability the allowlist does "
+                "nothing &mdash; producing an unfiltered container that looks filtered, which is "
+                "worse than an obviously unfiltered one. The capability is now set, the build page "
+                "says so in both the run command and the settings table, and the verification "
+                "sequence now checks the start-up log as well as testing egress from inside.",
+                "<strong>Ollama's context-length default is no longer a single number.</strong> The "
+                "pages stated a flat 4096, which is now only the bottom rung: the default is chosen "
+                "from available VRAM &mdash; 4k below 24&nbsp;GiB, 32k from 24 to 48&nbsp;GiB, 256k "
+                "at 48&nbsp;GiB and above. The recommendation was also raised from 32768 to the "
+                "64000 the documentation now gives for agents and coding tools.",
+                "<strong>The llama.cpp RPC worker has been renamed</strong> from "
+                "<span class=\"mono\">rpc-server</span> to "
+                "<span class=\"mono\">ggml-rpc-server</span>.",
+            ],
+            "Added": [
+                "The upstream RPC security warning, quoted rather than paraphrased: the backend is "
+                "a proof of concept, &ldquo;the functionality is fragile and insecure&rdquo;, and "
+                "&ldquo;never run the RPC server on an open network or in a sensitive "
+                "environment&rdquo;. There is no authentication on the worker port, which the pages "
+                "previously left implicit behind a firewall rule.",
+                "<span class=\"mono\">ollama ps</span> now reports the allocated context in a "
+                "<span class=\"mono\">CONTEXT</span> column alongside the processor split, so one "
+                "command answers both &ldquo;did it spill to the CPU&rdquo; and &ldquo;did the "
+                "server trim my window&rdquo;. Both pages that recommend the command now show its "
+                "output and say what to read from each column.",
+                "<strong>The network-isolation pattern</strong> as an alternative to the egress "
+                "allowlist: an <span class=\"mono\">internal: true</span> Docker network gives the "
+                "container no route out at all, which is a harder boundary than a domain list "
+                "because there is no list to get wrong. Documented on the build page and as a "
+                "commented variant in the Compose file.",
+                "<strong>A Docker-socket warning.</strong> Mounting "
+                "<span class=\"mono\">/var/run/docker.sock</span> hands the container full control "
+                "of the host's Docker, which is effectively root on the machine. Stated as a "
+                "deliberate omission in the Compose file rather than left unmentioned.",
+                "Three behaviours that are on or off by default and easy to miss: sandboxed port "
+                "previews and the <em>Terminal Preview Allow Same Origin</em> switch, why "
+                "admin-configured connections are preferred over user-configured ones, and that "
+                "<span class=\"mono\">OPEN_TERMINAL_MULTI_USER</span> is a workspace split rather "
+                "than an isolation boundary &mdash; everyone still shares the kernel.",
+                "Resource limits on the Open Terminal container, in the Compose-spec form the "
+                "documentation shows (<span class=\"mono\">deploy.resources.limits</span>) rather "
+                "than the older top-level keys, with <span class=\"mono\">docker stats</span> as "
+                "the way to confirm the cap is in force.",
+                "RPC worker options the pages did not cover: <span class=\"mono\">--device</span> "
+                "and <span class=\"mono\">CUDA_VISIBLE_DEVICES</span> to stop a worker exposing "
+                "every accelerator it finds, <span class=\"mono\">-c</span> for the local tensor "
+                "cache that speeds model loading, and "
+                "<span class=\"mono\">GGML_RPC_DEBUG</span> for when a split misbehaves. Also "
+                "that the default split distributes weights <em>and the cache</em> across every "
+                "device in proportion to free memory, which is a term the distributed relations "
+                "had treated as something you choose.",
+                "References [35], [36] and [37], and a separate "
+                "<span class=\"mono\">RECHECKED</span> access date, so a reader can tell which of "
+                "the two verification passes applies to the row they are looking at.",
+            ],
+            "Note on method": [
+                "This revision came from re-reading the upstream documentation repositories rather "
+                "than the rendered doc sites, which is why it caught things the first pass did not: "
+                "the API-key enforcement change is dated to a specific release in the security "
+                "document, and the context-length tiers live in a file that did not exist when the "
+                "set was first written.",
+            ],
+        },
+    ),
+    (
+        "0.0.3",
+        "2026-10-26",
+        "The homepage planner and the prose shortlist now share one source",
+        {
+            "Added": [
+                "<strong>A model planner on the homepage</strong>, folded into the existing fit "
+                "calculator rather than added beside it. One VRAM figure drives both: the planner "
+                "names the models that fit the card, and choosing one loads its published size into "
+                "the calculator so the context budget is evaluated for that actual tag. Splitting "
+                "them would make the reader retype a number they had already given, and would invite "
+                "the two halves to disagree about what &ldquo;fits&rdquo; means.",
+                "<strong>A near-miss band</strong> under the planner's results. The fit rule here "
+                "requires 1&nbsp;GB of usable cache on top of the weights and the runtime "
+                "reservation, which is stricter than a vendor's own claim: at 16&nbsp;GB, "
+                "<span class=\"mono\">gpt-oss:20b</span> misses by 0.2&nbsp;GB even though its "
+                "Ollama page states MXFP4 lets it run on exactly that. Dropping it silently would "
+                "make the planner contradict the model-selection page, which recommends it there. "
+                "The band names the near misses and says by how much.",
+                "<span class=\"mono\">src_modules/model_catalog.py</span> &mdash; the shortlist as "
+                "data: tag, size, context, quantisation, capabilities, citation and positioning for "
+                "every model, each value the figure published on that model's Ollama page.",
+                "<span class=\"mono\">verify_catalog_consistency()</span> in the build: every tag "
+                "the planner offers must appear on the model-selection page, at the size stated in "
+                "that tag's own table row, citing a reference the page carries. The check is "
+                "one-directional on purpose &mdash; the prose page legitimately discusses models the "
+                "planner does not carry, such as the 480b and 123b tags no home deployment can run.",
+            ],
+            "Fixed": [
+                "<strong>A wrong figure caught by the catalogue's own validator:</strong> "
+                "<span class=\"mono\">qwen3-coder-next:q4_K_M</span> was recorded as needing a "
+                "minimum of 48&nbsp;GB of VRAM while its weights alone are 52&nbsp;GB. Corrected to "
+                "64&nbsp;GB, the next single-card tier that holds it; below that it needs memory "
+                "pooled across nodes.",
+                "The first version of the consistency check tested whether a catalogue size appeared "
+                "<em>anywhere</em> on the model-selection page, which a deliberate 15&nbsp;&rarr;&nbsp;16&nbsp;GB "
+                "corruption passed unnoticed because &ldquo;16&rdquo; appears in the 16&nbsp;GB VRAM "
+                "budget row. The search is now scoped to the table row that mentions the tag.",
+            ],
+        },
+    ),
+    (
+        "0.0.2",
+        "2026-10-20",
+        "Repository homepage, and one corrected figure",
+        {
+            "Added": [
+                "<strong>A repository-root homepage</strong> at "
+                "<span class=\"mono\">index.html</span>, one level above this page set. It "
+                "integrates the whole repository into a five-stage implementation flow &mdash; "
+                "foundation, serve, hands, watch, work &mdash; organised around the fact that "
+                "everything in the repository either builds the Py3p12 mamba environment, runs "
+                "inside it, or documents the physics behind something that does. It carries a "
+                "hardware-tier selector, an in-page progress tracker and a live model-fit "
+                "calculator that evaluates the context-budget relation from the model selection "
+                "page.",
+                "<span class=\"mono\">assets/home.css</span> and "
+                "<span class=\"mono\">assets/home.js</span>, loaded only by that homepage.",
+                "A <strong>Repo home</strong> back-link at the start of every navigation strip "
+                "in this set, so the integration is two-way: a reader who lands on an AI_Local "
+                "page has a route to the rest of the repository.",
+                "<span class=\"mono\">src_modules/repo_inventory.py</span> and "
+                "<span class=\"mono\">src_modules/page_home.py</span>, the data and renderer "
+                "behind the homepage. The catalogue is generated from the inventory, so a "
+                "project added there appears in its stage, in the toolbox table and in the "
+                "repository map with no second edit.",
+                "<span class=\"mono\">--repo-root</span> and <span class=\"mono\">--repo-tree</span> "
+                "options on the build script, and <span class=\"mono\">--home</span> on the "
+                "rendering verifier.",
+            ],
+            "Fixed": [
+                "<strong>A 7&nbsp;% unit inconsistency.</strong> The 24&nbsp;GB worked fit on the "
+                "model selection page divided a binary remainder by a decimal one, giving "
+                "roughly 19&nbsp;300 tokens where the consistent figure is 20&nbsp;750. The page "
+                "now states its unit convention explicitly &mdash; binary throughout &mdash; and "
+                "agrees with the homepage calculator.",
+                "A stage cross-reference in the homepage flow named stage 3 where compiling "
+                "happens in stage 2.",
+                "The navigation strip marked AI_Local's overview as the current page while the "
+                "reader was on the repository homepage, because active-link matching compared "
+                "only the filename and both are <span class=\"mono\">index.html</span>. It now "
+                "resolves each href against the document URL and compares full paths.",
+                "The navigation brand read <span class=\"mono\">AI_Local</span> on the repository "
+                "homepage, naming a page set the reader had not entered. It now names its "
+                "destination.",
+                "<strong>A verifier bug.</strong> The equation-card extractor sliced from one "
+                "card to the next, so the LAST card on a page ran to the end of the document and "
+                "absorbed any later <span class=\"mono\">.pill</span> elements into its own count. "
+                "It now tracks <span class=\"mono\">&lt;div&gt;</span> depth and ends at the card's "
+                "own closing tag.",
+                "The link checker reported every homepage link into a sibling project as broken, "
+                "because the build output holds only this directory. Links that escape the build "
+                "output are now verified against "
+                "<span class=\"mono\">--repo-tree</span>, or skipped with the skip reported.",
+            ],
+        },
+    ),
+    (
         "0.0.1",
         "2026-10-18",
         "First internal draft of the rebuilt page set",
@@ -518,7 +688,9 @@ def build_changelog() -> str:
           <tr><td class="mono">assets/sitenav.css</td><td class="mono">1.0.0</td><td>Shared navigation strip</td></tr>
           <tr><td class="mono">assets/sitenav.js</td><td class="mono">1.0.0</td><td>Active-link marking and the injected theme control</td></tr>
           <tr><td class="mono">assets/legacy-dark.css</td><td class="mono">1.0.0</td><td>Dark theme for the three plain-stylesheet pages</td></tr>
-          <tr><td class="mono">scripts/build_ai_local_site.py</td><td class="mono">0.0.1</td><td>Generator and verifier for the whole set</td></tr>
+          <tr><td class="mono">assets/home.css</td><td class="mono">1.1.0</td><td>Repository homepage only: tier selector, stage cards, calculator</td></tr>
+          <tr><td class="mono">assets/home.js</td><td class="mono">1.1.0</td><td>Repository homepage only: the three interactive features</td></tr>
+          <tr><td class="mono">scripts/build_ai_local_site.py</td><td class="mono">0.0.3</td><td>Generator and verifier for the whole set</td></tr>
           <tr><td class="mono">scripts/probe_model_throughput.py</td><td class="mono">0.0.1</td><td>Throughput measurement against the equations</td></tr>
           <tr><td class="mono">scripts/build_cpp.ps1</td><td class="mono">0.0.1</td><td>CMake build wrapper with a bounded job count</td></tr>
         </tbody>

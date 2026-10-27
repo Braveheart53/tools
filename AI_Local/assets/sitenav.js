@@ -25,30 +25,50 @@
   /* ----------------------------------------------------------------------
      1. Mark the active link.
 
-     Comparison is on the final path segment, lower-cased, because a page may
-     be opened as   file:///.../AI_Local/index.html
-                    http://host/AI_Local/
-                    .../index.html?x=1#section
-     and all three must light up the same entry.
+     WHY FULL-PATH COMPARISON AND NOT JUST THE FILENAME
+     --------------------------------------------------
+     Comparing only the final path segment was the first implementation and
+     it is wrong as soon as there are two index.html files. The repository
+     homepage is /index.html and the AI_Local overview is
+     /AI_Local/index.html; a filename comparison marks the AI_Local overview
+     as the current page while the reader is actually on the repository
+     homepage, which is actively misleading about where they are.
+
+     Resolving each href against the document URL and comparing the resulting
+     pathnames is exact. It also handles, for free, a page opened as a
+     directory URL ("/AI_Local/"), with a query string, or with a fragment,
+     because the URL constructor normalises all three.
      ---------------------------------------------------------------------- */
-  function currentFile() {
-    var path = window.location.pathname || '';
-    var last = path.split('/').pop() || '';
-    // A directory URL ("/AI_Local/") resolves to the index page.
-    return (last === '' ? 'index.html' : last).toLowerCase();
+
+  /** Normalise a pathname for comparison: lower-case, directory -> index. */
+  function normalisePath(pathname) {
+    var path = (pathname || '').toLowerCase();
+    // A directory URL serves its index page.
+    if (path === '' || path.charAt(path.length - 1) === '/') {
+      path += 'index.html';
+    }
+    return path;
   }
 
   function markActiveLink() {
-    var here = currentFile();
+    var here = normalisePath(window.location.pathname);
     var links = document.querySelectorAll('.ailnav-links a[href]');
 
     Array.prototype.forEach.call(links, function (a) {
-      // getAttribute, not a.href: the property is resolved to an absolute
-      // URL by the browser, which defeats a simple filename comparison.
-      var href = (a.getAttribute('href') || '').split('#')[0].split('?')[0];
-      var target = href.split('/').pop().toLowerCase();
+      var there;
+      try {
+        // getAttribute, not a.href, as the input: the attribute is the
+        // authored relative href, and resolving it explicitly against the
+        // document URL is what makes the comparison meaningful.
+        there = normalisePath(
+          new URL(a.getAttribute('href'), window.location.href).pathname);
+      } catch (err) {
+        // A malformed href should not break the whole strip.
+        a.removeAttribute('aria-current');
+        return;
+      }
 
-      if (target && target === here) {
+      if (there === here) {
         a.setAttribute('aria-current', 'page');
       } else {
         a.removeAttribute('aria-current');

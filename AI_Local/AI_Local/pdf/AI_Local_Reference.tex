@@ -1,0 +1,2658 @@
+% ===========================================================================
+% AI_Local Reference -- generated document, do not edit by hand
+% ---------------------------------------------------------------------------
+% Author  : William W. Wallace
+% Engine  : LuaLaTeX (required: fontspec and unicode-math need it)
+% Source  : build_ai_local_pdf.py, from the same modules as the HTML pages
+%
+% Regenerate rather than edit:
+%   python build_ai_local_pdf.py --modules ../src_modules --out ../../pdf
+%
+% Compile manually with:
+%   lualatex AI_Local_Reference.tex   (twice, for refs and the outline)
+% ===========================================================================
+\documentclass[11pt,a4paper,oneside]{report}
+
+% ---- Engine check ---------------------------------------------------------
+% fontspec and unicode-math require LuaTeX or XeTeX. Failing here with a
+% clear message beats several hundred lines of confusing font errors.
+\usepackage{iftex}
+\ifLuaTeX\else
+  \ifXeTeX\else
+    \errmessage{This document requires LuaLaTeX (or XeLaTeX). Run: lualatex AI_Local_Reference.tex}
+  \fi
+\fi
+
+% ---- Page geometry --------------------------------------------------------
+% Generous inner margin: the equation catalogue has wide variable tables, and
+% a printed copy of this is likely to be punched or bound.
+\usepackage[a4paper,margin=22mm,top=24mm,bottom=24mm,
+            headheight=14pt,footskip=14mm]{geometry}
+
+% ---- Fonts ----------------------------------------------------------------
+% DejaVu is used because it is present on this build host and covers the
+% symbols these pages use. Latin Modern Math sets the mathematics.
+\usepackage{fontspec}
+\usepackage{unicode-math}
+\setmainfont{DejaVu Serif}[Scale=0.92]
+\setsansfont{DejaVu Sans}[Scale=0.90]
+\setmonofont{DejaVu Sans Mono}[Scale=0.84]
+\setmathfont{Latin Modern Math}
+
+\usepackage{amsmath}
+\usepackage{microtype}
+
+% ---- Tables ---------------------------------------------------------------
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+% Ragged-right in p{} columns: justified text in a narrow table column
+% produces rivers and overfull boxes.
+\usepackage{ragged2e}
+\renewcommand{\arraystretch}{1.18}
+
+% ---- Lists and rules ------------------------------------------------------
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*,topsep=3pt}
+\usepackage[normalem]{ulem}   % \sout for struck-through text
+
+% ---- Colour and callouts --------------------------------------------------
+\usepackage{xcolor}
+% The screen palette, carried over so the two outputs read as one document.
+\definecolor{aiPrimary}{HTML}{0F5F66}
+\definecolor{aiPrimarySoft}{HTML}{E3EFEF}
+\definecolor{aiBlue}{HTML}{1C5B8F}
+\definecolor{aiBlueSoft}{HTML}{E4EDF5}
+\definecolor{aiOrange}{HTML}{A8560C}
+\definecolor{aiOrangeSoft}{HTML}{F6EBDF}
+\definecolor{aiViolet}{HTML}{5A3F8F}
+\definecolor{aiVioletSoft}{HTML}{ECE7F6}
+\definecolor{aiRed}{HTML}{A3242E}
+\definecolor{aiRedSoft}{HTML}{F8E5E6}
+\definecolor{aiRule}{HTML}{D6D2C9}
+\definecolor{aiMuted}{HTML}{5F5C55}
+
+\usepackage[breakable,skins]{tcolorbox}
+
+% A provenance tag, mirroring the coloured pill on the web pages. Printed
+% above each equation so the reader knows at a glance whether the result was
+% quoted from a source or derived on these pages.
+\newcommand{\provenance}[2]{%
+  \nopagebreak\par\vspace{-2pt}%
+  {\footnotesize\sffamily\bfseries
+   \ifthenelse{\equal{#1}{derived}}{\color{aiOrange}}{%
+   \ifthenelse{\equal{#1}{data}}{\color{aiViolet}}{\color{aiBlue}}}%
+   \MakeUppercase{#2}}\par\vspace{2pt}%
+}
+\usepackage{ifthen}
+
+% The derivation environment. Every "Derived here" result carries one, and
+% the left rule makes it scannable in a document read mostly by jumping
+% around rather than front to back.
+\newenvironment{derivation}{%
+  \begin{tcolorbox}[breakable,enhanced,
+    colback=aiOrangeSoft!40,colframe=aiOrange,
+    boxrule=0pt,leftrule=2.2pt,arc=1pt,
+    left=8pt,right=6pt,top=5pt,bottom=5pt,
+    before skip=7pt, after skip=8pt]%
+  {\footnotesize\sffamily\bfseries\color{aiOrange}DERIVATION}\par\vspace{2pt}%
+}{\end{tcolorbox}}
+
+% ---- Headings -------------------------------------------------------------
+\usepackage{titlesec}
+% Headings are set ragged right. A justified display heading stretches the
+% word spaces of a two-word line across the measure, and at \Huge there is
+% often no break TeX can take at all: "Settings that decide whether this
+% works" ran 13pt into the margin while justified.
+\titleformat{\chapter}[display]
+  {\sffamily\bfseries\Large\color{aiPrimary}\RaggedRight}
+  {\MakeUppercase{\chaptertitlename}\ \thechapter}{8pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{0pt}{18pt}
+\titleformat{\section}
+  {\sffamily\bfseries\Large\color{aiPrimary}\RaggedRight}
+  {\thesection}{0.6em}{}
+\titleformat{\subsection}
+  {\sffamily\bfseries\large\RaggedRight}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}
+  {\sffamily\bfseries\normalsize\RaggedRight}{\thesubsubsection}{0.6em}{}
+
+% ---- Running heads --------------------------------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize\sffamily\color{aiMuted}AI\_Local Reference v0.0.6}
+\fancyhead[R]{\footnotesize\sffamily\color{aiMuted}\leftmark}
+\fancyfoot[C]{\footnotesize\sffamily\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{aiRule}\leaders\hrule height \headrulewidth\hfill}}
+
+% ---- Code listings --------------------------------------------------------
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=leftline,
+  framerule=1.6pt,
+  rulecolor=\color{aiRule},
+  framesep=7pt,
+  xleftmargin=10pt,
+  aboveskip=8pt, belowskip=8pt,
+  showstringspaces=false,
+  % The snippets are PowerShell, bash, YAML, JSON, TOML and Dockerfile mixed
+  % together, so no single language setting fits. Plain text with sensible
+  % breaking is more honest than a wrong highlighter.
+  language=
+}
+
+% ---- Hyperlinks and the PDF outline --------------------------------------
+% bookmarksnumbered so the outline carries the same numbering as the body;
+% bookmarksopen to 2 levels so the tree is useful on first open without
+% being a wall of entries. bookmark (loaded after hyperref) rebuilds the
+% outline reliably and is what makes \bookmark available for the per-
+% reference entries in Part V.
+\usepackage[
+  unicode=true,
+  bookmarks=true,
+  bookmarksnumbered=true,
+  bookmarksopen=true,
+  bookmarksopenlevel=2,
+  breaklinks=true,
+  colorlinks=true,
+  linkcolor=aiPrimary,
+  urlcolor=aiBlue,
+  citecolor=aiPrimary
+]{hyperref}
+\usepackage{bookmark}
+\usepackage{url}
+% xurl lets a URL break after any character. Plain url breaks only at
+% slashes and a few punctuation marks, so a long hyphenated article slug ran
+% 457pt into the margin in the first v0.0.6 build.
+\usepackage{xurl}
+
+% Document metadata. Set with \hypersetup rather than as package options:
+% in the option list the value is read with normal catcodes and an
+% underscore is silently DROPPED, which produced a PDF titled
+% "AILocal Reference" created by "buildailocalpdf.py". Inside \hypersetup
+% the value goes through \pdfstringdef, where \_ expands to a real
+% underscore. Verify after any change by reading /Title back out of the
+% finished PDF -- the error is invisible in the typeset page.
+\hypersetup{
+  pdftitle={AI\_Local Reference},
+  pdfauthor={William W. Wallace},
+  pdfsubject={Deploying language models across a home or lab network:
+              serving, distributing, monitoring, and local code generation
+              and test},
+  pdfkeywords={local AI, Ollama, Open WebUI, llama.cpp, Prometheus, Grafana,
+               mamba, RF engineering},
+  pdfcreator={build\_ai\_local\_pdf.py 0.0.2 (LuaLaTeX)}
+}
+
+% Deeper outline for the equation and reference catalogues.
+\bookmarksetup{depth=4}
+
+% ---- Spacing --------------------------------------------------------------
+\setlength{\parskip}{5pt}
+\setlength{\parindent}{0pt}
+\linespread{1.06}
+% Tables and equations should not be split from the text that introduces
+% them more than necessary.
+\widowpenalty=9000
+\clubpenalty=9000
+% Last-resort stretch. When a paragraph holds a long unbreakable run -- a
+% URL, a flag, a file path -- TeX would rather overrun the right margin
+% than loosen the word spacing. \emergencystretch gives it a final pass
+% with extra give, so the line sets slightly loose instead of sticking out
+% into the margin, which is the lesser of the two.
+\setlength{\emergencystretch}{3em}
+
+% ===========================================================================
+\begin{document}
+% ===========================================================================
+
+\begin{titlepage}
+\centering
+\vspace*{3.2cm}
+{\sffamily\bfseries\Huge\color{aiPrimary} AI\_Local}\\[6pt]
+{\sffamily\LARGE Reference Manual}\\[22pt]
+{\large Deploying language models across a home or lab network:\\
+serving, distributing, monitoring, and local code generation and test}\\[30pt]
+\rule{0.55\linewidth}{0.6pt}\\[14pt]
+{\large William W. Wallace}\\[4pt]
+{\small\ttfamily adaptive.electrodynamics@gmail.com}\\[22pt]
+{\small Page set version \textbf{0.0.6} \quad$\cdot$\quad
+ Homepage version \textbf{0.0.3}}\\[5pt]
+{\small Sources verified: 2026-10-18, 2026-10-26, 2026-11-05, 2026-11-15}\\[26pt]
+\begin{minipage}{0.80\linewidth}
+\small
+\textbf{How to read this document.} Every relation carries a provenance tag.
+\textsc{stated} means the result is quoted from a cited source with no
+algebra applied; \textsc{derived here} means the algebra was performed on
+these pages and is shown in full in the derivation box that follows; and
+\textsc{measured value} marks a tabulated experimental figure. Each relation
+is followed by a table defining every symbol in it, with units. Bracketed
+numbers link to the numbered reference list in Part~\ref{part:refs}, which
+also records how far each source can be leaned on, and lists separately the
+figures that are planning estimates rather than citations.
+
+\vspace{6pt}
+\textbf{This document is generated.} It and the HTML page set are built from
+the same source modules, so an equation, a reference or a model figure exists
+in exactly one place. Do not edit this file; regenerate it.
+\end{minipage}
+\vfill
+{\footnotesize\sffamily\color{aiMuted}Generated by build\_ai\_local\_pdf.py with LuaLaTeX}
+\end{titlepage}
+
+\pdfbookmark[0]{Contents}{toc}
+\tableofcontents
+\clearpage
+
+
+\part{The setup path}\label{part:flow}
+
+\chapter{10 steps, in order}
+
+
+Each step produces what the next one needs, so the order is a dependency chain
+rather than a preference. Every step ends with a check; if it does not pass,
+the next step will fail in a way that is harder to diagnose. Times are
+estimates, not measurements.
+
+\section{Step 1: Gather the software}\label{step:software}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] Every installer your GPU vendor and operating system need, from the original publisher, at a version this set was checked against.
+
+\item[Done when] \texttt{git --version} and \texttt{mamba --version} answer, and on Windows \texttt{cl} answers from a Developer prompt.
+
+\item[Applies to] one machine, two machines, three or more
+
+\item[Time] 30–60 min, mostly downloading (estimate)
+
+\item[Page] \texttt{downloads.html}
+
+\item[Software] \hyperref[sw:nvidia-driver]{NVIDIA display driver}, \hyperref[sw:amd-driver]{AMD Software: Adrenalin Edition}, \hyperref[sw:vs-buildtools]{Build Tools for Visual Studio 2022 / 2026}, \hyperref[sw:vc-redist]{Visual C++ Redistributable (x64)}, \hyperref[sw:git]{Git for Windows}, \hyperref[sw:miniforge]{Miniforge (conda + mamba)}, \hyperref[sw:wsl]{Windows Subsystem for Linux} (Chapter~\ref{ch:software})
+
+\end{description}
+
+\section{Step 2: Match the GPU stack to the card}\label{step:gpu}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] A driver, toolkit and compiler chosen for your card's architecture, and the runtime settings that decide how much of a model stays on the GPU.
+
+\item[Done when] \texttt{nvidia-\allowbreak{}smi} (or Adrenalin) lists every card, and \texttt{ollama ps} shows a loaded model at \texttt{100\% GPU}.
+
+\item[Applies to] one machine, two machines, three or more
+
+\item[Time] 30–90 min (estimate)
+
+\item[Page] \texttt{gpu-configuration.html}
+
+\item[Software] \hyperref[sw:nvidia-driver]{NVIDIA display driver}, \hyperref[sw:cuda]{CUDA Toolkit}, \hyperref[sw:amd-driver]{AMD Software: Adrenalin Edition}, \hyperref[sw:vulkan-sdk]{Vulkan SDK} (Chapter~\ref{ch:software})
+
+\end{description}
+
+\section{Step 3: Choose a model that fits}\label{step:model}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] A model tag whose weights, cache and runtime reservation fit your card with room to spare, and the context length it can afford.
+
+\item[Done when] The planner on the start page shows the tag fitting with at least 1 GiB left for the key/\allowbreak{}value cache.
+
+\item[Applies to] one machine, two machines, three or more
+
+\item[Time] 15–30 min (estimate)
+
+\item[Page] \texttt{ollama-model-selection.html}
+
+\item[Software] \hyperref[sw:ollama]{Ollama} (Chapter~\ref{ch:software})
+
+\end{description}
+
+\section{Step 4: Serve it on the network}\label{step:serve}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] Ollama (and, for more than one machine, llama.\allowbreak{}cpp RPC workers) reachable from the network, with Open WebUI in front.
+
+\item[Done when] Open WebUI answers from another machine; with RPC, the \texttt{llama-\allowbreak{}server} log lists every worker.
+
+\item[Applies to] one machine, two machines, three or more
+
+\item[Time] 1–3 h (estimate)
+
+\item[Page] \texttt{llama-rpc-vulkan-guide.html}
+
+\item[Software] \hyperref[sw:docker-desktop]{Docker Desktop}, \hyperref[sw:ollama]{Ollama}, \hyperref[sw:llama-cpp]{llama.\allowbreak{}cpp}, \hyperref[sw:open-webui]{Open WebUI (+ Open Terminal, mcpo)}, \hyperref[sw:nginx]{nginx}, \hyperref[sw:nssm]{NSSM} (Chapter~\ref{ch:software})
+
+\end{description}
+
+\section{Step 5: Give the model a place to build and test}\label{step:hands}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] An execution backend with your mamba environment and compilers, so the model can write, build and test C++ and Python against your own tools.
+
+\item[Done when] The verification sequence on that page passes, including the blocked-\allowbreak{}egress test.
+
+\item[Applies to] one machine, two machines, three or more
+
+\item[Time] 1–2 h (estimate)
+
+\item[Page] \texttt{local-code-build-test.html}
+
+\item[Alternatives] Jupyter in WSL 2 with micromamba (\texttt{Jupyter\_Server\_Setup\_wsl.html}), if you want the Jupyter engine running directly in WSL; Jupyter in Docker with GPU passthrough (\texttt{Dockler\_Jupyter\_withGPU\_Passthru\_nssm.html}), if you want the Jupyter engine in a container
+
+\item[Software] \hyperref[sw:vs-buildtools]{Build Tools for Visual Studio 2022 / 2026}, \hyperref[sw:cmake]{CMake}, \hyperref[sw:miniforge]{Miniforge (conda + mamba)}, \hyperref[sw:wsl]{Windows Subsystem for Linux}, \hyperref[sw:docker-desktop]{Docker Desktop}, \hyperref[sw:open-webui]{Open WebUI (+ Open Terminal, mcpo)}, \hyperref[sw:nssm]{NSSM} (Chapter~\ref{ch:software})
+
+\end{description}
+
+\section{Step 6: Decide what the agent may touch}\label{step:boundary}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] An OS-\allowbreak{}enforced boundary for an agent that runs on the host rather than in a container: which folders it may write, which hosts it may reach.
+
+\item[Done when] The sandbox reports enabled, and a write outside the allowed folders fails.
+
+\item[Applies to] one machine (optional), two machines (optional), three or more (optional)
+
+\item[Time] 30 min (estimate)
+
+\item[Page] \texttt{claude-sandbox-local-env.html}
+
+\end{description}
+
+\section{Step 7: Install Prometheus and Grafana}\label{step:monitor}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] A Prometheus server scraping every node, and Grafana reading from it.
+
+\item[Done when] Prometheus \texttt{/targets} shows every node \texttt{UP}.
+
+\item[Applies to] one machine (optional), two machines, three or more
+
+\item[Time] about 1 h (estimate)
+
+\item[Page] \texttt{Grafana\_Prometheus\_install\_windows.html}
+
+\item[Alternatives] Linux install (\texttt{Grafan\_Promethius\_install\_linux.html}), if the monitoring server runs Linux
+
+\item[Software] \hyperref[sw:nssm]{NSSM}, \hyperref[sw:prometheus]{Prometheus}, \hyperref[sw:grafana]{Grafana}, \hyperref[sw:windows-exporter]{windows\_\allowbreak{}exporter}, \hyperref[sw:node-exporter]{node\_\allowbreak{}exporter} (Chapter~\ref{ch:software})
+
+\end{description}
+
+\section{Step 8: Export GPU metrics}\label{step:gpu-metrics}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] Per-\allowbreak{}GPU utilisation, memory and temperature in Prometheus for every node.
+
+\item[Done when] A utilisation series for every GPU appears in Prometheus.
+
+\item[Applies to] one machine (optional), two machines, three or more
+
+\item[Time] 30–60 min (estimate)
+
+\item[Page] \texttt{GPU\_monitoring\_setup.html}
+
+\item[Software] \hyperref[sw:windows-exporter]{windows\_\allowbreak{}exporter}, \hyperref[sw:nvidia-exporter]{nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter} (Chapter~\ref{ch:software})
+
+\end{description}
+
+\section{Step 9: Build the fleet dashboard}\label{step:fleet}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] One Grafana dashboard showing every node's host, GPU and \texttt{llama-\allowbreak{}server} metrics.
+
+\item[Done when] The dashboard shows token rate, queue depth and GPU load per node.
+
+\item[Applies to] one machine (optional), two machines, three or more
+
+\item[Time] 1–2 h (estimate)
+
+\item[Page] \texttt{Promethius\_Grafana\_windows11-llama-monitoring-tutorial.html}
+
+\item[Software] \hyperref[sw:llama-cpp]{llama.\allowbreak{}cpp}, \hyperref[sw:prometheus]{Prometheus}, \hyperref[sw:grafana]{Grafana}, \hyperref[sw:windows-exporter]{windows\_\allowbreak{}exporter}, \hyperref[sw:node-exporter]{node\_\allowbreak{}exporter} (Chapter~\ref{ch:software})
+
+\end{description}
+
+\section{Step 10: Size retention and fix blank panels}\label{step:size}
+
+\begin{description}[leftmargin=6.2em,style=nextline,font=\normalfont\sffamily\bfseries\small]
+
+\item[Goal] A retention window chosen from the disk it costs, and rate windows that do not leave panels empty.
+
+\item[Done when] Disk use after a day matches the estimate, and no panel shows \texttt{No data} at your scrape interval.
+
+\item[Applies to] one machine (optional), two machines, three or more
+
+\item[Time] 30 min (estimate)
+
+\item[Page] \texttt{monitoring-sizing.html}
+
+\item[Software] \hyperref[sw:prometheus]{Prometheus} (Chapter~\ref{ch:software})
+
+\end{description}
+
+\part{Equation catalogue}\label{part:eq}
+
+\chapter{Relations, derivations and symbol definitions}
+
+
+These are the relations the rest of the set depends on. Each is tagged with
+its provenance, each derived result shows its steps, and each is followed by
+a table defining every symbol with its unit. On the web pages the symbol
+tables sit behind a disclosure button; here they are always printed, because
+an equation without its definitions is not usable on paper.
+
+
+Eighteen relations,
+grouped as they are in the source: model footprint and memory first, then
+throughput and distribution, then build and agent-loop timing, then
+monitoring.
+
+\section{Model footprint and memory}
+
+\subsection{Quantised weight footprint of a local model}\label{eq:quant-footprint}
+\provenance{derived}{Derived here}
+\begin{equation}
+S_{w} \;=\; \frac{P\,b_{q}}{8}\,\bigl(1+\varepsilon\bigr)
+\end{equation}
+This is the number to compare against free VRAM before pulling a tag. It accounts for the whole weight file, not just the quantised tensors, because a GGUF keeps token embeddings and normalisation weights at higher precision and adds tensor metadata.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item A model quantised to $ b_{q} $ bits per weight stores $ P\,b_{q} $ bits of weights in total.
+    
+  \item Convert bits to bytes: $ S_{w,\text{raw}} = P\,b_{q}/8 $.
+    
+  \item A GGUF container also carries per-\allowbreak{}tensor metadata and tensors deliberately left at a higher precision. Collect both as a fractional overhead $ \varepsilon $, giving $ S_{w} = (P b_{q}/8)(1+\varepsilon) $.
+    
+  \item Check against a published figure. Ollama lists \texttt{qwen3-\allowbreak{}coder:30b} at 19 GB\hyperref[ref:11]{[11]}. Taking $ P = 30.5\times10^{9} $ and the mixed Q4\_\allowbreak{}K\_\allowbreak{}M rate $ b_{q}\approx 4.8\ \mathrm{bit/\allowbreak{}weight} $: $ (30.5\times10^{9})(4.8)/8 = 1.83\times10^{10}\ \mathrm{B} = 18.3\ \mathrm{GB} $, so $ \varepsilon \approx 0.04 $.
+    
+  \item Treat $ \varepsilon \in [0.03,\,0.08] $ as the working range. The Ollama tag page does not state the quantisation level, so the $ b_{q} $ above is the library default rather than a published figure; confirm with \texttt{ollama show <tag>} before relying on the result.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the quantised-\allowbreak{}footprint relation, with the units used throughout this page set.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$S_{w}$ & On-\allowbreak{}disk and in-\allowbreak{}VRAM size of the weight file & B (byte) \\
+$P$ & Total parameter count of the model, all experts included & dimensionless \\
+$b_{q}$ & Average bits stored per weight for the chosen quantisation. Representative values: Q4\_\allowbreak{}K\_\allowbreak{}M $\approx 4.8$, Q5\_\allowbreak{}K\_\allowbreak{}M $\approx 5.7$, Q8\_\allowbreak{}0 $\approx 8.5$, BF16 $= 16$ & bit·weight\textsuperscript{−1} \\
+$\varepsilon$ & Container and high-\allowbreak{}precision-\allowbreak{}tensor overhead as a fraction of the raw weight bytes & dimensionless \\
+\end{longtable}
+\end{small}
+
+\subsection{Active parameter count of a routed mixture-of-\allowbreak{}experts model}\label{eq:moe-active}
+\provenance{stated}{Stated}
+\begin{equation}
+P_{\text{act}} \;=\; P_{\text{shared}} \;+\; k\,P_{\text{expert}}
+\end{equation}
+The distinction matters because the two halves of a sizing decision use different parameter counts: VRAM capacity is set by the total $ P $, while decode speed is set by $ P_{\text{act}} $. A 30B model that routes roughly 3B parameters per token occupies the card like a 30B model and streams like a 3B one.
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the active-\allowbreak{}parameter relation for a top-$k$ routed mixture-of-\allowbreak{}experts transformer.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$P_{\text{act}}$ & Parameters read while producing one token & dimensionless \\
+$P_{\text{shared}}$ & Parameters outside the expert blocks: attention, embeddings, normalisation, any always-on dense feed-\allowbreak{}forward & dimensionless \\
+$k$ & Experts the router selects per token, out of $E$ available & dimensionless \\
+$P_{\text{expert}}$ & Parameters in a single expert block & dimensionless \\
+\end{longtable}
+\end{small}
+
+\subsection{Key/\allowbreak{}value cache footprint}\label{eq:kv-cache}
+\provenance{derived}{Derived here}
+\begin{equation}
+S_{kv} \;=\; 2\,n_{\ell}\,n_{kv}\,d_{h}\,L_{\text{ctx}}\,n_{\text{seq}}\,b_{kv}
+\end{equation}
+The cache is the term people forget. It is linear in context length and linear in the number of concurrent sequences, so raising \texttt{--ctx-\allowbreak{}size} from 8192 to 32768 while also raising \texttt{--parallel} from 1 to 4 multiplies this term by sixteen.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item Autoregressive attention caches one key vector and one value vector for every token already generated, for every attention layer. That is the leading factor of 2.
+    
+  \item Grouped-\allowbreak{}query attention shares each key/\allowbreak{}value pair across several query heads, so the count that matters is $ n_{kv} $, the number of key/\allowbreak{}value heads, not the number of query heads.
+    
+  \item Each cached vector has $ d_{h} $ components, so one token costs $ 2\,n_{\ell}\,n_{kv}\,d_{h} $ elements.
+    
+  \item Multiply by the context length $ L_{\text{ctx}} $ that the cache is sized for, and by the number of concurrent sequences $ n_{\text{seq}} $ (\texttt{--parallel} in \texttt{llama-\allowbreak{}server}), each of which keeps its own cache.
+    
+  \item Multiply by the bytes per cached element $ b_{kv} $. Ollama exposes this as \texttt{OLLAMA\_\allowbreak{}KV\_\allowbreak{}CACHE\_\allowbreak{}TYPE}, documented with a default of \texttt{f16} and options \texttt{q8\_\allowbreak{}0} and \texttt{q4\_\allowbreak{}0}\hyperref[ref:9]{[9]}, giving $ b_{kv} = 2,\ 1,\ 0.5\ \mathrm{B} $ respectively. \textbf{Reducing $ b_{kv} $ below 2 is conditional:} the cache can be quantised only “when Flash Attention is enabled”\hyperref[ref:9]{[9]}, so on a backend or device without it the setting does not buy the memory this step assumes.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the key/\allowbreak{}value cache relation. The architectural quantities are read from the model card or from \texttt{ollama show <tag>}; the operational ones are set on the command line.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$S_{kv}$ & Total key/\allowbreak{}value cache size held in VRAM or RAM & B \\
+$n_{\ell}$ & Number of transformer layers & dimensionless \\
+$n_{kv}$ & Key/\allowbreak{}value heads per layer (equal to the query-\allowbreak{}head count only when grouped-\allowbreak{}query attention is not used) & dimensionless \\
+$d_{h}$ & Head dimension & dimensionless \\
+$L_{\text{ctx}}$ & Context length the cache is allocated for, \texttt{--ctx-\allowbreak{}size} or \texttt{OLLAMA\_\allowbreak{}CONTEXT\_\allowbreak{}LENGTH}. Ollama's default is chosen from available VRAM — 4k below 24 GiB, 32k from 24 to 48 GiB, 256k at 48 GiB and above — and its documentation asks for at least 64000 for agent and coding work[35] & token \\
+$n_{\text{seq}}$ & Concurrent sequences, \texttt{--parallel} in \texttt{llama-\allowbreak{}server} or \texttt{OLLAMA\_\allowbreak{}NUM\_\allowbreak{}PARALLEL} & dimensionless \\
+$b_{kv}$ & Bytes per cached element, set by the cache data type: \texttt{f16} = 2 (default), \texttt{q8\_\allowbreak{}0} = 1, \texttt{q4\_\allowbreak{}0} = 0.5. Anything below 2 requires Flash Attention, is a \textit{global} setting applying to every loaded model, and costs some precision — more so on a high-\allowbreak{}GQA architecture[9] & B \\
+\end{longtable}
+\end{small}
+
+\subsection{Longest context a card can actually hold}\label{eq:ctx-budget}
+\provenance{derived}{Derived here}
+\begin{equation}
+L_{\max} \;=\; \left\lfloor \frac{V_{\text{tot}} - S_{w} - V_{\text{rt}}}{2\,n_{\ell}\,n_{kv}\,d_{h}\,n_{\text{seq}}\,b_{kv}} \right\rfloor
+\end{equation}
+A model card advertising a 256K window is stating what the weights were trained to attend over, not what the card in the machine can allocate. This inverts the cache relation to give the second number, which is the one that decides whether a repository-\allowbreak{}scale prompt fits.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item Start from $ S_{kv} = 2\,n_{\ell}\,n_{kv}\,d_{h}\,L_{\text{ctx}}\,n_{\text{seq}}\,b_{kv} $ as derived above.
+    
+  \item The cache has to share the device with the weights $ S_{w} $ and with the runtime's own allocations $ V_{\text{rt}} $: compute scratch buffers, the CUDA or Vulkan context, and whatever the display driver has already reserved.
+    
+  \item Set the available remainder equal to the cache: $ V_{\text{tot}} - S_{w} - V_{\text{rt}} = S_{kv} $.
+    
+  \item Solve for $ L_{\text{ctx}} $ and take the floor, since a partial token cannot be cached.
+    
+  \item Round down further in practice. Allocators fragment, and on Windows the WDDM display driver can page VRAM out from under the runtime, so leave headroom rather than sizing to the last megabyte.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the context-\allowbreak{}budget relation. Symbols shared with the cache relation keep the same meaning and units.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$L_{\max}$ & Largest context length that fits once weights and runtime are placed & token \\
+$V_{\text{tot}}$ & Total device memory on the accelerator & B \\
+$S_{w}$ & Weight footprint, from the quantised-\allowbreak{}footprint relation & B \\
+$V_{\text{rt}}$ & Runtime, driver and compute-\allowbreak{}buffer reservation. Budget 0.8–1.5 GB for a single-\allowbreak{}GPU llama.\allowbreak{}cpp or Ollama process and measure it rather than assuming & B \\
+$n_{\ell},\,\allowbreak n_{kv},\,\allowbreak d_{h},\,\allowbreak n_{\text{seq}},\,\allowbreak b_{kv}$ & As defined for the key/\allowbreak{}value cache relation & — \\
+\end{longtable}
+\end{small}
+
+\section{Throughput and distribution}
+
+\subsection{Memory-\allowbreak{}bandwidth ceiling on single-\allowbreak{}stream decode rate}\label{eq:bandwidth-bound}
+\provenance{derived}{Derived here}
+\begin{equation}
+r_{\max} \;=\; \frac{B_{\text{eff}}}{S_{\text{act}}} \qquad\text{and}\qquad r_{\text{obs}} \;\approx\; \eta\,r_{\max},\quad \eta \in [0.5,\,0.8]
+\end{equation}
+Token generation is bandwidth-\allowbreak{}bound, not compute-\allowbreak{}bound. This single ratio predicts which of two candidate models will feel usable in an agent loop more reliably than any benchmark score does, and it is why an 8-\allowbreak{}bit quantisation of a model is roughly half the speed of a 4-\allowbreak{}bit quantisation of the same model.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item Generating one token in the decode phase requires reading every active weight from memory exactly once; with a batch of one there is no reuse to amortise that read against.
+    
+  \item The time to read $ S_{\text{act}} $ bytes at an achieved bandwidth $ B_{\text{eff}} $ is $ S_{\text{act}}/B_{\text{eff}} $, so $ t_{\text{tok}} \ge S_{\text{act}}/B_{\text{eff}} $.
+    
+  \item Take the reciprocal: $ r_{\max} = B_{\text{eff}}/S_{\text{act}} $ tokens per second.
+    
+  \item For a dense model $ S_{\text{act}} = S_{w} $. For a routed mixture of experts, substitute $ P_{\text{act}} $ from the active-\allowbreak{}parameter relation into the quantised-\allowbreak{}footprint relation instead of $ P $.
+    
+  \item Worked example. A 19 GB dense weight set on a card delivering $ B_{\text{eff}} = 450\ \mathrm{GB\,s^{-1}} $: $ r_{\max} = 450/\allowbreak{}19 = 23.7\ \mathrm{token\,s^{-1}} $, and with $ \eta = 0.65 $ expect about $ 15\ \mathrm{token\,s^{-1}} $.
+    
+  \item The same 19 GB file spilled to system RAM at $ B_{\text{eff}} = 50\ \mathrm{GB\,s^{-1}} $ gives $ r_{\max} = 2.6\ \mathrm{token\,s^{-1}} $. That ninefold cliff is the reason the layer-\allowbreak{}offload count below is worth computing rather than guessing.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the bandwidth-\allowbreak{}ceiling relation. $B_{\text{eff}}$ is the achieved figure from a bandwidth test, not the number on the specification sheet.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$r_{\max}$ & Upper bound on sustained token generation rate & token·s\textsuperscript{−1} \\
+$r_{\text{obs}}$ & Rate actually observed end to end & token·s\textsuperscript{−1} \\
+$B_{\text{eff}}$ & Achieved memory bandwidth of the device holding the weights. Typically 0.7–0.9 of the theoretical peak & B·s\textsuperscript{−1} \\
+$S_{\text{act}}$ & Bytes of weights read per token: the whole weight set for a dense model, the routed subset for a mixture of experts & B \\
+$\eta$ & Realisation factor covering attention over the cache, sampling, and framework overhead & dimensionless \\
+\end{longtable}
+\end{small}
+
+\subsection{\texorpdfstring{Layer count to pass to \texttt{--n-\allowbreak{}gpu-\allowbreak{}layers}}{Layer count to pass to \texttt{-{}-n-\allowbreak{}gpu-\allowbreak{}layers}}}\label{eq:ngl-layers}
+\provenance{derived}{Derived here}
+\begin{equation}
+n_{\text{gpu}} \;=\; \left\lfloor \frac{\bigl(V_{\text{tot}} - V_{\text{rt}} - S_{kv}\bigr)\,n_{\ell}}{S_{w}} \right\rfloor, \qquad 0 \le n_{\text{gpu}} \le n_{\ell}
+\end{equation}
+Current llama.\allowbreak{}cpp builds default to \texttt{-ngl auto} with \texttt{--fit on}, which adjusts every argument you did not set until the model fits (next relation)\hyperref[ref:43]{[43]}. This relation is for when you set \texttt{-ngl} yourself, as the service definitions in this set do: an explicit value is not adjusted, so the failure mode of overshooting is an out-of-\allowbreak{}memory abort part-\allowbreak{}way through loading rather than a graceful fallback.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item llama.\allowbreak{}cpp offloads whole transformer blocks, so the granularity is one layer. Averaged over the stack, one layer is $ S_{w}/n_{\ell} $ bytes.
+    
+  \item The device must also hold the runtime reservation $ V_{\text{rt}} $ and the whole key/\allowbreak{}value cache $ S_{kv} $, both of which are allocated regardless of how many layers are resident.
+    
+  \item The bytes left for weights are therefore $ V_{\text{tot}} - V_{\text{rt}} - S_{kv} $.
+    
+  \item Divide by the per-\allowbreak{}layer size and take the floor: $ n_{\text{gpu}} = \lfloor (V_{\text{tot}} - V_{\text{rt}} - S_{kv})\,n_{\ell}/S_{w} \rfloor $.
+    
+  \item Clamp into $ [0,\,n_{\ell}] $, then subtract one or two before the first run. Layers are not uniform in size, the output projection is usually the largest single tensor, and allocator fragmentation costs real megabytes.
+    
+  \item If the result equals $ n_{\ell} $, pass \texttt{-ngl all} (accepted by current builds\hyperref[ref:43]{[43]}; older builds need \texttt{-ngl 999}) rather than the exact count, so the setting survives a change of model.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the layer-\allowbreak{}offload relation. All memory symbols carry the meanings established in the cache and footprint relations.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$n_{\text{gpu}}$ & Layers to place on the accelerator, the \texttt{-ngl} argument & dimensionless \\
+$n_{\ell}$ & Total transformer layers in the model & dimensionless \\
+$V_{\text{tot}}$ & Total device memory & B \\
+$V_{\text{rt}}$ & Runtime, driver and compute-\allowbreak{}buffer reservation & B \\
+$S_{kv}$ & Key/\allowbreak{}value cache size for the chosen context and parallelism & B \\
+$S_{w}$ & Total weight footprint & B \\
+\end{longtable}
+\end{small}
+
+\subsection{Per-\allowbreak{}token wall clock across RPC workers}\label{eq:rpc-token-time}
+\provenance{derived}{Derived here}
+\begin{equation}
+t_{\text{tok}} \;=\; \sum_{i=1}^{N}\frac{S_{i}}{B_{i}} \;+\; \sum_{i=1}^{N-1}\left(\frac{D_{\text{act}}}{R_{i}} + 2\tau_{i}\right), \qquad r \;=\; \frac{1}{t_{\text{tok}}}
+\end{equation}
+llama.\allowbreak{}cpp's RPC backend splits the layer stack across machines\hyperref[ref:17]{[17]}. This separates the part of a token's cost that the split reduces from the part it adds, which is the only way to answer whether a fourth node is worth switching on. Note that $ S_{i} $ is chosen for you by default: the runtime distributes weights and the cache across every local and remote device in proportion to free memory, unless \texttt{--tensor-\allowbreak{}split} says otherwise\hyperref[ref:37]{[37]}.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item Node $ i $ holds $ S_{i} $ bytes of the weight set and streams them from its own memory at $ B_{i} $, so its contribution to one token is $ S_{i}/B_{i} $ by the bandwidth-\allowbreak{}ceiling argument above.
+    
+  \item A pipeline split is sequential for a single token: layer $ j+1 $ cannot start before layer $ j $ has produced its output. The per-\allowbreak{}node times therefore add rather than overlap.
+    
+  \item At each of the $ N-1 $ boundaries the activation tensor of $ D_{\text{act}} $ bytes crosses the link at throughput $ R_{i} $, costing $ D_{\text{act}}/R_{i} $, plus $ 2\tau_{i} $ for the request and response legs.
+    
+  \item Summing both contributions gives $ t_{\text{tok}} $, and $ r = 1/\allowbreak{}t_{\text{tok}} $.
+    
+  \item Scale of the link term on a home network. One activation row for a hidden size of 4096 in \texttt{f16} is $ 4096 \times 2 = 8192\ \mathrm{B} $. Over gigabit Ethernet at an achieved $ R = 940\ \mathrm{Mbit\,s^{-1}} = 1.18\times10^{8}\ \mathrm{B\,s^{-1}} $ that is $ 69\ \mathrm{\mu s} $, against $ 2\tau \approx 400\ \mathrm{\mu s} $ for a typical switched round trip. Latency dominates transfer, so the number of hops matters more than the hidden size.
+    
+  \item Prompt processing behaves differently. It submits many tokens at once, so $ D_{\text{act}} $ scales with the batch and the transfer term stops being negligible.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the distributed per-\allowbreak{}token relation for an $N$-node llama.\allowbreak{}cpp RPC pipeline.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$t_{\text{tok}}$ & Wall-\allowbreak{}clock time to produce one token & s \\
+$r$ & Sustained generation rate & token·s\textsuperscript{−1} \\
+$N$ & Nodes in the pipeline, host included & dimensionless \\
+$S_{i}$ & Weight bytes resident on node $i$ & B \\
+$B_{i}$ & Achieved memory bandwidth on node $i$ for the memory actually holding those weights & B·s\textsuperscript{−1} \\
+$D_{\text{act}}$ & Activation tensor crossing one boundary, hidden size times bytes per element & B \\
+$R_{i}$ & Achieved link throughput at boundary $i$ & B·s\textsuperscript{−1} \\
+$\tau_{i}$ & One-\allowbreak{}way link latency at boundary $i$ & s \\
+\end{longtable}
+\end{small}
+
+\subsection{Break-\allowbreak{}even condition for adding an RPC worker}\label{eq:rpc-breakeven}
+\provenance{derived}{Derived here}
+\begin{equation}
+\frac{S_{m}}{B_{\text{host}}} \;>\; \frac{S_{m}}{B_{\text{worker}}} \;+\; \frac{D_{\text{act}}}{R} + 2\tau
+\end{equation}
+Read as: moving $ S_{m} $ bytes of weights onto a worker pays only when the time the host stops spending on them exceeds the time the worker spends plus the cost of the extra hop. The condition is almost always satisfied when the bytes were spilling to host RAM, and almost never when they already fit in host VRAM.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item Write $ t_{\text{tok}} $ from the relation above for the configuration before the move, with $ S_{m} $ bytes still on the host: the host contributes $ S_{m}/B_{\text{host}} $.
+    
+  \item Write it again after the move: the worker contributes $ S_{m}/B_{\text{worker}} $, and one new boundary contributes $ D_{\text{act}}/R + 2\tau $.
+    
+  \item Every other term is common to both expressions and cancels.
+    
+  \item The move reduces $ t_{\text{tok}} $ exactly when the removed term exceeds the two added terms, which is the inequality stated.
+    
+  \item Case that pays. $ S_{m} = 6\ \mathrm{GB} $ spilling to host RAM at $ B_{\text{host}} = 50\ \mathrm{GB\,s^{-1}} $ costs $ 120\ \mathrm{ms} $ per token. On a worker GPU at $ B_{\text{worker}} = 400\ \mathrm{GB\,s^{-1}} $ it costs $ 15\ \mathrm{ms} $, plus roughly $ 0.5\ \mathrm{ms} $ of link cost from the figures above. The move saves about $ 105\ \mathrm{ms} $ per token.
+    
+  \item Case that does not. The same $ 6\ \mathrm{GB} $ already resident in host VRAM at $ 450\ \mathrm{GB\,s^{-1}} $ costs $ 13.3\ \mathrm{ms} $. A worker at $ 400\ \mathrm{GB\,s^{-1}} $ costs $ 15\ \mathrm{ms} $ plus the hop, so the move loses about $ 2.2\ \mathrm{ms} $ per token and adds a failure domain.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the break-\allowbreak{}even condition. Link symbols carry the meanings established in the per-\allowbreak{}token relation.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$S_{m}$ & Weight bytes being moved from host to worker & B \\
+$B_{\text{host}}$ & Achieved bandwidth of the host memory those bytes currently sit in & B·s\textsuperscript{−1} \\
+$B_{\text{worker}}$ & Achieved bandwidth of the worker memory they would move to & B·s\textsuperscript{−1} \\
+$D_{\text{act}}$ & Activation tensor crossing the new boundary & B \\
+$R$ & Achieved link throughput to the worker & B·s\textsuperscript{−1} \\
+$\tau$ & One-\allowbreak{}way link latency to the worker & s \\
+\end{longtable}
+\end{small}
+
+\section{Build and agent-loop timing}
+
+\subsection{Safe parallel job count for a C++ build}\label{eq:parallel-jobs}
+\provenance{derived}{Derived here}
+\begin{equation}
+j^{\star} \;=\; \min\!\left( n_{\text{cpu}},\; \left\lfloor \frac{M_{\text{avail}}}{M_{\text{job}}} \right\rfloor \right)
+\end{equation}
+Relevant because an agent told to "build the project" will reach for \texttt{-j\$(nproc)}, and on a machine that is simultaneously holding a 19 GB model resident the memory term, not the core count, is the binding constraint. Set \texttt{CMAKE\_\allowbreak{}BUILD\_\allowbreak{}PARALLEL\_\allowbreak{}LEVEL} in the environment so the limit holds regardless of how the build is invoked\hyperref[ref:28]{[28]}.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item Compilation of independent translation units is embarrassingly parallel up to the core count, so $ j \le n_{\text{cpu}} $ is the first bound.
+    
+  \item Each concurrent compiler process holds a peak resident set $ M_{\text{job}} $. Heavily templated C++ and link-\allowbreak{}time optimisation push this well above the 300–500 MB that plain C costs; 1.5–2.5 GB per job is realistic for a template-\allowbreak{}heavy target.
+    
+  \item Exceeding available memory does not fail cleanly. The machine swaps, the build slows by an order of magnitude, and the resident model may be evicted. So $ j \le \lfloor M_{\text{avail}}/M_{\text{job}} \rfloor $ is the second bound.
+    
+  \item Take the smaller of the two bounds.
+    
+  \item Worked example for a machine running a local coding model. 16 logical cores, 64 GB installed, 19 GB pinned by the model server and 8 GB by the operating system and editor, leaving $ M_{\text{avail}} = 37\ \mathrm{GB} $. At $ M_{\text{job}} = 2\ \mathrm{GB} $: $ \lfloor 37/\allowbreak{}2 \rfloor = 18 $, so $ j^{\star} = \min(16,\,18) = 16 $.
+    
+  \item Same machine with 32 GB installed: $ M_{\text{avail}} = 5\ \mathrm{GB} $, $ \lfloor 5/\allowbreak{}2 \rfloor = 2 $, and $ j^{\star} = 2 $. The core count is irrelevant.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the parallel-\allowbreak{}job relation. $M_{\text{avail}}$ is memory free after the model server and the operating system have taken their share, not installed memory.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$j^{\star}$ & Jobs to pass to \texttt{cmake --build . --parallel} or to \texttt{CMAKE\_\allowbreak{}BUILD\_\allowbreak{}PARALLEL\_\allowbreak{}LEVEL} & dimensionless \\
+$n_{\text{cpu}}$ & Logical cores available to the build & dimensionless \\
+$M_{\text{avail}}$ & System memory free with the model server already resident & B \\
+$M_{\text{job}}$ & Peak resident set of one compiler process & B \\
+\end{longtable}
+\end{small}
+
+\subsection{Amdahl speed-up of a parallel build}\label{eq:amdahl}
+\provenance{stated}{Stated}
+\begin{equation}
+S(j) \;=\; \frac{1}{(1-p) + \dfrac{p}{j}}, \qquad \lim_{j\to\infty} S(j) \;=\; \frac{1}{1-p}
+\end{equation}
+The serial fraction of a native build is the configure step and the final link, and a single-\allowbreak{}threaded link of a large binary can be tens of seconds. With $ p = 0.85 $ the ceiling is $ S_{\infty} = 6.7 $ no matter how many cores are added, which is worth knowing before an agent is allowed to raise the job count in a loop.
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in Amdahl's relation as applied to a compile-\allowbreak{}and-\allowbreak{}link cycle.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$S(j)$ & Speed-up over a single-\allowbreak{}job build & dimensionless \\
+$p$ & Fraction of total build time that parallelises, essentially the compile phase & dimensionless \\
+$j$ & Concurrent jobs & dimensionless \\
+$1-p$ & Serial fraction: configure, dependency scan, archive and link & dimensionless \\
+\end{longtable}
+\end{small}
+
+\subsection{Wall clock of one write-\allowbreak{}build-\allowbreak{}test agent task}\label{eq:agent-loop}
+\provenance{derived}{Derived here}
+\begin{equation}
+T_{\text{task}} \;=\; N_{\text{it}}\left( \frac{n_{\text{in}}}{r_{p}} \;+\; \frac{n_{\text{out}}}{r} \;+\; T_{\text{build}} \;+\; T_{\text{test}} \right)
+\end{equation}
+Sizing a local coding setup means deciding where the time goes. For a small edit on a fast build the model dominates and a bigger model is the wrong trade; for a cold C++ build the compiler dominates and model quality is nearly free, because a better model lowers $ N_{\text{it}} $ and $ N_{\text{it}} $ multiplies everything.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item One iteration of the loop is: read context, emit a patch, build, run tests. The agent cannot overlap these, because each step consumes the previous step's output.
+    
+  \item Reading $ n_{\text{in}} $ prompt tokens at prefill rate $ r_{p} $ takes $ n_{\text{in}}/r_{p} $. Prefill is compute-\allowbreak{}bound and batched, so $ r_{p} $ is typically one to two orders of magnitude above $ r $.
+    
+  \item Emitting $ n_{\text{out}} $ tokens at decode rate $ r $ takes $ n_{\text{out}}/r $, where $ r $ is bounded by the bandwidth ceiling derived above.
+    
+  \item Add the build and test times, then multiply by the number of iterations needed to converge.
+    
+  \item Worked example, Python edit. $ N_{\text{it}} = 3 $, $ n_{\text{in}} = 12000 $ at $ r_{p} = 900\ \mathrm{token\,s^{-1}} $, $ n_{\text{out}} = 800 $ at $ r = 15\ \mathrm{token\,s^{-1}} $, $ T_{\text{build}} = 0 $, $ T_{\text{test}} = 6\ \mathrm{s} $. Per iteration: $ 13.3 + 53.3 + 0 + 6 = 72.6\ \mathrm{s} $, total $ 218\ \mathrm{s} $. Generation is 73 \% of it, so a faster model wins.
+    
+  \item Worked example, C++ edit on an incremental build. Same model figures with $ T_{\text{build}} = 95\ \mathrm{s} $ and $ T_{\text{test}} = 40\ \mathrm{s} $: per iteration $ 201.6\ \mathrm{s} $, total $ 605\ \mathrm{s} $. Generation is now 26 \%, so spending that budget on a model that converges in two iterations instead of three saves more than any decode speed-up available.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the agent-\allowbreak{}iteration relation. Measure $r$ and $r_{p}$ with the probe script shipped alongside this page set rather than taking advertised figures.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$T_{\text{task}}$ & Wall clock from prompt to passing tests & s \\
+$N_{\text{it}}$ & Iterations of the write-\allowbreak{}build-\allowbreak{}test loop needed to converge & dimensionless \\
+$n_{\text{in}}$ & Prompt tokens read per iteration, including re-\allowbreak{}read source files & token \\
+$r_{p}$ & Prefill (prompt evaluation) rate & token·s\textsuperscript{−1} \\
+$n_{\text{out}}$ & Tokens generated per iteration, reasoning traces included & token \\
+$r$ & Decode rate, bounded by the bandwidth ceiling & token·s\textsuperscript{−1} \\
+$T_{\text{build}}$ & Compile and link time per iteration & s \\
+$T_{\text{test}}$ & Test-\allowbreak{}suite run time per iteration & s \\
+\end{longtable}
+\end{small}
+
+\section{Monitoring and telemetry}
+
+\subsection{Prometheus on-\allowbreak{}disk size}\label{eq:prom-disk}
+\provenance{stated}{Stated}
+\begin{equation}
+D \;=\; T_{\text{ret}} \cdot \lambda \cdot \beta
+\end{equation}
+This is the sizing relation given in the Prometheus storage documentation, which also states that the server averages one to two bytes per stored sample and recommends setting a size-\allowbreak{}based retention limit to at most 80–85 \% of the allocated disk\hyperref[ref:18]{[18]}. Reducing the number of series is more effective than reducing the sample rate, because samples within a series compress well and each new series does not.
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the Prometheus storage relation, named to match the documented form \texttt{needed\_\allowbreak{}disk\_\allowbreak{}space = retention\_\allowbreak{}time\_\allowbreak{}seconds * ingested\_\allowbreak{}samples\_\allowbreak{}per\_\allowbreak{}second * bytes\_\allowbreak{}per\_\allowbreak{}sample}.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$D$ & Disk occupied by the time-\allowbreak{}series database at steady state & B \\
+$T_{\text{ret}}$ & Retention window, \texttt{--storage.\allowbreak{}tsdb.\allowbreak{}retention.\allowbreak{}time}, default 15 d when no size limit is set[18] & s \\
+$\lambda$ & Ingested samples per second across every scrape job & sample·s\textsuperscript{−1} \\
+$\beta$ & Bytes per stored sample, documented as 1–2 on average[18] & B·sample\textsuperscript{−1} \\
+\end{longtable}
+\end{small}
+
+\subsection{Ingested sample rate from the scrape configuration}\label{eq:prom-ingest}
+\provenance{derived}{Derived here}
+\begin{equation}
+\lambda \;=\; \sum_{j} \frac{n_{j}}{T_{s,j}}
+\end{equation}
+Feeds the storage relation above. Worth computing before adding an exporter rather than after, because a GPU exporter publishing a few hundred series per card across four nodes is a larger step than it looks.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item Each scrape job $ j $ collects $ n_{j} $ distinct time series from its targets on every scrape.
+    
+  \item It scrapes once every $ T_{s,j} $ seconds, so it contributes $ n_{j}/T_{s,j} $ samples per second.
+    
+  \item Jobs are independent, so the total is the sum over jobs.
+    
+  \item Worked example for the four-\allowbreak{}node stack on this page set. \texttt{windows\_\allowbreak{}exporter} publishing roughly 1500 series on each of 4 nodes at $ T_{s} = 15\ \mathrm{s} $ gives $ 6000/\allowbreak{}15 = 400\ \mathrm{sample\,s^{-1}} $. An \texttt{nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter} adding about 120 series on each of 3 GPU nodes at 15 s gives $ 360/\allowbreak{}15 = 24 $. \texttt{llama-\allowbreak{}server --metrics} adds exactly 15 series, which its own documentation enumerates rather than leaving to be estimated\hyperref[ref:39]{[39]}, giving $ 15/\allowbreak{}15 = 1 $. Total $ \lambda \approx 425\ \mathrm{sample\,s^{-1}} $.
+    
+  \item Substituting into the storage relation with $ T_{\text{ret}} = 15\ \mathrm{d} = 1.296\times10^{6}\ \mathrm{s} $ and $ \beta = 2\ \mathrm{B} $: $ D = 1.296\times10^{6} \times 425 \times 2 = 1.10\times10^{9}\ \mathrm{B} \approx 1.1\ \mathrm{GB} $. Allow several times that for the write-\allowbreak{}ahead log, memory-\allowbreak{}mapped chunks and compaction headroom.
+    
+  \item The two exporter counts above are order-of-\allowbreak{}magnitude figures for planning, not measurements; only the \texttt{llama-\allowbreak{}server} figure is published. Replace the estimates with \texttt{prometheus\_\allowbreak{}tsdb\_\allowbreak{}head\_\allowbreak{}series} read from your own server once it has been running.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the ingest-\allowbreak{}rate relation, summed over the scrape jobs defined in \texttt{prometheus.\allowbreak{}yml}.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$\lambda$ & Total ingested samples per second & sample·s\textsuperscript{−1} \\
+$n_{j}$ & Distinct time series returned by every target of job $j$ combined & dimensionless \\
+$T_{s,j}$ & Scrape interval for job $j$, \texttt{scrape\_\allowbreak{}interval} & s \\
+\end{longtable}
+\end{small}
+
+\subsection{Minimum range-\allowbreak{}vector window for \texttt{rate()}}\label{eq:rate-window}
+\provenance{derived}{Derived here}
+\begin{equation}
+\left\lfloor \frac{w}{T_{s}} \right\rfloor \;\ge\; 2 + f \qquad\Longrightarrow\qquad w \;\ge\; (2+f)\,T_{s}
+\end{equation}
+The usual advice to make the window four times the scrape interval is this inequality with $ f = 2 $. Panels that go blank intermittently are nearly always a window too close to the scrape interval, not a broken exporter.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item \texttt{rate()} is documented as the per-\allowbreak{}second average rate of increase across the range vector, computed between its first and last samples and extrapolated to the ends of the range to allow for missed scrapes\hyperref[ref:19]{[19]}. It therefore needs two samples inside the window to return anything. The PromQL function reference states that two-\allowbreak{}float-\allowbreak{}sample minimum explicitly only for \texttt{deriv} and \texttt{predict\_\allowbreak{}linear}; for \texttt{rate} it is the observed behaviour rather than a documented guarantee, so treat this step as empirical.
+    
+  \item A window of width $ w $ at scrape interval $ T_{s} $ contains $ \lfloor w/\allowbreak{}T_{s} \rfloor $ samples when every scrape succeeds.
+    
+  \item Allowing $ f $ consecutive scrapes to fail or arrive late without the panel emptying requires $ 2+f $ slots rather than 2.
+    
+  \item Rearranging gives $ w \ge (2+f)T_{s} $.
+    
+  \item For the $ T_{s} = 15\ \mathrm{s} $ jobs on this page set, tolerating two missed scrapes gives $ w \ge 60\ \mathrm{s} $, which is why the dashboard expressions use \texttt{[1m]}.
+    
+  \item Raising $ T_{s} $ without raising $ w $ is the usual regression. Pin the relationship by templating the window from the scrape interval instead of hard-\allowbreak{}coding it.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the range-\allowbreak{}window condition for PromQL rate and increase functions over counters.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$w$ & Range-\allowbreak{}vector window, the bracketed duration in \texttt{rate(metric[w])} & s \\
+$T_{s}$ & Scrape interval of the job producing the metric & s \\
+$f$ & Consecutive failed or late scrapes to tolerate without the expression emptying & dimensionless \\
+\end{longtable}
+\end{small}
+
+\subsection{Utilisation from a cumulative busy-\allowbreak{}time counter}\label{eq:gpu-utilisation}
+\provenance{derived}{Derived here}
+\begin{equation}
+U(w) \;=\; \frac{c(t) - c(t-w)}{w} \;=\; \mathrm{rate}\bigl(c[w]\bigr), \qquad 0 \le U \le n_{\text{dev}}
+\end{equation}
+Worth stating explicitly because the GPU exporters publish both kinds of metric and they are not interchangeable: a cumulative busy-\allowbreak{}seconds counter must be differenced, while an instantaneous percentage gauge must not be. Applying \texttt{rate()} to a gauge, or omitting it on a counter, are the two failure modes that produce plausible-\allowbreak{}looking but wrong dashboards.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item A busy-\allowbreak{}time counter $ c(t) $ accumulates seconds during which the device was executing work, and only ever increases.
+    
+  \item Over a window $ w $ the device was busy for $ c(t) - c(t-w) $ seconds out of $ w $ seconds elapsed.
+    
+  \item The ratio of those two is the fraction of wall-\allowbreak{}clock time the device was busy, which is the definition of utilisation.
+    
+  \item That ratio is precisely what PromQL \texttt{rate()} computes over a counter. The function reference states that breaks in monotonicity, such as a counter reset when the exporter or driver restarts, are adjusted for automatically\hyperref[ref:19]{[19]}, which is why the raw difference must not be taken by hand.
+    
+  \item When the counter aggregates $ n_{\text{dev}} $ devices the result saturates at $ n_{\text{dev}} $ rather than 1, so divide by the device count before plotting a percentage.
+    
+  \item $ w $ must satisfy the window condition derived above, otherwise the panel empties whenever a scrape is missed.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the counter-\allowbreak{}based utilisation relation, applicable to GPU busy time, CPU time and any other cumulative seconds counter.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$U(w)$ & Mean utilisation over the window & dimensionless (×100 for per cent) \\
+$c(t)$ & Cumulative busy-\allowbreak{}seconds counter at time $t$ & s \\
+$w$ & Range-\allowbreak{}vector window & s \\
+$n_{\text{dev}}$ & Devices or cores the counter aggregates & dimensionless \\
+\end{longtable}
+\end{small}
+
+\section{GPU placement}
+
+\subsection{\texorpdfstring{What \texttt{--fit} guarantees on each device}{What -{}-fit guarantees on each device}}\label{eq:fit-margin}
+\provenance{derived}{Derived here}
+\begin{equation}
+V_{\text{tot},d} - \bigl(S_{w,d} + S_{kv,d} + V_{\text{rt},d}\bigr) \;\ge\; m_{\text{fit},d} \quad \text{for every device } d, \qquad n_{\text{ctx}} \;\ge\; n_{\text{ctx,min}}
+\end{equation}
+llama.\allowbreak{}cpp's option text says \texttt{--fit} decides "whether to adjust unset arguments to fit in device memory", with \texttt{--fit-\allowbreak{}target} giving a "target margin per device" and \texttt{--fit-\allowbreak{}ctx} the "minimum ctx size that can be set by --fit"\hyperref[ref:43]{[43]}. Written as an inequality, that is the condition above. The order in which it gives up layers versus context is not stated in the option text; \texttt{--fit-\allowbreak{}print on} prints the estimate it used.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item Quoted defaults from \texttt{common/\allowbreak{}common.h}\hyperref[ref:43]{[43]}: \texttt{fit\_\allowbreak{}params} is on, \texttt{fit\_\allowbreak{}params\_\allowbreak{}target} is $ 1024 \times 1024 \times 1024 $ bytes per device (the 1024 MiB the option text reports), and \texttt{fit\_\allowbreak{}params\_\allowbreak{}min\_\allowbreak{}ctx} is 4096.
+    
+  \item Device $ d $ holds its share of the weights $ S_{w,d} $, its share of the key/\allowbreak{}value cache $ S_{kv,d} $ (the cache is split with the layers in the default \texttt{layer} split mode), and the runtime reservation $ V_{\text{rt},d} $.
+    
+  \item Reading "margin" as the memory left free once those are allocated gives $ V_{\text{tot},d} - (S_{w,d} + S_{kv,d} + V_{\text{rt},d}) \ge m_{\text{fit},d} $. This reading is ours; the option text does not define the term further.
+    
+  \item The context may be reduced to meet the margin, but not below $ n_{\text{ctx,min}} $.
+    
+  \item Only \textit{unset} arguments are adjusted. An explicit \texttt{-ngl} or \texttt{-c} is held fixed, so a hand-\allowbreak{}tuned service definition opts out of the mechanism for that argument.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the fit-\allowbreak{}margin condition.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$V_{\text{tot},d}$ & Total memory of device $d$ & B \\
+$S_{w,d}$ & Weight bytes placed on device $d$ & B \\
+$S_{kv,d}$ & Key/\allowbreak{}value cache bytes placed on device $d$ & B \\
+$V_{\text{rt},d}$ & Runtime, driver and compute-\allowbreak{}buffer reservation on device $d$ & B \\
+$m_{\text{fit},d}$ & Target free margin, \texttt{--fit-\allowbreak{}target}; default 1024 MiB & B \\
+$n_{\text{ctx}}$ & Context length the server ends up with & tokens \\
+$n_{\text{ctx,min}}$ & Floor on the context \texttt{--fit} may set, \texttt{--fit-\allowbreak{}ctx}; default 4096 & tokens \\
+\end{longtable}
+\end{small}
+
+\subsection{Keeping mixture-of-\allowbreak{}experts weights in system memory}\label{eq:moe-cpu-offload}
+\provenance{derived}{Derived here}
+\begin{equation}
+S_{\text{gpu}} \;\approx\; S_{w} - N_{\text{cpu}}\,\frac{S_{\text{exp}}}{n_{\text{moe}}}, \qquad t_{\text{tok}} \;\approx\; \frac{S_{\text{act}} - N_{\text{cpu}}\,a}{B_{\text{gpu}}} + \frac{N_{\text{cpu}}\,a}{B_{\text{cpu}}}, \qquad a \;=\; \frac{k}{E}\,\frac{S_{\text{exp}}}{n_{\text{moe}}}
+\end{equation}
+\texttt{--n-\allowbreak{}cpu-\allowbreak{}moe N} "keep[s] the Mixture of Experts (MoE) weights of the first N layers in the CPU"\hyperref[ref:43]{[43]}. The relation shows why that costs so much less speed than lowering \texttt{-ngl} by the same memory: a token reads only the $ k $ routed experts of each layer, so the CPU streams a fraction $ k/\allowbreak{}E $ of those layers' expert bytes, not all of them.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item Split the weights into expert tensors $ S_{\text{exp}} $, spread over $ n_{\text{moe}} $ MoE layers, and everything else (attention, shared experts, embeddings). Assume the expert bytes are equal across MoE layers.
+    
+  \item Moving the experts of $ N_{\text{cpu}} $ layers to system memory removes $ N_{\text{cpu}}\,S_{\text{exp}}/n_{\text{moe}} $ from the card, which gives $ S_{\text{gpu}} $.
+    
+  \item Each layer has $ E $ experts and routes each token to $ k $ of them, so a token reads $ a = (k/\allowbreak{}E)\,S_{\text{exp}}/n_{\text{moe}} $ expert bytes per MoE layer. This is the per-\allowbreak{}layer form of the active-\allowbreak{}parameter relation on the model page.
+    
+  \item By the bandwidth-\allowbreak{}ceiling argument, the GPU part of a token costs its bytes over $ B_{\text{gpu}} $ and the CPU part its bytes over $ B_{\text{cpu}} $. The two run in sequence for one token, so they add, giving $ t_{\text{tok}} $.
+    
+  \item Neglected: moving activations across PCIe (small per token), CPU compute speed (the CPU side can be compute-\allowbreak{}bound rather than bandwidth-\allowbreak{}bound), and the optional \texttt{--moe-\allowbreak{}cache-\allowbreak{}mib} GPU cache for offloaded experts\hyperref[ref:43]{[43]}. Treat $ t_{\text{tok}} $ as a lower bound and measure.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the expert-\allowbreak{}offload relation.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$S_{\text{gpu}}$ & Weight bytes left on the GPU & B \\
+$S_{w}$ & Total weight footprint & B \\
+$S_{\text{exp}}$ & Bytes of all routed-\allowbreak{}expert tensors & B \\
+$n_{\text{moe}}$ & Number of MoE layers & dimensionless \\
+$N_{\text{cpu}}$ & Layers whose experts stay in system memory, the \texttt{--n-\allowbreak{}cpu-\allowbreak{}moe} value & dimensionless \\
+$S_{\text{act}}$ & Bytes read per token with everything on the GPU & B \\
+$a$ & Expert bytes read per token per MoE layer & B \\
+$k,\;E$ & Experts routed per token, and experts per layer & dimensionless \\
+$B_{\text{gpu}},\;B_{\text{cpu}}$ & Memory bandwidth of the card and of system memory & B s\textsuperscript{−1} \\
+$t_{\text{tok}}$ & Time per generated token, lower bound & s \\
+\end{longtable}
+\end{small}
+
+\subsection{\texorpdfstring{Share of the model each GPU receives under \texttt{--tensor-\allowbreak{}split}}{Share of the model each GPU receives under \texttt{-{}-tensor-\allowbreak{}split}}}\label{eq:tensor-split}
+\provenance{derived}{Derived here}
+\begin{equation}
+f_{i} \;=\; \frac{t_{i}}{\sum_{j=1}^{G} t_{j}}, \qquad S_{w,i} \;\approx\; f_{i}\,S_{w}, \qquad t_{i} \;\propto\; V_{\text{tot},i} - V_{\text{rt},i} \;\;\text{to balance free memory}
+\end{equation}
+The option takes "a comma-\allowbreak{}separated list of proportions, e.g. 3,1" giving the "fraction of the model to offload to each GPU"\hyperref[ref:43]{[43]}. Proportions are normalised, so \texttt{3,1} and \texttt{75,25} mean the same split.
+\begin{derivation}
+\begin{enumerate}
+
+    
+  \item A list of proportions describes a split only once normalised, which gives $ f_{i} = t_{i}/\sum_j t_{j} $ with $ \sum_i f_{i} = 1 $.
+    
+  \item In the default \texttt{layer} mode whole layers are assigned, so $ S_{w,i} \approx f_{i}\,S_{w} $ holds to within one layer's size.
+    
+  \item For two unequal cards, setting $ t_{i} $ to each card's memory after its runtime reservation gives both the same fraction of free memory. Because the cache is split with the layers, the cache then divides in the same proportion.
+  
+\end{enumerate}
+\end{derivation}
+\begin{small}
+\begin{longtable}{@{}p{0.13\linewidth} p{0.55\linewidth} p{0.24\linewidth}@{}}
+\caption{Symbols in the tensor-\allowbreak{}split relation.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$t_{i}$ & The $i$-th value passed to \texttt{--tensor-\allowbreak{}split} & dimensionless \\
+$f_{i}$ & Fraction of the model placed on GPU $i$ & dimensionless \\
+$G$ & Number of GPUs in the split & dimensionless \\
+$S_{w,i},\;S_{w}$ & Weight bytes on GPU $i$, and in total & B \\
+$V_{\text{tot},i},\;V_{\text{rt},i}$ & Total memory and runtime reservation of GPU $i$ & B \\
+\end{longtable}
+\end{small}
+
+\part{Model catalogue}\label{part:models}
+
+
+\chapter{The shortlist}
+
+Every model here carries tool-calling support, which is the hard gate: a
+model that cannot call a tool cannot drive a build however good its code is.
+Figures are those published on each model's distribution page on the date in
+the reference list. Model pages are revised in place, so re-read a tag before
+buying hardware on the strength of it.
+
+
+\begin{small}
+\begin{longtable}{@{}p{0.185\linewidth} l r p{0.105\linewidth} p{0.135\linewidth} p{0.165\linewidth} l@{}}
+\caption{Tool-calling code and agent models, with the figures published on each model's distribution page. Context is in tokens. The Architecture column distinguishes a dense model, whose whole weight set is read per token, from a routed mixture of experts, which occupies the card like its total size and streams like its active subset.}\\
+\toprule
+\textbf{Tag} & \textbf{Size} & \textbf{Context} & \textbf{Quant} & \textbf{Capabilities} & \textbf{Architecture} & \textbf{Ref.} \\
+\midrule \endfirsthead
+\toprule
+\textbf{Tag} & \textbf{Size} & \textbf{Context} & \textbf{Quant} & \textbf{Capabilities} & \textbf{Architecture} & \textbf{Ref.} \\
+\midrule \endhead
+\bottomrule \endfoot
+\texttt{nemotron-3-nano:4b} & 2.8-2.9 GB & 262,144 & None & tools, thinking & dense & [34] \\
+\texttt{qwen2.5-coder:7b} & 4.7 GB & 32,768 & None & tools & dense & [12] \\
+\texttt{gpt-oss:20b} & 14 GB & 131,072 & MXFP4, 4.25 bit/parameter & tools, thinking & dense & [16] \\
+\texttt{devstral-small-2:24b} & 15 GB & 393,216 & None & tools, vision & dense & [13] \\
+\texttt{laguna-xs-2.1:q4\_K\_M} & 20 GB & 262,144 & Q4\_K\_M & tools, thinking & dense & [15] \\
+\texttt{qwen3-coder:30b} & 19 GB & 262,144 & None & tools & dense & [11] \\
+\texttt{qwen3.6:35b} & 23-24 GB & 262,144 & None & tools, thinking, vision & dense & [14] \\
+\texttt{qwen3-coder-next:q4\_K\_M} & 52 GB & 262,144 & q4\_K\_M & tools & 80B total / 3B active & [33] \\
+\end{longtable}
+\end{small}
+
+\section{Fit by VRAM budget}
+
+
+Derived from the catalogue by the same rule the homepage planner applies: a
+model fits when its weight file, the runtime reservation and at least 1\,GB
+of cache all sit on the card. A model that is resident but cannot hold a
+useful prompt is not a fit.
+
+
+\begin{small}
+\begin{longtable}{@{}r r p{0.30\linewidth} l r@{}}
+\caption{Models that fit each VRAM budget, computed from the catalogue. Headroom is what remains for the key/value cache after the weights and the runtime reservation, in GB. The largest model that fits is not automatically the right choice: a smaller one leaves more room for context, and context is what an agent loop consumes.}\\
+\toprule
+\textbf{VRAM (GB)} & \textbf{Fit} & \textbf{Largest that fits} & \textbf{Size} & \textbf{Headroom} \\
+\midrule \endfirsthead
+\toprule
+\textbf{VRAM (GB)} & \textbf{Fit} & \textbf{Largest that fits} & \textbf{Size} & \textbf{Headroom} \\
+\midrule \endhead
+\bottomrule \endfoot
+8 & 2 & \texttt{qwen2.5-coder:7b} & 4.7 GB & 2.1 \\
+12 & 2 & \texttt{qwen2.5-coder:7b} & 4.7 GB & 6.1 \\
+16 & 2 & \texttt{qwen2.5-coder:7b} & 4.7 GB & 10.1 \\
+24 & 6 & \texttt{laguna-xs-2.1:q4\_K\_M} & 20 GB & 2.8 \\
+32 & 7 & \texttt{qwen3.6:35b} & 23-24 GB & 6.8 \\
+48 & 7 & \texttt{qwen3.6:35b} & 23-24 GB & 22.8 \\
+64 & 8 & \texttt{qwen3-coder-next:q4\_K\_M} & 52 GB & 10.8 \\
+96 & 8 & \texttt{qwen3-coder-next:q4\_K\_M} & 52 GB & 42.8 \\
+\end{longtable}
+\end{small}
+
+\part{Configuration reference}\label{part:config}
+
+
+\chapter{Settings that decide whether this works}
+
+Extracted from the page set. Every name is quoted from the vendor
+documentation cited beside it; where a default is stated, it is the
+documented default and not an assumption.
+
+
+\section{GPU configuration}
+
+\begin{small}
+\begin{longtable}{@{}p{0.132\linewidth} p{0.182\linewidth} p{0.182\linewidth} p{0.182\linewidth} p{0.182\linewidth}@{}}
+\caption{NVIDIA architectures in the cards this set is likely to meet. Compute capability and example cards from Ollama's hardware table[40] (NVIDIA's own list is [49]); CUDA 13 support from the CUDA 13.5 release notes[45] and llama.\allowbreak{}cpp's build file[44]; driver minimums from Ollama[40].}\\
+\toprule
+\textbf{Compute capability} & \textbf{Architecture} & \textbf{Example cards} & \textbf{Can CUDA 13.5 build for it?} & \textbf{Ollama minimum driver} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Compute capability} & \textbf{Architecture} & \textbf{Example cards} & \textbf{Can CUDA 13.5 build for it?} & \textbf{Ollama minimum driver} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+12.0 & Blackwell & RTX 5060 to RTX 5090 & Yes, toolkit 12.8 or newer[44] & 550 \\
+8.9 & Ada & RTX 4060 to RTX 4090 & Yes & 550 \\
+8.6 & Ampere & RTX 3060 to RTX 3090 Ti & Yes & 550 \\
+7.5 & Turing & GTX 1650 Ti, RTX 2060 to RTX 2080 Ti, TITAN RTX & Yes & 550 \\
+7.0 & Volta & TITAN V, V100 & \textbf{No}: use CUDA 12.x & 550 \\
+6.1 & Pascal & GTX 1050 to GTX 1080 Ti, TITAN Xp & \textbf{No}: use CUDA 12.x & \textbf{570} \\
+5.0, 5.2 & Maxwell & GTX 750 to GTX 980 Ti & \textbf{No}: use CUDA 12.x & \textbf{570} \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{CUDA toolkit lines, the minimum Windows driver each needs, the Visual Studio versions its installation guide lists as host compilers, and the architectures llama.\allowbreak{}cpp builds for with it. “Not checked” means that guide was not read, not that the pairing fails.}\\
+\toprule
+\textbf{Toolkit} & \textbf{Windows driver} & \textbf{Visual Studio host compiler} & \textbf{Builds for compute capability} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Toolkit} & \textbf{Windows driver} & \textbf{Visual Studio host compiler} & \textbf{Builds for compute capability} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+CUDA 13.5 & R620 branch[45] & 2019, 2022, 2026[46] & 7.5 and newer \\
+CUDA 13.0 & R580 branch[45] & not checked & 7.5 and newer \\
+CUDA 12.9 Update 1 & 576.57 or newer[45] & 2019, 2022 only[47] & 5.0 and newer[44] \\
+CUDA 12.8 GA & 570.65 or newer[45] & not checked & 5.0 and newer; first with Blackwell[44] \\
+CUDA 12.6 Update 3 & 561.17 or newer[45] & not checked & 5.0 and newer \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{Install sets by situation. The driver ceiling for older cards comes from a press report of NVIDIA's schedule[59] secondary source; the rest from the table above.}\\
+\toprule
+\textbf{Situation} & \textbf{Driver} & \textbf{Toolkit} & \textbf{Compiler} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Situation} & \textbf{Driver} & \textbf{Toolkit} & \textbf{Compiler} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Running Ollama only, any supported card & 550 or newer; 570 or newer for compute capability 5.0–6.2[40] & none & none \\
+Building llama.\allowbreak{}cpp, Turing (7.5) or newer & Current, R620 branch for CUDA 13.5 & CUDA 13.5 & Build Tools 2026 or 2022 \\
+Building llama.\allowbreak{}cpp, Pascal / Maxwell / Volta & 570–580 series; R580 is reported as the last branch for these cards[59] & CUDA 12.9 Update 1, or the 12.6 / 12.8 installers already in the folder & \textbf{Build Tools 2022}; CUDA 12.9 does not list 2026[47] \\
+Building for RTX 50-\allowbreak{}series (Blackwell) & Current & 12.8 or newer; 13.5 preferred & 2026 or 2022 \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Runtime CUDA variables that llama.\allowbreak{}cpp documents[42].}\\
+\toprule
+\textbf{Variable} & \textbf{Effect} & \textbf{When to use it} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Variable} & \textbf{Effect} & \textbf{When to use it} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{CUDA\_\allowbreak{}VISIBLE\_\allowbreak{}DEVICES} & Hides devices from the process; llama.\allowbreak{}cpp's example uses \texttt{"-0"} to hide the first one & Keep a display card or a second job's card out of the model \\
+\texttt{GGML\_\allowbreak{}CUDA\_\allowbreak{}ENABLE\_\allowbreak{}UNIFIED\_\allowbreak{}MEMORY=\allowbreak{}1} & On Linux, "allows swapping to system RAM instead of crashing when the GPU VRAM is exhausted" & A model slightly too large for the card, accepting a large speed loss \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Which AMD cards Ollama runs through ROCm, by platform[40], and which AMD supports for ROCm inside WSL[52]. Cards outside a row's list fall back to Vulkan.}\\
+\toprule
+\textbf{Platform} & \textbf{Requirement} & \textbf{Supported Radeon cards (abridged)} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Platform} & \textbf{Requirement} & \textbf{Supported Radeon cards (abridged)} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Linux & ROCm v7 driver, installed with \texttt{amdgpu-\allowbreak{}install} & RX 9070 / 9060 series, RX 7900 to 7600 series, RX 6950 XT to 6800, Radeon PRO W7000 and W6000 series, Ryzen AI Max and HX series \\
+Windows & ROCm v7 / HIP7-\allowbreak{}capable driver stack & RX 7900 XTX, 7900 XT, 7900 GRE, 7800 XT, 7700 XT, 7600 XT, 7600; Radeon PRO W7900 to W7500 \\
+WSL 2 & ROCm 7.2.1 with Adrenalin 26.1.1 for WSL2; Ubuntu 22.04 or 24.04 & RX 9070 / 9060 series, AI PRO R9700 / R9600D, RX 7900 XTX / XT / GRE, RX 7800 XT, RX 7700 / 7700 XT, PRO W7900 / W7800 / W7700 \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{The remaining hardware routes.}\\
+\toprule
+\textbf{Hardware} & \textbf{Ollama} & \textbf{llama.\allowbreak{}cpp} & \textbf{Notes} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Hardware} & \textbf{Ollama} & \textbf{llama.\allowbreak{}cpp} & \textbf{Notes} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Intel Arc and integrated GPUs & Vulkan; bundled with the driver on Windows[40] & Vulkan, or SYCL with \texttt{-DGGML\_\allowbreak{}SYCL=\allowbreak{}ON} and the oneAPI toolkit[42] & SYCL needs oneAPI on the build machine only \\
+Apple silicon & Metal[40] & Metal, on by default on macOS[42] & Unified memory: the model shares RAM with the system \\
+CPU only & Automatic when no GPU qualifies & Default build & Speed is bounded by system memory bandwidth; see the model page \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{Device-\allowbreak{}selection settings, by library. All of them are read when the server process starts, so set them in the service definition, not in an interactive shell.}\\
+\toprule
+\textbf{Setting} & \textbf{Applies to} & \textbf{Values} & \textbf{Source} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Setting} & \textbf{Applies to} & \textbf{Values} & \textbf{Source} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{CUDA\_\allowbreak{}VISIBLE\_\allowbreak{}DEVICES} & NVIDIA (Ollama, llama.\allowbreak{}cpp) & Comma-\allowbreak{}separated IDs; UUIDs from \texttt{nvidia-\allowbreak{}smi -L} are more reliable than indices; an invalid ID such as \texttt{-1} forces CPU & [40][42] \\
+\texttt{ROCR\_\allowbreak{}VISIBLE\_\allowbreak{}DEVICES} & AMD ROCm (Ollama) & IDs or \texttt{Uuid} from \texttt{rocminfo}; \texttt{-1} forces CPU & [40] \\
+\texttt{GGML\_\allowbreak{}VK\_\allowbreak{}VISIBLE\_\allowbreak{}DEVICES} & Vulkan (Ollama, llama.\allowbreak{}cpp) & Numeric IDs; \texttt{-1} disables all Vulkan GPUs. On iGPU + dGPU systems, set it to the discrete card & [40] \\
+\texttt{OLLAMA\_\allowbreak{}VULKAN=\allowbreak{}0} & Ollama & Disables the Vulkan backend entirely & [40] \\
+\texttt{--device} / \texttt{--list-\allowbreak{}devices} & llama.\allowbreak{}cpp & Comma-\allowbreak{}separated device names to offload to (\texttt{none} = no offload); \texttt{--list-\allowbreak{}devices} prints the names & [43] \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Ollama server settings that affect GPU placement[41].}\\
+\toprule
+\textbf{Variable} & \textbf{What it does} & \textbf{Why it matters here} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Variable} & \textbf{What it does} & \textbf{Why it matters here} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{OLLAMA\_\allowbreak{}FLASH\_\allowbreak{}ATTENTION} & Unset: used automatically where backend and device support it; \texttt{1} forces it on, \texttt{0} off[9] & Precondition for a quantised cache \\
+\texttt{OLLAMA\_\allowbreak{}KV\_\allowbreak{}CACHE\_\allowbreak{}TYPE} & Key/\allowbreak{}value cache type (default \texttt{f16}) & Halves the cache at \texttt{q8\_\allowbreak{}0}; see section 10 \\
+\texttt{OLLAMA\_\allowbreak{}CONTEXT\_\allowbreak{}LENGTH} & Context length; \texttt{0} means pick from VRAM & Explicit value overrides the VRAM tiers \\
+\texttt{OLLAMA\_\allowbreak{}NUM\_\allowbreak{}PARALLEL} & Maximum parallel requests; default 1 & Each slot needs its own cache \\
+\texttt{OLLAMA\_\allowbreak{}MAX\_\allowbreak{}LOADED\_\allowbreak{}MODELS} & Maximum loaded models per GPU & Two models need room for both \\
+\texttt{OLLAMA\_\allowbreak{}SCHED\_\allowbreak{}SPREAD} & Always schedule a model across all GPUs & Multi-\allowbreak{}GPU machines; section 11 \\
+\texttt{OLLAMA\_\allowbreak{}GPU\_\allowbreak{}OVERHEAD} & VRAM to reserve per GPU, in bytes; default 0 & A card that also drives displays \\
+\texttt{OLLAMA\_\allowbreak{}KEEP\_\allowbreak{}ALIVE} & How long models stay loaded; default \texttt{5m} & Reload cost versus VRAM held \\
+\texttt{OLLAMA\_\allowbreak{}LLM\_\allowbreak{}LIBRARY} & Sets the runtime library, bypassing autodetection & Diagnosis only \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{llama.\allowbreak{}cpp placement options[43]. Every option with an environment name can be set that way instead, which is convenient in an NSSM service definition.}\\
+\toprule
+\textbf{Option} & \textbf{Environment} & \textbf{Default} & \textbf{Meaning} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Option} & \textbf{Environment} & \textbf{Default} & \textbf{Meaning} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{--fit on|off} & \texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}FIT} & \texttt{on} & Adjust unset arguments to fit device memory \\
+\texttt{--fit-\allowbreak{}target MiB0,MiB1,...} & — & 1024 per device & Free margin to leave on each device \\
+\texttt{--fit-\allowbreak{}ctx N} & \texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}FIT\_\allowbreak{}CTX} & 4096 & Smallest context --fit may choose \\
+\texttt{--fit-\allowbreak{}print on|off} & — & \texttt{off} & Print the memory estimate \\
+\texttt{-ngl, --n-\allowbreak{}gpu-\allowbreak{}layers} & \texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}N\_\allowbreak{}GPU\_\allowbreak{}LAYERS} & \texttt{auto} & An exact number, \texttt{auto} or \texttt{all} \\
+\texttt{-c, --ctx-\allowbreak{}size} & \texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}CTX\_\allowbreak{}SIZE} & \texttt{0} (from the model) & Context length \\
+\texttt{-np, --parallel} & \texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}N\_\allowbreak{}PARALLEL} & \texttt{-1} (auto) & Server slots; each holds cache \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Symbols in the fit-\allowbreak{}margin condition.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$V_{\text{tot},d}$ & Total memory of device $d$ & B \\
+$S_{w,d}$ & Weight bytes placed on device $d$ & B \\
+$S_{kv,d}$ & Key/\allowbreak{}value cache bytes placed on device $d$ & B \\
+$V_{\text{rt},d}$ & Runtime, driver and compute-\allowbreak{}buffer reservation on device $d$ & B \\
+$m_{\text{fit},d}$ & Target free margin, \texttt{--fit-\allowbreak{}target}; default 1024 MiB & B \\
+$n_{\text{ctx}}$ & Context length the server ends up with & tokens \\
+$n_{\text{ctx,min}}$ & Floor on the context \texttt{--fit} may set, \texttt{--fit-\allowbreak{}ctx}; default 4096 & tokens \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Symbols in the layer-\allowbreak{}offload relation. All memory symbols carry the meanings established in the cache and footprint relations.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$n_{\text{gpu}}$ & Layers to place on the accelerator, the \texttt{-ngl} argument & dimensionless \\
+$n_{\ell}$ & Total transformer layers in the model & dimensionless \\
+$V_{\text{tot}}$ & Total device memory & B \\
+$V_{\text{rt}}$ & Runtime, driver and compute-\allowbreak{}buffer reservation & B \\
+$S_{kv}$ & Key/\allowbreak{}value cache size for the chosen context and parallelism & B \\
+$S_{w}$ & Total weight footprint & B \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{llama.\allowbreak{}cpp mixture-of-\allowbreak{}experts placement options[43].}\\
+\toprule
+\textbf{Option} & \textbf{Environment} & \textbf{Meaning} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Option} & \textbf{Environment} & \textbf{Meaning} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{-cmoe, --cpu-\allowbreak{}moe} & \texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}CPU\_\allowbreak{}MOE} & Keep all MoE weights in the CPU \\
+\texttt{-ncmoe, --n-\allowbreak{}cpu-\allowbreak{}moe N} & \texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}N\_\allowbreak{}CPU\_\allowbreak{}MOE} & Keep the MoE weights of the first N layers in the CPU \\
+\texttt{--moe-\allowbreak{}cache-\allowbreak{}mib N} & — & GPU cache for the experts kept in the CPU; default 0 (disabled) \\
+\texttt{-ot, --override-\allowbreak{}tensor} & \texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}OVERRIDE\_\allowbreak{}TENSOR} & Override the buffer type of tensors matching a name pattern; the general form of the options above \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Symbols in the expert-\allowbreak{}offload relation.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$S_{\text{gpu}}$ & Weight bytes left on the GPU & B \\
+$S_{w}$ & Total weight footprint & B \\
+$S_{\text{exp}}$ & Bytes of all routed-\allowbreak{}expert tensors & B \\
+$n_{\text{moe}}$ & Number of MoE layers & dimensionless \\
+$N_{\text{cpu}}$ & Layers whose experts stay in system memory, the \texttt{--n-\allowbreak{}cpu-\allowbreak{}moe} value & dimensionless \\
+$S_{\text{act}}$ & Bytes read per token with everything on the GPU & B \\
+$a$ & Expert bytes read per token per MoE layer & B \\
+$k,\;E$ & Experts routed per token, and experts per layer & dimensionless \\
+$B_{\text{gpu}},\;B_{\text{cpu}}$ & Memory bandwidth of the card and of system memory & B s\textsuperscript{−1} \\
+$t_{\text{tok}}$ & Time per generated token, lower bound & s \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Symbols in the key/\allowbreak{}value cache relation. The architectural quantities are read from the model card or from \texttt{ollama show <tag>}; the operational ones are set on the command line.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$S_{kv}$ & Total key/\allowbreak{}value cache size held in VRAM or RAM & B \\
+$n_{\ell}$ & Number of transformer layers & dimensionless \\
+$n_{kv}$ & Key/\allowbreak{}value heads per layer (equal to the query-\allowbreak{}head count only when grouped-\allowbreak{}query attention is not used) & dimensionless \\
+$d_{h}$ & Head dimension & dimensionless \\
+$L_{\text{ctx}}$ & Context length the cache is allocated for, \texttt{--ctx-\allowbreak{}size} or \texttt{OLLAMA\_\allowbreak{}CONTEXT\_\allowbreak{}LENGTH}. Ollama's default is chosen from available VRAM — 4k below 24 GiB, 32k from 24 to 48 GiB, 256k at 48 GiB and above — and its documentation asks for at least 64000 for agent and coding work[35] & token \\
+$n_{\text{seq}}$ & Concurrent sequences, \texttt{--parallel} in \texttt{llama-\allowbreak{}server} or \texttt{OLLAMA\_\allowbreak{}NUM\_\allowbreak{}PARALLEL} & dimensionless \\
+$b_{kv}$ & Bytes per cached element, set by the cache data type: \texttt{f16} = 2 (default), \texttt{q8\_\allowbreak{}0} = 1, \texttt{q4\_\allowbreak{}0} = 0.5. Anything below 2 requires Flash Attention, is a \textit{global} setting applying to every loaded model, and costs some precision — more so on a high-\allowbreak{}GQA architecture[9] & B \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{Cache and attention settings in both runtimes[41][43].}\\
+\toprule
+\textbf{Setting} & \textbf{Runtime} & \textbf{Default} & \textbf{Notes} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Setting} & \textbf{Runtime} & \textbf{Default} & \textbf{Notes} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{-fa, --flash-\allowbreak{}attn} & llama.\allowbreak{}cpp & \texttt{auto} & Picks the Flash Attention kernel where the backend supports it \\
+\texttt{OLLAMA\_\allowbreak{}FLASH\_\allowbreak{}ATTENTION} & Ollama & automatic where supported[9] & Must be in effect for a quantised cache to save memory \\
+\texttt{-ctk / -ctv} & llama.\allowbreak{}cpp & \texttt{f16} & Separate K and V cache types \\
+\texttt{OLLAMA\_\allowbreak{}KV\_\allowbreak{}CACHE\_\allowbreak{}TYPE} & Ollama & \texttt{f16} & \texttt{q8\_\allowbreak{}0} about halves the cache, \texttt{q4\_\allowbreak{}0} about quarters it; global to all models[9] \\
+\texttt{-nkvo, --no-kv-\allowbreak{}offload} & llama.\allowbreak{}cpp & offload on & Keeps the cache in system memory: frees VRAM, costs speed \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{llama.\allowbreak{}cpp split modes, \texttt{-sm, --split-\allowbreak{}mode}[43].}\\
+\toprule
+\textbf{Mode} & \textbf{What is split} & \textbf{Use} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Mode} & \textbf{What is split} & \textbf{Use} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{none} & Nothing: one GPU only, chosen with \texttt{-mg} & A model that fits on one card \\
+\texttt{layer} (default) & Layers and cache, pipelined & The general case \\
+\texttt{row} & Weights by rows, in parallel; \texttt{-mg} holds intermediate results and cache & Equal cards with a fast interconnect \\
+\texttt{tensor} & Weights and cache, in parallel; marked experimental & Testing only \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Symbols in the tensor-\allowbreak{}split relation.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$t_{i}$ & The $i$-th value passed to \texttt{--tensor-\allowbreak{}split} & dimensionless \\
+$f_{i}$ & Fraction of the model placed on GPU $i$ & dimensionless \\
+$G$ & Number of GPUs in the split & dimensionless \\
+$S_{w,i},\;S_{w}$ & Weight bytes on GPU $i$, and in total & B \\
+$V_{\text{tot},i},\;V_{\text{rt},i}$ & Total memory and runtime reservation of GPU $i$ & B \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{GPU access from containers, by host.}\\
+\toprule
+\textbf{Host} & \textbf{NVIDIA} & \textbf{AMD} & \textbf{Source} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Host} & \textbf{NVIDIA} & \textbf{AMD} & \textbf{Source} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Windows, Docker Desktop & Yes, through WSL 2 GPU paravirtualisation: needs the WSL 2 backend, a current NVIDIA driver with WSL 2 support, and \texttt{wsl --update}. Pass \texttt{--gpus=\allowbreak{}all} & Not covered by Docker Desktop's \texttt{--gpus} support, which it describes for NVIDIA GPUs & [51] \\
+Linux, Docker Engine & Install the NVIDIA Container Toolkit, run \texttt{sudo nvidia-\allowbreak{}ctk runtime configure --runtime=\allowbreak{}docker}, restart Docker, then pass \texttt{--gpus=\allowbreak{}all} & Pass \texttt{--device /dev/\allowbreak{}kfd --device /dev/\allowbreak{}dri} and use a ROCm image such as \texttt{ollama/\allowbreak{}ollama:rocm} & [50][89] \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{GPU exporters that work, by vendor and host.}\\
+\toprule
+\textbf{Vendor} & \textbf{Host} & \textbf{Exporter and install} & \textbf{Source} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Vendor} & \textbf{Host} & \textbf{Exporter and install} & \textbf{Source} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+NVIDIA & Windows & \texttt{nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter}: \texttt{winget install --scope machine utkuozdemir.\allowbreak{}nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter}, then \texttt{nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter install --collect.\allowbreak{}backend=\allowbreak{}nvml}; port 9835; a native service, no NSSM & [56] \\
+NVIDIA & Linux & \texttt{nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter} from its \texttt{.deb}, \texttt{.rpm} or tarball & [56] \\
+AMD, Intel, NVIDIA & Windows & \texttt{windows\_\allowbreak{}exporter} with the \texttt{gpu} collector turned on; vendor-\allowbreak{}neutral, from the same Windows counters Task Manager reads & [55][86] \\
+AMD & WSL & \textbf{Not possible}: \texttt{amd-\allowbreak{}smi} is unsupported under WSL & [53] \\
+AMD & Linux & AMD Device Metrics Exporter, which replaces \texttt{amd\_\allowbreak{}smi\_\allowbreak{}exporter}; its README describes Instinct accelerators and Radeon support was not confirmed & [57][58] \\
+Any & Any & \texttt{llama-\allowbreak{}server --metrics}: token rate, queue and cache use, which is load as the model sees it & [39] \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Symbols in the counter-\allowbreak{}based utilisation relation, applicable to GPU busy time, CPU time and any other cumulative seconds counter.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$U(w)$ & Mean utilisation over the window & dimensionless (×100 for per cent) \\
+$c(t)$ & Cumulative busy-\allowbreak{}seconds counter at time $t$ & s \\
+$w$ & Range-\allowbreak{}vector window & s \\
+$n_{\text{dev}}$ & Devices or cores the counter aggregates & dimensionless \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{Symptoms, causes and checks.}\\
+\toprule
+\textbf{Symptom} & \textbf{Likely cause} & \textbf{Check or fix} & \textbf{Source} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symptom} & \textbf{Likely cause} & \textbf{Check or fix} & \textbf{Source} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\texttt{ollama ps} shows CPU or a CPU/\allowbreak{}GPU split & Driver below the minimum for the card; card not on the ROCm list; model plus cache larger than VRAM & Driver version against section 1; card against section 3; the fit relation on the model page & [40][9] \\
+CUDA 13 build fails for a GTX 10-\allowbreak{}series card & CUDA 13 cannot target compute capability below 7.5 & Use CUDA 12.x & [45][44] \\
+\texttt{nvcc} rejects the Visual Studio version & CUDA 12.x with Visual Studio 2026 & Use Build Tools 2022 with CUDA 12.x & [47] \\
+llama.\allowbreak{}cpp context is smaller than requested & --fit reduced it to meet the per-\allowbreak{}device margin & Run with \texttt{--fit-\allowbreak{}print on}; raise \texttt{--n-\allowbreak{}cpu-\allowbreak{}moe} or quantise the cache & [43] \\
+Out-of-\allowbreak{}memory part-\allowbreak{}way through loading & Explicit \texttt{-ngl} too high, so --fit does not adjust it & Remove \texttt{-ngl}, or use the layer-\allowbreak{}count relation in section 8 & [43] \\
+No AMD GPU metrics from inside WSL & \texttt{amd-\allowbreak{}smi} is unsupported under WSL & Use the \texttt{windows\_\allowbreak{}exporter} gpu collector on the Windows host & [53][55] \\
+GPU panel empty after upgrading windows\_\allowbreak{}exporter & Metric renamed to \texttt{...\_\allowbreak{}total} in 0.32 & Update the panel query & [55] \\
+Wrong card used on a machine with an iGPU & Vulkan picked the integrated GPU & Set \texttt{GGML\_\allowbreak{}VK\_\allowbreak{}VISIBLE\_\allowbreak{}DEVICES} to the discrete card & [40] \\
+NVIDIA GPU lost after suspend on Linux & Driver bug documented by Ollama & \texttt{sudo rmmod nvidia\_\allowbreak{}uvm \&\& sudo modprobe nvidia\_\allowbreak{}uvm} & [40] \\
+\end{longtable}
+\end{small}
+
+\section{Execution backends and environment}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Open Terminal package-\allowbreak{}installation variables, which apply to the Docker image only, with the values this deployment uses for C++ and Python work.}\\
+\toprule
+\textbf{Variable} & \textbf{Installs} & \textbf{Value used here} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Variable} & \textbf{Installs} & \textbf{Value used here} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+OPEN\_\allowbreak{}TERMINAL\_\allowbreak{}PACKAGES & System packages & build-\allowbreak{}essential cmake ninja-\allowbreak{}build git pkg-\allowbreak{}config \\
+OPEN\_\allowbreak{}TERMINAL\_\allowbreak{}PIP\_\allowbreak{}PACKAGES & Python packages & pytest numpy scipy h5py \\
+OPEN\_\allowbreak{}TERMINAL\_\allowbreak{}NPM\_\allowbreak{}PACKAGES & npm packages & unset \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{Open Terminal settings with a direct bearing on blast radius, with the documented default and the value recommended for a home network.}\\
+\toprule
+\textbf{Setting} & \textbf{Default} & \textbf{Recommended} & \textbf{Why} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Setting} & \textbf{Default} & \textbf{Recommended} & \textbf{Why} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+OPEN\_\allowbreak{}TERMINAL\_\allowbreak{}ALLOWED\_\allowbreak{}DOMAINS & None & Your package indexes only, \textbf{with \texttt{--cap-\allowbreak{}add NET\_\allowbreak{}ADMIN}} & An egress firewall: only the listed domains \textit{and their subdomains} are reachable[36]. Unset means unrestricted egress. \textbf{It installs dnsmasq and iptables in the container, so it needs \texttt{NET\_\allowbreak{}ADMIN}; set without it, the allowlist silently does nothing} \\
+OPEN\_\allowbreak{}TERMINAL\_\allowbreak{}CORS\_\allowbreak{}ALLOWED\_\allowbreak{}ORIGINS & * & Your Open WebUI origin & A start-up warning is emitted when it is unset[6] \\
+OPEN\_\allowbreak{}TERMINAL\_\allowbreak{}EXECUTE\_\allowbreak{}TIMEOUT & Unset & Longer than your slowest clean build & Seconds to wait for command output[6]. Unset plus a 40-\allowbreak{}minute build is an agent that appears to hang \\
+OPEN\_\allowbreak{}TERMINAL\_\allowbreak{}FILE\_\allowbreak{}BROWSER\_\allowbreak{}ROOT & home & /workspace & Accepts \texttt{home}, an explicit path, or \texttt{filesystem}[6]. \texttt{filesystem} exposes the whole container \\
+OPEN\_\allowbreak{}TERMINAL\_\allowbreak{}MAX\_\allowbreak{}SESSIONS & 16 & 2–4 for a single user & Caps concurrent terminal sessions[6], which also caps how many builds can be started at once \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Open WebUI variables for the Jupyter execution backend, with the values for a Jupyter server reachable at \texttt{host.\allowbreak{}docker.\allowbreak{}internal:8888}. Names and accepted values are quoted from the Jupyter integration tutorial.}\\
+\toprule
+\textbf{Variable} & \textbf{Value} & \textbf{Note} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Variable} & \textbf{Value} & \textbf{Note} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+ENABLE\_\allowbreak{}CODE\_\allowbreak{}INTERPRETER & True & Global toggle, default \texttt{true}[1] \\
+CODE\_\allowbreak{}EXECUTION\_\allowbreak{}ENGINE & jupyter & The manual Run button \\
+CODE\_\allowbreak{}EXECUTION\_\allowbreak{}JUPYTER\_\allowbreak{}URL & http://host.\allowbreak{}docker.\allowbreak{}internal:8888 & — \\
+CODE\_\allowbreak{}EXECUTION\_\allowbreak{}JUPYTER\_\allowbreak{}AUTH & token & Accepts only \texttt{token} or \texttt{password}; any other value sends no credentials at all \\
+CODE\_\allowbreak{}EXECUTION\_\allowbreak{}JUPYTER\_\allowbreak{}AUTH\_\allowbreak{}TOKEN & your token & Must equal Jupyter's \texttt{JUPYTER\_\allowbreak{}TOKEN} \\
+CODE\_\allowbreak{}EXECUTION\_\allowbreak{}JUPYTER\_\allowbreak{}TIMEOUT & 60 & Seconds; raise it for anything that compiles \\
+CODE\_\allowbreak{}INTERPRETER\_\allowbreak{}ENGINE & jupyter & \textbf{Set this explicitly.} It defaults to \texttt{pyodide} and does \textit{not} inherit from \texttt{CODE\_\allowbreak{}EXECUTION\_\allowbreak{}ENGINE} \\
+CODE\_\allowbreak{}INTERPRETER\_\allowbreak{}JUPYTER\_\allowbreak{}URL & same as above & Defaults to its \texttt{CODE\_\allowbreak{}EXECUTION\_\allowbreak{}*} counterpart \\
+CODE\_\allowbreak{}INTERPRETER\_\allowbreak{}JUPYTER\_\allowbreak{}AUTH & token & Defaults to its counterpart \\
+CODE\_\allowbreak{}INTERPRETER\_\allowbreak{}JUPYTER\_\allowbreak{}AUTH\_\allowbreak{}TOKEN & your token & Defaults to its counterpart \\
+CODE\_\allowbreak{}INTERPRETER\_\allowbreak{}JUPYTER\_\allowbreak{}TIMEOUT & 60 & Defaults to its counterpart \\
+ENABLE\_\allowbreak{}ORJSON & True & On by default; speeds output on the Jupyter engine. Read at start-up, so restart after changing it \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Environment invocation forms, and which to put in a model's system prompt. The \texttt{-n}/\texttt{-p}/\texttt{-f} flags are documented in the conda command reference and the micromamba user guide.}\\
+\toprule
+\textbf{Form} & \textbf{Behaviour} & \textbf{Use in a sandbox} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Form} & \textbf{Behaviour} & \textbf{Use in a sandbox} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+mamba activate Py3p12 & Mutates the current shell; needs the shell hook installed & No. Fails or silently no-\allowbreak{}ops in a fresh shell \\
+mamba run -n Py3p12 <cmd> & Runs one command with the environment applied & \textbf{Yes.} Stateless and the form to standardise on \\
+micromamba run -p /opt/\allowbreak{}envs/\allowbreak{}Py3p12 <cmd> & Same, selecting by full prefix path & Yes, when the environment is outside the configured \texttt{envs\_\allowbreak{}dirs} \\
+/opt/\allowbreak{}envs/\allowbreak{}Py3p12/\allowbreak{}bin/\allowbreak{}python & Calls the interpreter directly & Works, and is the most explicit. Misses environment variables an activation script would set \\
+mamba env create -f env.\allowbreak{}yml -n Py3p12 & Creates from a YAML specification[24] & Setup only, not per task \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.362\linewidth} p{0.497\linewidth}@{}}
+\caption{Build-\allowbreak{}output settings that reduce the number of agent iterations, with the reason each one helps.}\\
+\toprule
+\textbf{Setting} & \textbf{Effect} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Setting} & \textbf{Effect} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+-G "Ninja Multi-\allowbreak{}Config" & Ninja's errors are the compiler's own text. MSBuild interleaves project banners and timing that a model will try to interpret \\
+/diagnostics:caret & MSVC points at the offending column, which is what lets a model find the right line without re-\allowbreak{}reading the file \\
+-fdiagnostics-\allowbreak{}color=\allowbreak{}never & On GCC and Clang, strips ANSI escapes that otherwise reach the model as noise \\
+CMAKE\_\allowbreak{}EXPORT\_\allowbreak{}COMPILE\_\allowbreak{}COMMANDS=\allowbreak{}ON & Writes \texttt{compile\_\allowbreak{}commands.\allowbreak{}json}, so a model can read the exact flags for one file instead of guessing \\
+2>\&1 | Tee-\allowbreak{}Object build.\allowbreak{}log & Keeps the failure on disk. Essential when the output is longer than the tool result the model is handed \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{Model and server settings required for tool-\allowbreak{}driven code execution, with the symptom each produces when it is wrong.}\\
+\toprule
+\textbf{Setting} & \textbf{Where} & \textbf{Required value} & \textbf{Symptom when wrong} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Setting} & \textbf{Where} & \textbf{Required value} & \textbf{Symptom when wrong} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Function Calling & Workspace → Models → edit model & \textbf{Native}, the default as of v0.10.0 & Legacy mode uses prompt-\allowbreak{}based tool calling, is less reliable, and "may not trigger terminal commands"[5] \\
+Code Interpreter capability & Settings → Admin → Models & Enabled per model[1] & The model writes code and never runs it \\
+ENABLE\_\allowbreak{}CODE\_\allowbreak{}EXECUTION & Open WebUI environment & \texttt{true} only if you want the in-\allowbreak{}chat Run button & Separate from \texttt{ENABLE\_\allowbreak{}CODE\_\allowbreak{}INTERPRETER}: this one governs executing code blocks in a response, that one governs the model running code as part of its reasoning. Both default to \texttt{true} on the Pyodide engine, and the hardening guidance is to set them \texttt{false} where code execution is not required[36]. On a deployment driving Open Terminal, neither is needed \\
+OLLAMA\_\allowbreak{}CONTEXT\_\allowbreak{}LENGTH & Ollama server environment & \textbf{64000 or more}, which is the figure Ollama's own documentation gives for agents and coding tools[35] & The default is chosen from VRAM, not fixed: under 24 GiB it is 4k, which a build log plus source plus history overruns immediately — the prompt is truncated and the model loses the error it was fixing. See the note below \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{Ollama's VRAM-\allowbreak{}tiered default context length. The prose column is quoted from the context-\allowbreak{}length documentation; the threshold column is read from \texttt{server/\allowbreak{}routes.go}, which is what the server actually tests. The practical consequence is that the same \texttt{ollama serve} on two machines gives two different windows, so the default cannot be assumed from one node to another.}\\
+\toprule
+\textbf{As documented[35]} & \textbf{As implemented[38]} & \textbf{Default context} & \textbf{Enough for an agent loop?} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{As documented[35]} & \textbf{As implemented[38]} & \textbf{Default context} & \textbf{Enough for an agent loop?} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+< 24 GiB & neither test passes & 4096 & \textbf{No.} One compiler error can exhaust it \\
+24–48 GiB & totalVRAM ≥ 23 GiB & 32768 & Workable for single-\allowbreak{}file edits, short of the documented 64000 for agent work \\
+≥ 48 GiB & totalVRAM ≥ 47 GiB & 262144 & Yes, and likely more than the cache budget actually allows — check it \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Behaviour that is on or off by default in Open Terminal and is easy to miss, with what it means for this deployment.}\\
+\toprule
+\textbf{Behaviour} & \textbf{Default} & \textbf{What it means} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Behaviour} & \textbf{Default} & \textbf{What it means} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Port previews are sandboxed & On & When the model starts a server, the preview frame is a separate origin from Open WebUI, which keeps whatever is running away from your session. \textbf{Settings → Interface → Terminal Preview Allow Same Origin} relaxes it and is off unless you turn it on[36]. Leave it off: the code being previewed is usually code the model just wrote \\
+Admin-\allowbreak{}configured connections & Prefer them & An admin-\allowbreak{}configured connection keeps the API key on the server and routes requests through Open WebUI's backend; a user-\allowbreak{}configured one stores the key in each user's browser and requires every user's machine to reach the terminal directly[36]. This is why §3.4 adds the connection under \textbf{Admin → Integrations} \\
+\texttt{OPEN\_\allowbreak{}TERMINAL\_\allowbreak{}MULTI\_\allowbreak{}USER} & \texttt{false} & Gives each user their own account and home folder inside one container, which keeps people and their agents out of each other's files. It is a workspace split, not an isolation boundary: everyone still shares the kernel[36] \\
+\end{longtable}
+\end{small}
+
+\section{Sandbox policy}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{The three dimensions the sandbox restricts, with the documented default reach and the settings key that adjusts it. Reach and key names are quoted from the sandboxing documentation.}\\
+\toprule
+\textbf{Dimension} & \textbf{Default reach} & \textbf{Settings keys} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Dimension} & \textbf{Default reach} & \textbf{Settings keys} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\textbf{Writes} & "The working directory, a per-\allowbreak{}user temp directory, and directories you've added" with \texttt{--add-\allowbreak{}dir}, \texttt{/add-\allowbreak{}dir} or \texttt{permissions.\allowbreak{}additionalDirectories}[23]. Protected paths stay write-\allowbreak{}denied & \texttt{sandbox.\allowbreak{}filesystem.\allowbreak{}allowWrite}, \texttt{sandbox.\allowbreak{}filesystem.\allowbreak{}denyWrite} \\
+\textbf{Reads} & "Most of the machine, including credential files such as \texttt{\textasciitilde{}/.ssh} and \texttt{\textasciitilde{}/.aws/\allowbreak{}credentials}" & \texttt{sandbox.\allowbreak{}filesystem.\allowbreak{}denyRead}, \texttt{sandbox.\allowbreak{}credentials} \\
+\textbf{Network} & "No direct route out. Connections go through a proxy on your machine that checks each host against your allowed domains, \textbf{which start empty}" & \texttt{sandbox.\allowbreak{}network.\allowbreak{}allowedDomains}, \texttt{sandbox.\allowbreak{}network.\allowbreak{}deniedDomains} \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.362\linewidth} p{0.497\linewidth}@{}}
+\caption{Sandbox modes and the settings that constrain how far a command can escape them.}\\
+\toprule
+\textbf{Setting} & \textbf{Effect} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Setting} & \textbf{Effect} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+allowUnsandboxedCommands & Whether a command that fails under the sandbox may be retried unsandboxed. Setting it to \texttt{false} makes the \texttt{dangerouslyDisableSandbox} parameter ignored entirely[21] \\
+failIfUnavailable & Prevents running commands unsandboxed when the sandbox cannot start. The documentation notes the overrides panel shows this as \textbf{Strict sandbox mode}[21] \\
+excludedCommands & Command patterns that run outside the sandbox altogether — no filesystem restrictions, no network proxy. Covered in §6 \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{Paths a mamba-\allowbreak{}based build reads or writes, and how each is handled under the sandbox. Default-\allowbreak{}reach statements are from the sandboxing documentation; the mamba directory names follow this deployment's own configuration.}\\
+\toprule
+\textbf{Path} & \textbf{Access} & \textbf{Already covered?} & \textbf{Action} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Path} & \textbf{Access} & \textbf{Already covered?} & \textbf{Action} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Project source & Read + write & \textbf{Yes} — the working directory is writable by default & None \\
+Build tree under the project & Read + write & \textbf{Yes} & None \\
+Environment prefix, e.g. \texttt{[your-\allowbreak{}envs-\allowbreak{}dir]/Py3p12} & Read + execute & \textbf{Yes} — reads reach most of the machine by default & None for reading. Needed only if the agent must \textit{install into} the environment \\
+Package cache, \texttt{CONDA\_\allowbreak{}PKGS\_\allowbreak{}DIRS} & Write & No & Add to \texttt{allowWrite}, but only if installs are permitted \\
+Environment prefix, for installs & Write & No & Add to \texttt{allowWrite} — and think first (see below) \\
+\texttt{\textasciitilde{}/.condarc} / \texttt{\textasciitilde{}/.mambarc} & Read & \textbf{Yes} & None \\
+Temp directory & Write & \textbf{Yes} — a per-\allowbreak{}user temp directory is writable by default & None \\
+\end{longtable}
+\end{small}
+
+\section{Monitoring}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Retention flags that interact with the relation above, with the documented defaults and behaviour quoted from the Prometheus storage documentation.}\\
+\toprule
+\textbf{Flag} & \textbf{Documented default} & \textbf{Note} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Flag} & \textbf{Documented default} & \textbf{Note} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+--storage.\allowbreak{}tsdb.\allowbreak{}path & data/ & "Where Prometheus writes its database"[18] \\
+--storage.\allowbreak{}tsdb.\allowbreak{}retention.\allowbreak{}time & 15d & The default applies only when neither this flag nor the size flag is set[18] \\
+--storage.\allowbreak{}tsdb.\allowbreak{}retention.\allowbreak{}size & 0 & Disabled by default. The write-\allowbreak{}ahead log and memory-\allowbreak{}mapped chunks count toward the total, so "the minimum requirement for the disk is the peak space taken by the \texttt{wal}"[18] \\
+Both set together & — & "whichever triggers first will be used"[18] \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{The \texttt{/metrics} exporter of \texttt{llama-\allowbreak{}server}, enumerated from its server documentation. Available only when \texttt{--metrics} is passed (\texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}ENDPOINT\_\allowbreak{}METRICS=\allowbreak{}1} in the environment). The Type column decides the PromQL treatment, per §4.}\\
+\toprule
+\textbf{Metric} & \textbf{Type} & \textbf{Why it matters here} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Metric} & \textbf{Type} & \textbf{Why it matters here} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+llamacpp:prompt\_\allowbreak{}tokens\_\allowbreak{}total & Counter & With the next row, gives measured prefill rate $r_{p}$ \\
+llamacpp:prompt\_\allowbreak{}seconds\_\allowbreak{}total & Counter & — \\
+llamacpp:prompt\_\allowbreak{}tokens\_\allowbreak{}seconds & Gauge & Prefill throughput, pre-\allowbreak{}averaged. \textbf{Do not wrap in \texttt{rate()}} \\
+llamacpp:tokens\_\allowbreak{}predicted\_\allowbreak{}total & Counter & With the next row, gives measured decode rate $r$ — the quantity the bandwidth ceiling predicts \\
+llamacpp:tokens\_\allowbreak{}predicted\_\allowbreak{}seconds\_\allowbreak{}total & Counter & — \\
+llamacpp:predicted\_\allowbreak{}tokens\_\allowbreak{}seconds & Gauge & Decode throughput, pre-\allowbreak{}averaged. \textbf{Do not wrap in \texttt{rate()}} \\
+llamacpp:requests\_\allowbreak{}processing & Gauge & In-\allowbreak{}flight requests \\
+llamacpp:requests\_\allowbreak{}deferred & Gauge & Queueing. Non-\allowbreak{}zero means slots are exhausted; raise \texttt{--parallel} or accept the wait \\
+llamacpp:n\_\allowbreak{}tokens\_\allowbreak{}max & Counter & \textbf{High watermark of the context size observed.} The direct measurement of whether your window is big enough — if it pins at the configured ceiling, prompts are being truncated \\
+llamacpp:n\_\allowbreak{}decode\_\allowbreak{}total & Counter & Total \texttt{llama\_\allowbreak{}decode()} calls \\
+llamacpp:n\_\allowbreak{}busy\_\allowbreak{}slots\_\allowbreak{}per\_\allowbreak{}decode & Gauge & Batching efficiency: average busy slots per decode call \\
+llamacpp:spec\_\allowbreak{}decode\_\allowbreak{}num\_\allowbreak{}draft\_\allowbreak{}tokens\_\allowbreak{}total & Counter & Speculative decoding. All read 0 when it is off, so four of the fifteen series cost nothing unless you turn it on \\
+llamacpp:spec\_\allowbreak{}decode\_\allowbreak{}num\_\allowbreak{}accepted\_\allowbreak{}tokens\_\allowbreak{}total & Counter &  \\
+llamacpp:spec\_\allowbreak{}decode\_\allowbreak{}num\_\allowbreak{}drafts\_\allowbreak{}total & Counter &  \\
+llamacpp:spec\_\allowbreak{}decode\_\allowbreak{}num\_\allowbreak{}accepted\_\allowbreak{}tokens\_\allowbreak{}per\_\allowbreak{}pos\_\allowbreak{}total & Counter &  \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.234\linewidth} p{0.322\linewidth} p{0.322\linewidth}@{}}
+\caption{Symbols in the range-\allowbreak{}window condition for PromQL rate and increase functions over counters.}\\
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+$w$ & Range-\allowbreak{}vector window, the bracketed duration in \texttt{rate(metric[w])} & s \\
+$T_{s}$ & Scrape interval of the job producing the metric & s \\
+$f$ & Consecutive failed or late scrapes to tolerate without the expression emptying & dimensionless \\
+\end{longtable}
+\end{small}
+
+\begin{small}
+\begin{longtable}{@{}p{0.170\linewidth} p{0.234\linewidth} p{0.234\linewidth} p{0.234\linewidth}@{}}
+\caption{Minimum range-\allowbreak{}vector window per scrape interval, evaluated from the condition above for two and three tolerated missed scrapes. The 15 s column is the interval used throughout this page set.}\\
+\toprule
+\textbf{Scrape interval $T_{s}$} & \textbf{Bare minimum, $f = 0$} & \textbf{Tolerating 2 misses} & \textbf{Tolerating 3 misses} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Scrape interval $T_{s}$} & \textbf{Bare minimum, $f = 0$} & \textbf{Tolerating 2 misses} & \textbf{Tolerating 3 misses} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+10 s & 20 s & 40 s & 50 s \\
+15 s & 30 s & \textbf{60 s} & 75 s \\
+30 s & 60 s & 120 s & 150 s \\
+60 s & 120 s & 240 s & 300 s \\
+\end{longtable}
+\end{small}
+
+\chapter{Software and downloads}\label{ch:software}
+
+
+Every program the deployment uses, with its original creator's download page.
+\emph{In the folder} is what the deployment folder held on 2026-11-15;
+\emph{Current} is the newest release on that date, read from the publisher.
+Rows marked \textsc{not in repo} must be fetched from the publisher by anyone
+cloning the repository.
+
+\begin{small}
+\begin{longtable}{@{}p{0.20\linewidth} p{0.36\linewidth} p{0.18\linewidth} p{0.18\linewidth}@{}}
+\caption{Programs in the deployment, with download sources and versions.}\\
+\toprule \textbf{Program} & \textbf{Role and download} & \textbf{In the folder} & \textbf{Current} \\ \midrule \endfirsthead
+\toprule \textbf{Program} & \textbf{Role and download} & \textbf{In the folder} & \textbf{Current} \\ \midrule \endhead
+\bottomrule \endfoot
+\textbf{NVIDIA display driver}\label{sw:nvidia-driver}\newline{\footnotesize NVIDIA} & Kernel driver and CUDA runtime for every NVIDIA path, including WSL and Docker.\newline{\footnotesize\url{https://www.nvidia.com/en-us/drivers/}} & --\newline{\footnotesize publisher} & R620 branch (pairs with CUDA 13.5) \hyperref[ref:60]{[60]} \\
+\textbf{CUDA Toolkit}\label{sw:cuda}\newline{\footnotesize NVIDIA} & Compiler (\texttt{nvcc}) and libraries for building llama.\allowbreak{}cpp with CUDA. Not needed to \textit{run} Ollama.\newline{\footnotesize\url{https://developer.nvidia.com/cuda-toolkit-archive}} & 11.8.0, 12.5.0, 12.6.3, 12.8.2, 13.2.1 (installers)\newline{\footnotesize \textsc{not in repo}} & 13.5 (12.9 Update 1 is the newest 12.x) \hyperref[ref:61]{[61]} \\
+\textbf{AMD Software: Adrenalin Edition}\label{sw:amd-driver}\newline{\footnotesize AMD} & Radeon driver on Windows; also supplies the ROCm runtime that WSL uses.\newline{\footnotesize\url{https://www.amd.com/en/support/download/drivers.html}} & --\newline{\footnotesize publisher} & \emph{not checked} \hyperref[ref:62]{[62]} \\
+\textbf{HIP SDK for Windows}\label{sw:hip-sdk} \emph{(optional)}\newline{\footnotesize AMD} & HIP compiler for building llama.\allowbreak{}cpp's ROCm backend natively on Windows.\newline{\footnotesize\url{https://www.amd.com/en/developer/resources/rocm-hub/hip-sdk.html}} & --\newline{\footnotesize publisher} & \emph{not checked} \hyperref[ref:54]{[54]} \\
+\textbf{Vulkan SDK}\label{sw:vulkan-sdk}\newline{\footnotesize LunarG} & Headers and \texttt{glslc} needed to \textit{build} llama.\allowbreak{}cpp's Vulkan backend.\newline{\footnotesize\url{https://vulkan.lunarg.com/sdk/home}} & 1.4.350.0\newline{\footnotesize \textsc{not in repo}} & 1.4.363.1 \hyperref[ref:63]{[63]} \\
+\textbf{Intel oneAPI Base Toolkit}\label{sw:oneapi} \emph{(optional)}\newline{\footnotesize Intel} & SYCL compiler for llama.\allowbreak{}cpp on Intel Arc and integrated GPUs.\newline{\footnotesize\url{https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html}} & --\newline{\footnotesize publisher} & \emph{not checked} \hyperref[ref:84]{[84]} \\
+\textbf{Build Tools for Visual Studio 2022 / 2026}\label{sw:vs-buildtools}\newline{\footnotesize Microsoft} & MSVC compiler, Windows SDK and the vcvars environment for C++ and CUDA builds.\newline{\footnotesize\url{https://visualstudio.microsoft.com/downloads/}} & vs\_BuildTools\_2022.exe, vs\_BuildTools\_2026.exe, VisualStudioSetup\_2026.exe\newline{\footnotesize in repo} & Visual Studio 2026 \hyperref[ref:64]{[64]} \\
+\textbf{Visual C++ Redistributable (x64)}\label{sw:vc-redist}\newline{\footnotesize Microsoft} & Runtime DLLs for MSVC-\allowbreak{}built binaries on machines with no compiler installed.\newline{\footnotesize\url{https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist}} & VC\_redist.x64\_2022.exe\newline{\footnotesize in repo} & latest supported (v14) \hyperref[ref:65]{[65]} \\
+\textbf{Remote Tools for Visual Studio 2022 / 2026}\label{sw:vs-remote} \emph{(optional)}\newline{\footnotesize Microsoft} & Remote debugger for stepping through a build running on another node.\newline{\footnotesize\url{https://learn.microsoft.com/en-us/visualstudio/debugger/remote-debugging}} & VS\_RemoteTools\_2022.exe, VS\_RemoteTools\_2026.exe\newline{\footnotesize in repo} & \emph{not checked} \hyperref[ref:66]{[66]} \\
+\textbf{Git for Windows}\label{sw:git}\newline{\footnotesize Git for Windows project} & Source control; fetches llama.\allowbreak{}cpp and this repository.\newline{\footnotesize\url{https://git-scm.com/downloads/win}} & --\newline{\footnotesize publisher} & 2.56.1 \hyperref[ref:80]{[80]} \\
+\textbf{CMake}\label{sw:cmake}\newline{\footnotesize Kitware} & Build-\allowbreak{}system generator used by llama.\allowbreak{}cpp and by \texttt{build\_\allowbreak{}cpp.\allowbreak{}ps1}.\newline{\footnotesize\url{https://cmake.org/download/}} & --\newline{\footnotesize publisher} & 4.5.0 \hyperref[ref:81]{[81]} \\
+\textbf{Miniforge (conda + mamba)}\label{sw:miniforge}\newline{\footnotesize conda-forge} & The mamba environment that every Python step runs in.\newline{\footnotesize\url{https://github.com/conda-forge/miniforge}} & --\newline{\footnotesize publisher} & 26.9.4-2 \hyperref[ref:82]{[82]} \\
+\textbf{OpenSSL (Win64 build)}\label{sw:openssl} \emph{(optional)}\newline{\footnotesize OpenSSL Project; Windows build by Shining Light Productions} & TLS for llama.\allowbreak{}cpp's optional HTTPS features.\newline{\footnotesize\url{https://slproweb.com/products/Win32OpenSSL.html}} & Win64OpenSSL-4\_0\_0.exe\newline{\footnotesize \textsc{not in repo}} & 4.1 (Oct 23 2026); 4.0.3 supported to 14 May 2027; 3.5.9 LTS to 8 Apr 2030 \hyperref[ref:79]{[79]} \\
+\textbf{Windows Subsystem for Linux}\label{sw:wsl}\newline{\footnotesize Microsoft} & Linux userland for the Jupyter-on-\allowbreak{}WSL route and for Docker Desktop's GPU support.\newline{\footnotesize\url{https://learn.microsoft.com/en-us/windows/wsl/install}} & --\newline{\footnotesize publisher} & \emph{not checked} \hyperref[ref:67]{[67]} \\
+\textbf{Docker Desktop}\label{sw:docker-desktop}\newline{\footnotesize Docker Inc.} & Runs Open WebUI, Open Terminal and Jupyter containers; passes the GPU through WSL 2.\newline{\footnotesize\url{https://docs.docker.com/desktop/setup/install/windows-install/}} & Docker Desktop Installer.exe (version not in file name)\newline{\footnotesize \textsc{not in repo}} & 4.99.0 \hyperref[ref:68]{[68]} \\
+\textbf{NVIDIA Container Toolkit}\label{sw:nvidia-ctk} \emph{(optional)}\newline{\footnotesize NVIDIA} & Gives Docker containers the GPU on a \textit{Linux} host.\newline{\footnotesize\url{https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html}} & --\newline{\footnotesize publisher} & 1.20.2 \hyperref[ref:50]{[50]} \\
+\textbf{Ollama}\label{sw:ollama}\newline{\footnotesize Ollama} & Model runtime and registry client on every serving node.\newline{\footnotesize\url{https://ollama.com/download}} & --\newline{\footnotesize publisher} & 0.40.16 \hyperref[ref:69]{[69]} \\
+\textbf{llama.\allowbreak{}cpp}\label{sw:llama-cpp}\newline{\footnotesize ggml-org} & \texttt{llama-\allowbreak{}server} and \texttt{ggml-\allowbreak{}rpc-\allowbreak{}server} for multi-\allowbreak{}machine serving and the \texttt{/metrics} endpoint.\newline{\footnotesize\url{https://github.com/ggml-org/llama.cpp/releases}} & --\newline{\footnotesize publisher} & b12428 \hyperref[ref:70]{[70]} \\
+\textbf{Open WebUI (+ Open Terminal, mcpo)}\label{sw:open-webui}\newline{\footnotesize Open WebUI} & Browser front end, code execution and the terminal tool server.\newline{\footnotesize\url{https://github.com/open-webui/open-webui}} & --\newline{\footnotesize publisher} & Open WebUI 0.13.3; Open Terminal 0.17.17; mcpo 0.0.20 \hyperref[ref:71]{[71]} \\
+\textbf{nginx}\label{sw:nginx}\newline{\footnotesize F5 / nginx} & Reverse proxy in front of Ollama or Open WebUI.\newline{\footnotesize\url{https://nginx.org/en/download.html}} & 1.30.2 (zip and extracted folder)\newline{\footnotesize in repo} & stable 1.30.6; mainline 1.31.8 \hyperref[ref:75]{[75]} \\
+\textbf{NSSM}\label{sw:nssm}\newline{\footnotesize Iain Patterson} & Runs non-\allowbreak{}service executables (Prometheus, Grafana, llama-\allowbreak{}server, Jupyter) as Windows services.\newline{\footnotesize\url{https://nssm.cc/download}} & 2.24 and 2.24-101-g897c7ad (zip and extracted)\newline{\footnotesize in repo} & 2.24 (release); 2.24-\allowbreak{}101-\allowbreak{}g897c7ad (pre-\allowbreak{}release) \hyperref[ref:76]{[76]} \\
+\textbf{Prometheus}\label{sw:prometheus}\newline{\footnotesize Prometheus Authors} & Time-\allowbreak{}series store that scrapes every exporter.\newline{\footnotesize\url{https://prometheus.io/download/}} & 3.5.3 (zip and extracted with prometheus.exe)\newline{\footnotesize \textsc{partly in repo}} & 3.16.0; 3.13.5 LTS \hyperref[ref:72]{[72]} \\
+\textbf{Grafana}\label{sw:grafana}\newline{\footnotesize Grafana Labs} & Dashboards over Prometheus.\newline{\footnotesize\url{https://grafana.com/grafana/download?platform=windows}} & 13.0.1+security-01 (MSI)\newline{\footnotesize \textsc{not in repo}} & 13.3.1 \hyperref[ref:74]{[74]} \\
+\textbf{windows\_\allowbreak{}exporter}\label{sw:windows-exporter}\newline{\footnotesize Prometheus community} & Host metrics on Windows, and vendor-\allowbreak{}neutral GPU metrics through its \texttt{gpu} collector.\newline{\footnotesize\url{https://github.com/prometheus-community/windows_exporter/releases}} & 0.31.7 (EXE and MSI)\newline{\footnotesize in repo} & 0.32.1 \hyperref[ref:73]{[73]} \\
+\textbf{node\_\allowbreak{}exporter}\label{sw:node-exporter}\newline{\footnotesize Prometheus Authors} & Host metrics on Linux nodes.\newline{\footnotesize\url{https://prometheus.io/download/}} & --\newline{\footnotesize publisher} & 1.12.1 \hyperref[ref:72]{[72]} \\
+\textbf{nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter}\label{sw:nvidia-exporter}\newline{\footnotesize Utku Ozdemir} & Per-\allowbreak{}GPU utilisation, memory, power and temperature for NVIDIA cards.\newline{\footnotesize\url{https://github.com/utkuozdemir/nvidia_gpu_exporter/releases}} & --\newline{\footnotesize publisher} & 1.19.0 \hyperref[ref:83]{[83]} \\
+\textbf{AMD Device Metrics Exporter}\label{sw:amd-dme} \emph{(optional)}\newline{\footnotesize AMD} & GPU metrics on \textit{Linux} hosts with ROCm.\newline{\footnotesize\url{https://github.com/ROCm/device-metrics-exporter}} & --\newline{\footnotesize publisher} & \emph{not checked} \hyperref[ref:58]{[58]} \\
+\textbf{Go}\label{sw:go} \emph{(optional)}\newline{\footnotesize The Go Authors} & Compiler; only needed to build an exporter from source.\newline{\footnotesize\url{https://go.dev/dl/}} & 1.26.3 (MSI)\newline{\footnotesize in repo} & 1.27.4 \hyperref[ref:77]{[77]} \\
+\textbf{Alertmanager}\label{sw:alertmanager} \emph{(optional)}\newline{\footnotesize Prometheus Authors} & Routes Prometheus alerts to e-\allowbreak{}mail, chat or webhooks.\newline{\footnotesize\url{https://prometheus.io/download/}} & 0.32.1\newline{\footnotesize in repo} & 0.35.0 \hyperref[ref:72]{[72]} \\
+\textbf{blackbox\_\allowbreak{}exporter}\label{sw:blackbox-exporter} \emph{(optional)}\newline{\footnotesize Prometheus Authors} & Probes HTTP endpoints (for example Ollama's port) from outside.\newline{\footnotesize\url{https://prometheus.io/download/}} & 0.28.0\newline{\footnotesize in repo} & 0.29.1 \hyperref[ref:72]{[72]} \\
+\textbf{statsd\_\allowbreak{}exporter}\label{sw:statsd-exporter} \emph{(optional)}\newline{\footnotesize Prometheus Authors} & Bridges StatsD metrics into Prometheus.\newline{\footnotesize\url{https://github.com/prometheus/statsd_exporter/releases}} & 0.29.0\newline{\footnotesize in repo} & 0.31.0 \hyperref[ref:72]{[72]} \\
+\textbf{graphite\_\allowbreak{}exporter}\label{sw:graphite-exporter} \emph{(optional)}\newline{\footnotesize Prometheus Authors} & Bridges Graphite metrics into Prometheus.\newline{\footnotesize\url{https://prometheus.io/download/}} & 0.16.0\newline{\footnotesize in repo} & 0.17.0 \hyperref[ref:72]{[72]} \\
+\textbf{consul\_\allowbreak{}exporter}\label{sw:consul-exporter} \emph{(optional)}\newline{\footnotesize Prometheus Authors} & Exports Consul service health.\newline{\footnotesize\url{https://prometheus.io/download/}} & 0.13.0\newline{\footnotesize in repo} & 0.13.0 \hyperref[ref:72]{[72]} \\
+\textbf{7-\allowbreak{}Zip}\label{sw:7zip} \emph{(optional)}\newline{\footnotesize Igor Pavlov} & Extracts the release archives of this page set.\newline{\footnotesize\url{https://www.7-zip.org/}} & --\newline{\footnotesize publisher} & \emph{not checked} \hyperref[ref:85]{[85]} \\
+\end{longtable}
+\end{small}
+
+\chapter{Corrections made to the earlier pages}
+
+
+The pages that predate this set are retrofitted rather than rewritten. Where
+their content could not work as written, one exact span of the original page
+was replaced, and the replacement is marked on the page. Each row below is one
+such replacement, from \texttt{src\_modules/legacy\_corrections.py}.
+
+\begin{small}
+\begin{longtable}{@{}p{0.18\linewidth} p{0.26\linewidth} p{0.29\linewidth} p{0.17\linewidth}@{}}
+\caption{Exact-span corrections applied to the earlier pages in v0.0.6.}\\
+\toprule \textbf{Key} & \textbf{Page} & \textbf{Why} & \textbf{Refs} \\ \midrule \endfirsthead
+\toprule \textbf{Key} & \textbf{Page} & \textbf{Why} & \textbf{Refs} \\ \midrule \endhead
+\bottomrule \endfoot
+\texttt{gpu-\allowbreak{}nvidia-\allowbreak{}install} & \texttt{GPU\_\allowbreak{}monitoring\_\allowbreak{}setup.\allowbreak{}html} & Download URL pointed at a nonexistent repository; service registration replaced by the exporter's own documented install. & \hyperref[ref:56]{[56]} \\
+\texttt{gpu-\allowbreak{}nvidia-\allowbreak{}metric-\allowbreak{}names} & \texttt{GPU\_\allowbreak{}monitoring\_\allowbreak{}setup.\allowbreak{}html} & Metric names did not match the exporter's documented names. & \hyperref[ref:20]{[20]} \\
+\texttt{gpu-\allowbreak{}amd-\allowbreak{}section} & \texttt{GPU\_\allowbreak{}monitoring\_\allowbreak{}setup.\allowbreak{}html} & Section described a nonexistent exporter and metric names; replaced with the documented windows\_exporter gpu collector. & \hyperref[ref:53]{[53]}, \hyperref[ref:55]{[55]}, \hyperref[ref:57]{[57]}, \hyperref[ref:58]{[58]}, \hyperref[ref:86]{[86]} \\
+\texttt{gpu-\allowbreak{}grafana-\allowbreak{}nvidia-id} & \texttt{GPU\_\allowbreak{}monitoring\_\allowbreak{}setup.\allowbreak{}html} & Dashboard id did not match the exporter README. & \hyperref[ref:20]{[20]} \\
+\texttt{gpu-\allowbreak{}grafana-\allowbreak{}amd-\allowbreak{}card} & \texttt{GPU\_\allowbreak{}monitoring\_\allowbreak{}setup.\allowbreak{}html} & Dashboard targeted a nonexistent metric namespace. & \hyperref[ref:55]{[55]} \\
+\texttt{gpu-\allowbreak{}alert-\allowbreak{}gauge} & \texttt{GPU\_\allowbreak{}monitoring\_\allowbreak{}setup.\allowbreak{}html} & rate() applied to a gauge; nonexistent metric. & -- \\
+\texttt{gpu-\allowbreak{}footer-\allowbreak{}claim} & \texttt{GPU\_\allowbreak{}monitoring\_\allowbreak{}setup.\allowbreak{}html} & Unverifiable validation claim against superseded versions. & -- \\
+\texttt{linux-\allowbreak{}gpu-\allowbreak{}section} & \texttt{Grafan\_\allowbreak{}Promethius\_\allowbreak{}install\_\allowbreak{}linux.\allowbreak{}html} & Nonexistent repository and metric; replaced with the exporter's documented Linux install. & \hyperref[ref:56]{[56]} \\
+\texttt{jupyter-\allowbreak{}wsl-\allowbreak{}amd} & \texttt{Jupyter\_\allowbreak{}Server\_\allowbreak{}Setup\_\allowbreak{}wsl.\allowbreak{}html} & AMD WSL path used native-Linux kernel steps that do not apply under WSL. & \hyperref[ref:40]{[40]}, \hyperref[ref:52]{[52]}, \hyperref[ref:53]{[53]}, \hyperref[ref:87]{[87]} \\
+\texttt{docker-\allowbreak{}jupyter-\allowbreak{}amd} & \texttt{Dockler\_\allowbreak{}Jupyter\_\allowbreak{}withGPU\_\allowbreak{}Passthru\_\allowbreak{}nssm.\allowbreak{}html} & AMD container path relies on Docker GPU support that Docker documents for NVIDIA only. & \hyperref[ref:51]{[51]}, \hyperref[ref:87]{[87]} \\
+\texttt{rpc-\allowbreak{}readme-\allowbreak{}path} & \texttt{llama-\allowbreak{}rpc-\allowbreak{}vulkan-\allowbreak{}guide.\allowbreak{}html} & llama.cpp moved the RPC README from examples/ to tools/. & \hyperref[ref:37]{[37]} \\
+\texttt{rpc-\allowbreak{}kitemetric-\allowbreak{}dead} & \texttt{llama-\allowbreak{}rpc-\allowbreak{}vulkan-\allowbreak{}guide.\allowbreak{}html} & Cited page no longer exists. & -- \\
+\end{longtable}
+\end{small}
+
+\part{References}\label{part:refs}
+
+\chapter{Numbered reference list}
+
+
+IEEE style. Numbers are permanent: a retired reference keeps its number and a
+new one takes the next free number, so a number written down elsewhere never
+comes to mean something else. The confidence column records how far each
+source can be leaned on. \textsc{primary} is a normative or first-party
+specification; \textsc{vendor} is first-party but commercial and revised in
+place, which every model card in this list is, so anything cited to one
+should be re-read before hardware is bought on its strength.
+
+
+\begingroup\RaggedRight
+
+\begin{description}[leftmargin=2.8em,style=sameline,labelwidth=2.4em,itemsep=5pt]
+
+\bookmark[level=2,dest=ref:1]{[1] Open WebUI, “Python Code Execution,” Open WebUI Documentation}
+\item[\textbf{[1]}]\label{ref:1}%
+Open WebUI, “Python Code Execution,” \textit{Open WebUI Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.openwebui.com/features/chat-conversations/chat-features/code-execution/python/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:2]{[2] Open WebUI, “Jupyter Notebooks,” Open WebUI Documentation, Integrations — Dev Tools}
+\item[\textbf{[2]}]\label{ref:2}%
+Open WebUI, “Jupyter Notebooks,” \textit{Open WebUI Documentation}, Integrations — Dev Tools. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.openwebui.com/tutorials/integrations/dev-tools/jupyter/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:3]{[3] Open WebUI, “Open Terminal,” Open WebUI Documentation}
+\item[\textbf{[3]}]\label{ref:3}%
+Open WebUI, “Open Terminal,” \textit{Open WebUI Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.openwebui.com/features/open-terminal}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:4]{[4] Open WebUI, “Open Terminal — Installation,” Open WebUI Documentation}
+\item[\textbf{[4]}]\label{ref:4}%
+Open WebUI, “Open Terminal — Installation,” \textit{Open WebUI Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.openwebui.com/features/open-terminal/setup/installation}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:5]{[5] Open WebUI, “Connecting Open Terminal to Open WebUI,” Open WebUI Documentation}
+\item[\textbf{[5]}]\label{ref:5}%
+Open WebUI, “Connecting Open Terminal to Open WebUI,” \textit{Open WebUI Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.openwebui.com/features/open-terminal/setup/connecting}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:6]{[6] Open WebUI, “Open Terminal — Advanced Configuration,” Open WebUI Documentation}
+\item[\textbf{[6]}]\label{ref:6}%
+Open WebUI, “Open Terminal — Advanced Configuration,” \textit{Open WebUI Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.openwebui.com/features/open-terminal/advanced/configuration}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:7]{[7] Open WebUI, “Environment Variable Configuration,” Open WebUI Documentation. Moved from /getting}
+\item[\textbf{[7]}]\label{ref:7}%
+Open WebUI, “Environment Variable Configuration,” \textit{Open WebUI Documentation}. Moved from \texttt{/getting-\allowbreak{}started/\allowbreak{}env-\allowbreak{}configuration}; every variable cited from it was re-\allowbreak{}found at the new address on 2026-11-15. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.openwebui.com/reference/env-configuration}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:8]{[8] Open WebUI, “MCP Support” (mcpo OpenAPI proxy), Open WebUI Documentation}
+\item[\textbf{[8]}]\label{ref:8}%
+Open WebUI, “MCP Support” (\texttt{mcpo} OpenAPI proxy), \textit{Open WebUI Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.openwebui.com/features/extensibility/plugin/tools/openapi-servers/mcp}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:9]{[9] Ollama, “FAQ” (server environment variables), Ollama Documentation}
+\item[\textbf{[9]}]\label{ref:9}%
+Ollama, “FAQ” (server environment variables), \textit{Ollama Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.ollama.com/faq}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:10]{[10] Ollama, “Model Library,” model index}
+\item[\textbf{[10]}]\label{ref:10}%
+Ollama, “Model Library,” model index. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://ollama.com/library}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:11]{[11] Ollama, “qwen3-coder,” model card and tag listing}
+\item[\textbf{[11]}]\label{ref:11}%
+Ollama, “qwen3-\allowbreak{}coder,” model card and tag listing. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://ollama.com/library/qwen3-coder}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:12]{[12] Ollama, “qwen2.5-coder,” model card and tag listing}
+\item[\textbf{[12]}]\label{ref:12}%
+Ollama, “qwen2.5-\allowbreak{}coder,” model card and tag listing. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://ollama.com/library/qwen2.5-coder}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:13]{[13] Ollama, “devstral-small-2,” model card, tag listing and SWE-Bench / Terminal Bench figures publ}
+\item[\textbf{[13]}]\label{ref:13}%
+Ollama, “devstral-\allowbreak{}small-2,” model card, tag listing and SWE-\allowbreak{}Bench / Terminal Bench figures published by Mistral AI. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://ollama.com/library/devstral-small-2}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:14]{[14] Ollama, “qwen3.6,” model card and tag listing}
+\item[\textbf{[14]}]\label{ref:14}%
+Ollama, “qwen3.6,” model card and tag listing. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://ollama.com/library/qwen3.6}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:15]{[15] Ollama, “laguna-xs-2.1,” model card and tag listing (Poolside, distributed by Ollama)}
+\item[\textbf{[15]}]\label{ref:15}%
+Ollama, “laguna-xs-2.1,” model card and tag listing (Poolside, distributed by Ollama). [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://ollama.com/library/laguna-xs-2.1}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:16]{[16] Ollama, “gpt-oss,” model card and tag listing (OpenAI open-weight models)}
+\item[\textbf{[16]}]\label{ref:16}%
+Ollama, “gpt-\allowbreak{}oss,” model card and tag listing (OpenAI open-\allowbreak{}weight models). [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://ollama.com/library/gpt-oss}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:17]{[17] ggml-org, “RPC backend” (rpc-server, GGML\_RPC), llama.cpp source tree, tools/rpc/README.md}
+\item[\textbf{[17]}]\label{ref:17}%
+ggml-\allowbreak{}org, “RPC backend” (\texttt{rpc-\allowbreak{}server}, \texttt{GGML\_\allowbreak{}RPC}), \textit{llama.\allowbreak{}cpp} source tree, \texttt{tools/\allowbreak{}rpc/\allowbreak{}README.md}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://github.com/ggml-org/llama.cpp/blob/master/tools/rpc/README.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:18]{[18] Prometheus Authors, “Storage,” Prometheus Documentation}
+\item[\textbf{[18]}]\label{ref:18}%
+Prometheus Authors, “Storage,” \textit{Prometheus Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://prometheus.io/docs/prometheus/latest/storage/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:19]{[19] Prometheus Authors, “Query functions,” Prometheus Documentation, PromQL reference}
+\item[\textbf{[19]}]\label{ref:19}%
+Prometheus Authors, “Query functions,” \textit{Prometheus Documentation}, PromQL reference. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://prometheus.io/docs/prometheus/latest/querying/functions/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:20]{[20] U. Ozdemir, “nvidia\_gpu\_exporter,” Nvidia GPU exporter for Prometheus, GitHub repository}
+\item[\textbf{[20]}]\label{ref:20}%
+U. Ozdemir, “nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter,” Nvidia GPU exporter for Prometheus, GitHub repository. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://github.com/utkuozdemir/nvidia_gpu_exporter}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:21]{[21] Anthropic, “Configure the sandboxed Bash tool,” Claude Code Documentation}
+\item[\textbf{[21]}]\label{ref:21}%
+Anthropic, “Configure the sandboxed Bash tool,” \textit{Claude Code Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://code.claude.com/docs/en/sandboxing}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:22]{[22] Anthropic, “Settings reference,” Claude Code Documentation (sandbox keys)}
+\item[\textbf{[22]}]\label{ref:22}%
+Anthropic, “Settings reference,” \textit{Claude Code Documentation} (\texttt{sandbox} keys). [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://code.claude.com/docs/en/settings-reference}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:23]{[23] Anthropic, “Permissions,” Claude Code Documentation (additional directories, permission rule sy}
+\item[\textbf{[23]}]\label{ref:23}%
+Anthropic, “Permissions,” \textit{Claude Code Documentation} (additional directories, permission rule syntax). [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://code.claude.com/docs/en/permissions}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:24]{[24] Anaconda Inc., “conda env create,” conda Documentation, command reference}
+\item[\textbf{[24]}]\label{ref:24}%
+Anaconda Inc., “conda env create,” \textit{conda Documentation}, command reference. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.conda.io/projects/conda/en/stable/commands/env/create.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:25]{[25] QuantStack and mamba contributors, “micromamba user guide,” mamba Documentation}
+\item[\textbf{[25]}]\label{ref:25}%
+QuantStack and mamba contributors, “micromamba user guide,” \textit{mamba Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:26]{[26] Docker Inc., “GPU access,” Docker Docs, Engine — containers}
+\item[\textbf{[26]}]\label{ref:26}%
+Docker Inc., “GPU access,” \textit{Docker Docs}, Engine — containers. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.docker.com/engine/containers/gpu/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:27]{[27] Kitware Inc., “CMAKE\_BUILD\_PARALLEL\_LEVEL,” CMake Documentation, environment variable reference}
+\item[\textbf{[27]}]\label{ref:27}%
+Kitware Inc., “CMAKE\_\allowbreak{}BUILD\_\allowbreak{}PARALLEL\_\allowbreak{}LEVEL,” \textit{CMake Documentation}, environment variable reference. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://cmake.org/cmake/help/latest/envvar/CMAKE_BUILD_PARALLEL_LEVEL.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:28]{[28] H. Krekel and pytest-dev contributors, “How to invoke pytest,” pytest Documentation}
+\item[\textbf{[28]}]\label{ref:28}%
+H. Krekel and pytest-\allowbreak{}dev contributors, “How to invoke pytest,” \textit{pytest Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://docs.pytest.org/en/stable/how-to/usage.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:29]{[29] Project Jupyter, “Running a public Jupyter Server,” Jupyter Server Documentation}
+\item[\textbf{[29]}]\label{ref:29}%
+Project Jupyter, “Running a public Jupyter Server,” \textit{Jupyter Server Documentation}. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://jupyter-server.readthedocs.io/en/latest/operators/public-server.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:30]{[30] W. W. Wallace, “Mamba on Windows — Install, Shell Setup, and YAML Environments,” Braveheart53/t}
+\item[\textbf{[30]}]\label{ref:30}%
+W. W. Wallace, “Mamba on Windows — Install, Shell Setup, and YAML Environments,” \textit{Braveheart53/\allowbreak{}tools}, GitHub repository. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://github.com/Braveheart53/tools/blob/main/Mamba%20on%20Windows%20%E2%80%94%20Install%2C%20Shell%20Setup%2C%20and%20YAML%20Environments.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:31]{[31] KaTeX contributors, “KaTeX — The fastest math typesetting library for the web,” project documen}
+\item[\textbf{[31]}]\label{ref:31}%
+KaTeX contributors, “KaTeX — The fastest math typesetting library for the web,” project documentation and supported-\allowbreak{}function list. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://katex.org/docs/supported.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:32]{[32] W. W. Wallace, “AI\_Local — local AI deployment working set,” Braveheart53/tools, GitHub reposit}
+\item[\textbf{[32]}]\label{ref:32}%
+W. W. Wallace, “AI\_\allowbreak{}Local — local AI deployment working set,” \textit{Braveheart53/\allowbreak{}tools}, GitHub repository. [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://github.com/Braveheart53/tools/tree/main/AI_Local}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:33]{[33] Ollama, “qwen3-coder-next,” model card and tag listing (80B total / 3B active, built on Qwen3-N}
+\item[\textbf{[33]}]\label{ref:33}%
+Ollama, “qwen3-\allowbreak{}coder-\allowbreak{}next,” model card and tag listing (80B total / 3B active, built on Qwen3-\allowbreak{}Next-\allowbreak{}80B-\allowbreak{}A3B-\allowbreak{}Base). [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://ollama.com/library/qwen3-coder-next}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:34]{[34] Ollama, “nemotron-3-nano,” model card and tag listing (NVIDIA)}
+\item[\textbf{[34]}]\label{ref:34}%
+Ollama, “nemotron-3-\allowbreak{}nano,” model card and tag listing (NVIDIA). [Online]. Available: see URL below. Accessed: 2026-10-18.\newline
+{\footnotesize\url{https://ollama.com/library/nemotron-3-nano}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:35]{[35] Ollama, “Context length,” Ollama Documentation, docs/context-length.mdx}
+\item[\textbf{[35]}]\label{ref:35}%
+Ollama, “Context length,” \textit{Ollama Documentation}, \texttt{docs/\allowbreak{}context-\allowbreak{}length.\allowbreak{}mdx}. [Online]. Available: see URL below. Accessed: 2026-10-26.\newline
+{\footnotesize\url{https://github.com/ollama/ollama/blob/main/docs/context-length.mdx}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:36]{[36] Open WebUI, “Security Best Practices” (Open Terminal), Open WebUI Documentation, docs/features/}
+\item[\textbf{[36]}]\label{ref:36}%
+Open WebUI, “Security Best Practices” (Open Terminal), \textit{Open WebUI Documentation}, \texttt{docs/\allowbreak{}features/\allowbreak{}open-\allowbreak{}terminal/\allowbreak{}advanced/\allowbreak{}security.md}. [Online]. Available: see URL below. Accessed: 2026-10-26.\newline
+{\footnotesize\url{https://github.com/open-webui/docs/blob/main/docs/features/open-terminal/advanced/security.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:37]{[37] ggml-org, “RPC backend” (ggml-rpc-server), llama.cpp source tree, tools/rpc/README.md, re-read }
+\item[\textbf{[37]}]\label{ref:37}%
+ggml-\allowbreak{}org, “RPC backend” (\texttt{ggml-\allowbreak{}rpc-\allowbreak{}server}), \textit{llama.\allowbreak{}cpp} source tree, \texttt{tools/\allowbreak{}rpc/\allowbreak{}README.md}, re-\allowbreak{}read for the renamed binary, the upstream security warning and the RDMA transport. [Online]. Available: see URL below. Accessed: 2026-10-26.\newline
+{\footnotesize\url{https://github.com/ggml-org/llama.cpp/blob/master/tools/rpc/README.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:38]{[38] Ollama, server/routes.go (VRAM-tiered defaultNumCtx thresholds), ollama/ollama source tree}
+\item[\textbf{[38]}]\label{ref:38}%
+Ollama, \texttt{server/\allowbreak{}routes.go} (VRAM-\allowbreak{}tiered \texttt{defaultNumCtx} thresholds), \textit{ollama/\allowbreak{}ollama} source tree. [Online]. Available: see URL below. Accessed: 2026-11-05.\newline
+{\footnotesize\url{https://github.com/ollama/ollama/blob/main/server/routes.go}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:39]{[39] ggml-org, “LLaMA.cpp HTTP Server,” llama.cpp source tree, tools/server/README.md (/metrics expo}
+\item[\textbf{[39]}]\label{ref:39}%
+ggml-\allowbreak{}org, “LLaMA.\allowbreak{}cpp HTTP Server,” \textit{llama.\allowbreak{}cpp} source tree, \texttt{tools/\allowbreak{}server/\allowbreak{}README.md} (\texttt{/metrics} exporter, CLI and \texttt{LLAMA\_\allowbreak{}ARG\_\allowbreak{}*} reference). [Online]. Available: see URL below. Accessed: 2026-11-05.\newline
+{\footnotesize\url{https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:40]{[40] Ollama, “Hardware support,” ollama/ollama source tree, docs/gpu.mdx (NVIDIA compute capability }
+\item[\textbf{[40]}]\label{ref:40}%
+Ollama, “Hardware support,” \textit{ollama/\allowbreak{}ollama} source tree, \texttt{docs/\allowbreak{}gpu.\allowbreak{}mdx} (NVIDIA compute capability and driver minimums, AMD ROCm v7 targets, Vulkan, device selection) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/ollama/ollama/blob/main/docs/gpu.mdx}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:41]{[41] Ollama, envconfig/config.go (server environment variables, defaults and descriptions), ollama/o}
+\item[\textbf{[41]}]\label{ref:41}%
+Ollama, \texttt{envconfig/\allowbreak{}config.go} (server environment variables, defaults and descriptions), \textit{ollama/\allowbreak{}ollama} source tree [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/ollama/ollama/blob/main/envconfig/config.go}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:42]{[42] ggml-org, “Build llama.cpp locally,” llama.cpp source tree, docs/build.md (CUDA, HIP, Vulkan, S}
+\item[\textbf{[42]}]\label{ref:42}%
+ggml-\allowbreak{}org, “Build llama.\allowbreak{}cpp locally,” \textit{llama.\allowbreak{}cpp} source tree, \texttt{docs/\allowbreak{}build.md} (CUDA, HIP, Vulkan, SYCL and Metal builds; runtime CUDA variables) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:43]{[43] ggml-org, common/arg.cpp and common/common.h (command-line options, environment names and defau}
+\item[\textbf{[43]}]\label{ref:43}%
+ggml-\allowbreak{}org, \texttt{common/\allowbreak{}arg.\allowbreak{}cpp} and \texttt{common/\allowbreak{}common.h} (command-\allowbreak{}line options, environment names and defaults), \textit{llama.\allowbreak{}cpp} source tree [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/ggml-org/llama.cpp/blob/master/common/arg.cpp}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:44]{[44] ggml-org, ggml/src/ggml-cuda/CMakeLists.txt (default CUDA architecture list by toolkit version)}
+\item[\textbf{[44]}]\label{ref:44}%
+ggml-\allowbreak{}org, \texttt{ggml/\allowbreak{}src/\allowbreak{}ggml-\allowbreak{}cuda/\allowbreak{}CMakeLists.\allowbreak{}txt} (default CUDA architecture list by toolkit version), \textit{llama.\allowbreak{}cpp} source tree [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/ggml-org/llama.cpp/blob/master/ggml/src/ggml-cuda/CMakeLists.txt}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:45]{[45] NVIDIA, “CUDA Toolkit 13.5 Release Notes,” NVIDIA Documentation Hub (driver branch per toolkit;}
+\item[\textbf{[45]}]\label{ref:45}%
+NVIDIA, “CUDA Toolkit 13.5 Release Notes,” \textit{NVIDIA Documentation Hub} (driver branch per toolkit; removal of Maxwell, Pascal and Volta support) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:46]{[46] NVIDIA, “CUDA Installation Guide for Microsoft Windows,” CUDA 13.5 (supported Visual Studio hos}
+\item[\textbf{[46]}]\label{ref:46}%
+NVIDIA, “CUDA Installation Guide for Microsoft Windows,” CUDA 13.5 (supported Visual Studio host compilers) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:47]{[47] NVIDIA, “CUDA Installation Guide for Microsoft Windows,” CUDA 12.9.1 archive (supported Visual }
+\item[\textbf{[47]}]\label{ref:47}%
+NVIDIA, “CUDA Installation Guide for Microsoft Windows,” CUDA 12.9.1 archive (supported Visual Studio host compilers) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://docs.nvidia.com/cuda/archive/12.9.1/cuda-installation-guide-microsoft-windows/index.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:48]{[48] NVIDIA, “CUDA on WSL User Guide,” NVIDIA Documentation Hub}
+\item[\textbf{[48]}]\label{ref:48}%
+NVIDIA, “CUDA on WSL User Guide,” \textit{NVIDIA Documentation Hub} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://docs.nvidia.com/cuda/wsl-user-guide/index.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:49]{[49] NVIDIA, “CUDA GPU Compute Capability,” NVIDIA Developer}
+\item[\textbf{[49]}]\label{ref:49}%
+NVIDIA, “CUDA GPU Compute Capability,” \textit{NVIDIA Developer} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://developer.nvidia.com/cuda-gpus}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:50]{[50] NVIDIA, “Installing the NVIDIA Container Toolkit,” NVIDIA Cloud Native Technologies}
+\item[\textbf{[50]}]\label{ref:50}%
+NVIDIA, “Installing the NVIDIA Container Toolkit,” \textit{NVIDIA Cloud Native Technologies} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:51]{[51] Docker Inc., “GPU support in Docker Desktop for Windows,” Docker Docs}
+\item[\textbf{[51]}]\label{ref:51}%
+Docker Inc., “GPU support in Docker Desktop for Windows,” \textit{Docker Docs} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://docs.docker.com/desktop/features/gpu/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:52]{[52] AMD, “WSL support matrices by ROCm version,” ROCm on Radeon and Ryzen documentation}
+\item[\textbf{[52]}]\label{ref:52}%
+AMD, “WSL support matrices by ROCm version,” \textit{ROCm on Radeon and Ryzen} documentation [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/wsl/wsl_compatibility.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:53]{[53] AMD, “Limitations and recommended settings” (Radeon, WSL section: amd-smi unsupported under WSL}
+\item[\textbf{[53]}]\label{ref:53}%
+AMD, “Limitations and recommended settings” (Radeon, WSL section: \texttt{amd-\allowbreak{}smi} unsupported under WSL), \textit{ROCm on Radeon and Ryzen} documentation, ROCm 7.2 [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://rocm.docs.amd.com/projects/radeon-ryzen/en/docs-7.2/docs/limitations/limitationsrad.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:54]{[54] AMD, “HIP SDK for Windows,” AMD ROCm Developer Hub}
+\item[\textbf{[54]}]\label{ref:54}%
+AMD, “HIP SDK for Windows,” \textit{AMD ROCm Developer Hub} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://www.amd.com/en/developer/resources/rocm-hub/hip-sdk.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:55]{[55] Prometheus community, “gpu collector,” windows\_exporter v0.32.1, docs/collector.gpu.md (metric }
+\item[\textbf{[55]}]\label{ref:55}%
+Prometheus community, “gpu collector,” \textit{windows\_\allowbreak{}exporter} v0.32.1, \texttt{docs/\allowbreak{}collector.\allowbreak{}gpu.md} (metric renamed from v0.31.7) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/prometheus-community/windows_exporter/blob/v0.32.1/docs/collector.gpu.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:56]{[56] U. Ozdemir, “Installation,” nvidia\_gpu\_exporter, docs/INSTALL.md (winget, Scoop and native Wind}
+\item[\textbf{[56]}]\label{ref:56}%
+U. Ozdemir, “Installation,” \textit{nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter}, \texttt{docs/\allowbreak{}INSTALL.md} (winget, Scoop and native Windows service) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/utkuozdemir/nvidia_gpu_exporter/blob/master/docs/INSTALL.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:57]{[57] AMD, “AMD SMI Prometheus Exporter,” amd\_smi\_exporter README (no further updates; superseded by }
+\item[\textbf{[57]}]\label{ref:57}%
+AMD, “AMD SMI Prometheus Exporter,” \textit{amd\_\allowbreak{}smi\_\allowbreak{}exporter} README (no further updates; superseded by the Device Metrics Exporter) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/amd/amd_smi_exporter/blob/master/README.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:58]{[58] AMD, “AMD Device Metrics Exporter,” ROCm/device-metrics-exporter README}
+\item[\textbf{[58]}]\label{ref:58}%
+AMD, “AMD Device Metrics Exporter,” \textit{ROCm/\allowbreak{}device-\allowbreak{}metrics-\allowbreak{}exporter} README [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/ROCm/device-metrics-exporter/blob/main/README.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:59]{[59] Tom’s Hardware, “Nvidia to axe Maxwell, Pascal, and Volta GPUs with end of driver support — 580}
+\item[\textbf{[59]}]\label{ref:59}%
+\textit{Tom’s Hardware}, “Nvidia to axe Maxwell, Pascal, and Volta GPUs with end of driver support — 580 series drivers will be the last to support GTX 900 and 1000 cards,” Jul. 1, 2025 (reports NVIDIA’s Unix driver deprecation schedule) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://www.tomshardware.com/pc-components/gpu-drivers/nvidia-to-axe-maxwell-pascal-and-volta-gpus-with-end-of-driver-support-580-series-drivers-will-be-the-last-to-support-gtx-900-and-1000-cards}\quad$\cdot$\quad\textsc{secondary}}
+
+\bookmark[level=2,dest=ref:60]{[60] NVIDIA, “Download The Official NVIDIA Drivers,” NVIDIA}
+\item[\textbf{[60]}]\label{ref:60}%
+NVIDIA, “Download The Official NVIDIA Drivers,” \textit{NVIDIA} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://www.nvidia.com/en-us/drivers/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:61]{[61] NVIDIA, “CUDA Toolkit Downloads” and “CUDA Toolkit Archive,” NVIDIA Developer}
+\item[\textbf{[61]}]\label{ref:61}%
+NVIDIA, “CUDA Toolkit Downloads” and “CUDA Toolkit Archive,” \textit{NVIDIA Developer} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://developer.nvidia.com/cuda-toolkit-archive}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:62]{[62] AMD, “AMD Drivers and Support for Processors and Graphics,” AMD}
+\item[\textbf{[62]}]\label{ref:62}%
+AMD, “AMD Drivers and Support for Processors and Graphics,” \textit{AMD} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://www.amd.com/en/support/download/drivers.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:63]{[63] LunarG, “Vulkan SDK,” LunarXchange (current SDK 1.4.363.1 by its sdk/latest.json listing)}
+\item[\textbf{[63]}]\label{ref:63}%
+LunarG, “Vulkan SDK,” \textit{LunarXchange} (current SDK 1.4.363.1 by its \texttt{sdk/\allowbreak{}latest.\allowbreak{}json} listing) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://vulkan.lunarg.com/sdk/home}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:64]{[64] Microsoft, “Visual Studio downloads” (Visual Studio 2026, Build Tools for Visual Studio 2026 an}
+\item[\textbf{[64]}]\label{ref:64}%
+Microsoft, “Visual Studio downloads” (Visual Studio 2026, Build Tools for Visual Studio 2026 and 2022) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://visualstudio.microsoft.com/downloads/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:65]{[65] Microsoft, “Latest supported Visual C++ Redistributable downloads,” Microsoft Learn}
+\item[\textbf{[65]}]\label{ref:65}%
+Microsoft, “Latest supported Visual C++ Redistributable downloads,” \textit{Microsoft Learn} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:66]{[66] Microsoft, “Remote debugging,” Visual Studio documentation (Remote Tools download)}
+\item[\textbf{[66]}]\label{ref:66}%
+Microsoft, “Remote debugging,” \textit{Visual Studio documentation} (Remote Tools download) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://learn.microsoft.com/en-us/visualstudio/debugger/remote-debugging}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:67]{[67] Microsoft, “How to install Linux on Windows with WSL,” Microsoft Learn}
+\item[\textbf{[67]}]\label{ref:67}%
+Microsoft, “How to install Linux on Windows with WSL,” \textit{Microsoft Learn} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://learn.microsoft.com/en-us/windows/wsl/install}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:68]{[68] Docker Inc., “Install Docker Desktop on Windows” and “Docker Desktop release notes,” Docker Doc}
+\item[\textbf{[68]}]\label{ref:68}%
+Docker Inc., “Install Docker Desktop on Windows” and “Docker Desktop release notes,” \textit{Docker Docs} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://docs.docker.com/desktop/setup/install/windows-install/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:69]{[69] Ollama, “Download Ollama,” ollama.com}
+\item[\textbf{[69]}]\label{ref:69}%
+Ollama, “Download Ollama,” \textit{ollama.\allowbreak{}com} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://ollama.com/download}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:70]{[70] ggml-org, llama.cpp releases (prebuilt CUDA, HIP, Vulkan and CPU binaries)}
+\item[\textbf{[70]}]\label{ref:70}%
+ggml-\allowbreak{}org, \textit{llama.\allowbreak{}cpp} releases (prebuilt CUDA, HIP, Vulkan and CPU binaries) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/ggml-org/llama.cpp/releases}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:71]{[71] Open WebUI, open-webui, open-terminal and mcpo repositories and container images}
+\item[\textbf{[71]}]\label{ref:71}%
+Open WebUI, \textit{open-\allowbreak{}webui}, \textit{open-\allowbreak{}terminal} and \textit{mcpo} repositories and container images [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/open-webui/open-webui}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:72]{[72] Prometheus Authors, “Download,” prometheus.io (Prometheus 3.16.0, 3.13.5 LTS, Alertmanager, exp}
+\item[\textbf{[72]}]\label{ref:72}%
+Prometheus Authors, “Download,” \textit{prometheus.io} (Prometheus 3.16.0, 3.13.5 LTS, Alertmanager, exporters) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://prometheus.io/download/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:73]{[73] Prometheus community, windows\_exporter releases}
+\item[\textbf{[73]}]\label{ref:73}%
+Prometheus community, \textit{windows\_\allowbreak{}exporter} releases [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/prometheus-community/windows_exporter/releases}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:74]{[74] Grafana Labs, “Download Grafana,” grafana.com}
+\item[\textbf{[74]}]\label{ref:74}%
+Grafana Labs, “Download Grafana,” \textit{grafana.\allowbreak{}com} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://grafana.com/grafana/download?platform=windows}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:75]{[75] F5 / nginx, “nginx: download,” nginx.org (mainline 1.31.8, stable 1.30.6)}
+\item[\textbf{[75]}]\label{ref:75}%
+F5 / nginx, “nginx: download,” \textit{nginx.\allowbreak{}org} (mainline 1.31.8, stable 1.30.6) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://nginx.org/en/download.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:76]{[76] I. Patterson, “NSSM — the Non-Sucking Service Manager,” nssm.cc (site intermittently unavailabl}
+\item[\textbf{[76]}]\label{ref:76}%
+I. Patterson, “NSSM — the Non-\allowbreak{}Sucking Service Manager,” \textit{nssm.cc} (site intermittently unavailable when checked) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://nssm.cc/download}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:77]{[77] The Go Authors, “All releases,” go.dev}
+\item[\textbf{[77]}]\label{ref:77}%
+The Go Authors, “All releases,” \textit{go.\allowbreak{}dev} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://go.dev/dl/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:78]{[78] OpenSSL Project, “Downloads,” openssl-library.org (supported branches and end-of-support dates)}
+\item[\textbf{[78]}]\label{ref:78}%
+OpenSSL Project, “Downloads,” \textit{openssl-\allowbreak{}library.\allowbreak{}org} (supported branches and end-of-\allowbreak{}support dates) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://openssl-library.org/source/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:79]{[79] Shining Light Productions, “Win32/Win64 OpenSSL Installer for Windows,” slproweb.com (third-par}
+\item[\textbf{[79]}]\label{ref:79}%
+Shining Light Productions, “Win32/\allowbreak{}Win64 OpenSSL Installer for Windows,” \textit{slproweb.\allowbreak{}com} (third-\allowbreak{}party Windows builds) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://slproweb.com/products/Win32OpenSSL.html}\quad$\cdot$\quad\textsc{vendor}}
+
+\bookmark[level=2,dest=ref:80]{[80] Git for Windows project, “Download for Windows,” git-scm.com}
+\item[\textbf{[80]}]\label{ref:80}%
+Git for Windows project, “Download for Windows,” \textit{git-\allowbreak{}scm.\allowbreak{}com} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://git-scm.com/downloads/win}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:81]{[81] Kitware Inc., “Download CMake,” cmake.org}
+\item[\textbf{[81]}]\label{ref:81}%
+Kitware Inc., “Download CMake,” \textit{cmake.\allowbreak{}org} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://cmake.org/download/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:82]{[82] conda-forge, Miniforge installers (conda and mamba from conda-forge)}
+\item[\textbf{[82]}]\label{ref:82}%
+conda-\allowbreak{}forge, \textit{Miniforge} installers (conda and mamba from conda-\allowbreak{}forge) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/conda-forge/miniforge}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:83]{[83] U. Ozdemir, nvidia\_gpu\_exporter releases}
+\item[\textbf{[83]}]\label{ref:83}%
+U. Ozdemir, \textit{nvidia\_\allowbreak{}gpu\_\allowbreak{}exporter} releases [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/utkuozdemir/nvidia_gpu_exporter/releases}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:84]{[84] Intel, “Intel oneAPI Base Toolkit,” Intel Developer Zone (SYCL compiler for Intel GPUs)}
+\item[\textbf{[84]}]\label{ref:84}%
+Intel, “Intel oneAPI Base Toolkit,” \textit{Intel Developer Zone} (SYCL compiler for Intel GPUs) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:85]{[85] I. Pavlov, “7-Zip,” 7-zip.org}
+\item[\textbf{[85]}]\label{ref:85}%
+I. Pavlov, “7-\allowbreak{}Zip,” \textit{7-\allowbreak{}zip.\allowbreak{}org} [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://www.7-zip.org/}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:86]{[86] Prometheus community, windows\_exporter v0.32.1 README (command-line flags, [defaults] placehold}
+\item[\textbf{[86]}]\label{ref:86}%
+Prometheus community, \textit{windows\_\allowbreak{}exporter} v0.32.1 README (command-\allowbreak{}line flags, \texttt{[defaults]} placeholder and MSI installer properties) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/prometheus-community/windows_exporter/blob/v0.32.1/README.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:87]{[87] AMD, “Install ROCm on WSL” (ROCDXG-based procedure), ROCm on Radeon and Ryzen documentation}
+\item[\textbf{[87]}]\label{ref:87}%
+AMD, “Install ROCm on WSL” (ROCDXG-\allowbreak{}based procedure), \textit{ROCm on Radeon and Ryzen} documentation [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/wsl/howto_wsl.html}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:88]{[88] AMD, librocdxg README (WSL user-mode library; repository marked deprecated, source moved to ROC}
+\item[\textbf{[88]}]\label{ref:88}%
+AMD, \textit{librocdxg} README (WSL user-\allowbreak{}mode library; repository marked deprecated, source moved to \texttt{ROCm/\allowbreak{}rocm-\allowbreak{}systems}) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/ROCm/librocdxg/blob/master/README.md}\quad$\cdot$\quad\textsc{primary}}
+
+\bookmark[level=2,dest=ref:89]{[89] Ollama, “Docker,” ollama/ollama source tree, docs/docker.mdx (NVIDIA and AMD container commands}
+\item[\textbf{[89]}]\label{ref:89}%
+Ollama, “Docker,” \textit{ollama/\allowbreak{}ollama} source tree, \texttt{docs/\allowbreak{}docker.\allowbreak{}mdx} (NVIDIA and AMD container commands) [Online]. Available: see URL below. Accessed: 2026-11-15.\newline
+{\footnotesize\url{https://github.com/ollama/ollama/blob/main/docs/docker.mdx}\quad$\cdot$\quad\textsc{primary}}
+
+\end{description}
+
+\endgroup
+
+\chapter{Figures with no citation}
+
+
+Some numbers in this document are not in any source, because no source
+publishes them. They are planning estimates for this class of hardware,
+listed here so they are not mistaken for cited facts. Each is stated as a
+range at its point of use, and the relation that consumes it names it as an
+estimate.
+
+\begin{small}
+\begin{longtable}{@{}p{0.30\linewidth} p{0.17\linewidth} p{0.43\linewidth}@{}}
+\caption{Uncited planning estimates, with how to replace each with a
+measurement taken on your own hardware.}\\
+\toprule
+\textbf{Quantity} & \textbf{Value used} & \textbf{How to measure it} \\
+\midrule \endfirsthead
+\toprule
+\textbf{Quantity} & \textbf{Value used} & \textbf{How to measure it} \\
+\midrule \endhead
+\bottomrule \endfoot
+GGUF container overhead $\varepsilon$ & 0.03--0.08 &
+  Compare a published tag size against $P b_{q}/8$ for a model whose
+  parameter count and quantisation you know \\
+Throughput realisation factor $\eta$ & 0.5--0.8 &
+  \texttt{probe\_model\_throughput.py}, then divide the measured rate by the
+  computed bound \\
+Runtime VRAM reservation $V_{\mathrm{rt}}$ & 0.8--1.5\,GB &
+  \texttt{nvidia-smi} with a model loaded, minus the published weight size \\
+Peak compiler resident set $M_{\mathrm{job}}$ & 1.5--2.5\,GB &
+  Watch peak working set during a single-job build of your heaviest
+  translation unit \\
+Exporter series counts & $\sim$1500 / $\sim$120 &
+  Query \texttt{prometheus\_tsdb\_head\_series} on your own server. The
+  \texttt{llama-server} count is published and is not an estimate \\
+Model architecture placeholders $n_{\ell}=48$, $n_{kv}=8$, $d_{h}=128$ &
+  plausible shape only & \texttt{ollama show <tag>} \\
+\end{longtable}
+\end{small}
+
+
+\end{document}

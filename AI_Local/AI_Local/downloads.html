@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Software and downloads</title>
+<meta name="description" content="Every program the AI_Local deployment uses, with official download links, the versions in the deployment folder, and which installers the GitHub repository does not carry.">
+<meta name="author" content="William W. Wallace">
+<meta name="generator" content="build_ai_local_site.py 0.0.4">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f5f66'/%3E%3Cg stroke='%23e3efef' stroke-width='2' fill='none'%3E%3Cpath d='M16 9v6M16 15l-6 6M16 15l6 6'/%3E%3C/g%3E%3Cg fill='%23e3efef'%3E%3Ccircle cx='16' cy='8' r='3'/%3E%3Ccircle cx='9' cy='23' r='3'/%3E%3Ccircle cx='23' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/equations.css">
+<link rel="stylesheet" href="assets/sitenav.css">
+</head>
+<body class="ail">
+<a class="skip" href="#content">Skip to content</a>
+<nav class="ailnav" aria-label="AI_Local page set">
+  <div class="ailnav-inner">
+    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
+    <span class="ailnav-ver">v0.0.6</span>
+    <div class="ailnav-links">
+      <a href="../index.html" class="ailnav-home"><span aria-hidden="true">⌂</span>&nbsp;Repo home</a><a href="index.html">Overview</a><a href="downloads.html">Downloads</a><a href="gpu-configuration.html">GPU setup</a><a href="local-code-build-test.html">Build &amp; test</a><a href="ollama-model-selection.html">Model choice</a><a href="claude-sandbox-local-env.html">Sandbox access</a><a href="monitoring-sizing.html">Monitor sizing</a><a href="llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="GPU_monitoring_setup.html">GPU metrics</a><a href="Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="references.html">References</a><a href="CHANGELOG.html">Change log</a>
+    </div>
+    <button class="ailnav-theme" type="button" aria-label="Switch theme" aria-pressed="false"><span class="ailnav-theme-icon" aria-hidden="true">☾</span><span class="ailnav-theme-label">Dark</span></button>
+  </div>
+</nav>
+<nav class="ailflow" aria-label="Setup path"><span class="ailflow-where"><span class="ailflow-n">1</span>Step 1 of 10: Gather the software</span><span class="ailflow-move"><a href="index.html#step-software">On the path</a><a href="gpu-configuration.html">2. Match the GPU stack to the card &rarr;</a></span></nav>
+<main id="content">
+<section class="hero">
+  <div class="container">
+    <div class="eyebrow">Step 1 &middot; Software and downloads</div>
+    <h1>Everything to install, and where to get it</h1>
+    <p class="lead">Every program the deployment uses, linked to its original creator's download page, with the version found in the deployment folder beside the newest one published on 2026-11-15. Six of the programs in the folder are not in the GitHub repository, because their installers are too large for it, so a reader who clones the repository has to fetch those from the publisher. They are listed first.</p>
+    <p class="small muted">Download from the publisher, not from a mirror: an installer that runs as administrator and loads a kernel driver is the wrong place to save a click. Where a publisher ships source only, the row names the distributor the publisher's own documentation points to and says so.</p>
+  </div>
+</section>
+
+<section id="on-this-page">
+  <div class="container">
+    <h2>On this page</h2>
+    <ul class="toc">
+      <li><a href="#not-in-repo">1. Not in the repository: fetch these from the publisher</a></li>
+      <li><a href="#minimum">2. The minimum set for your GPU</a></li>
+      <li><a href="#by-step">3. Everything, by setup step</a></li>
+      <li><a href="#unused">4. In the folder, but not yet used by any page</a></li>
+      <li><a href="#method">5. How the versions were checked</a></li>
+    </ul>
+  </div>
+</section>
+
+<section id="not-in-repo">
+  <div class="container">
+    <h2>1. Not in the repository: fetch these from the publisher</h2>
+    <p>These were found in the deployment folder on 2026-11-15 but are absent from the GitHub repository. Several are larger than GitHub's 100&nbsp;MB per-file limit.</p>
+    <div class="table-wrap"><table>
+    <caption>Programs in the deployment folder that the repository does not carry, with the original creator's download page.</caption>
+    <thead><tr><th scope="col">Program and download</th><th scope="col">What it does here</th><th scope="col">In the folder</th><th scope="col">Current (2026-11-15)</th></tr></thead>
+    <tbody>
+      <tr><td><strong id="sw-cuda">CUDA Toolkit</strong><br><span class="small muted">NVIDIA &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://developer.nvidia.com/cuda-toolkit-archive" rel="noopener">developer.nvidia.com</a></span></td><td>Compiler (<span class="mono">nvcc</span>) and libraries for building llama.cpp with CUDA. Not needed to <em>run</em> Ollama.<br><span class="small">CUDA 13 removed Maxwell, Pascal and Volta <a class="cite" href="references.html#r45">[45]</a>, and llama.cpp only adds the <span class="mono">50/61/70</span> targets when the toolkit is older than 13 <a class="cite" href="references.html#r44">[44]</a>. A GTX 10-series card (<span class="mono">CMAKE_CUDA_ARCHITECTURES=61</span>) must be built with CUDA 12.x. CUDA 12.9 accepts Visual Studio 2019/2022 only <a class="cite" href="references.html#r47">[47]</a>; CUDA 13.5 also accepts 2026 <a class="cite" href="references.html#r46">[46]</a>. See <a href="gpu-configuration.html#nvidia-matrix">the version matrix</a>.</span></td><td>11.8.0, 12.5.0, 12.6.3, 12.8.2, 13.2.1 (installers)<br><span class="badge low">not in repository</span></td><td>13.5 (12.9 Update 1 is the newest 12.x)<a class="cite" href="references.html#r61">[61]</a> </td></tr>
+      <tr><td><strong id="sw-vulkan-sdk">Vulkan SDK</strong><br><span class="small muted">LunarG &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://vulkan.lunarg.com/sdk/home" rel="noopener">vulkan.lunarg.com</a></span></td><td>Headers and <span class="mono">glslc</span> needed to <em>build</em> llama.cpp's Vulkan backend.<br><span class="small">The Vulkan <em>runtime</em> ships with every current GPU driver; the SDK is needed only on the machine that compiles <a class="cite" href="references.html#r42">[42]</a>.</span></td><td>1.4.350.0<br><span class="badge low">not in repository</span></td><td>1.4.363.1<a class="cite" href="references.html#r63">[63]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-openssl">OpenSSL (Win64 build)</strong> <span class="badge">optional</span><br><span class="small muted">OpenSSL Project; Windows build by Shining Light Productions &middot; Windows</span><br><span class="small">Download: <a href="https://slproweb.com/products/Win32OpenSSL.html" rel="noopener">slproweb.com</a></span></td><td>TLS for llama.cpp's optional HTTPS features.<br><span class="small">The OpenSSL Project publishes source only <a class="cite" href="references.html#r78">[78]</a>; the Win64 installer is a third-party build. llama.cpp builds and runs without it, minus SSL <a class="cite" href="references.html#r42">[42]</a>. The folder's 4.0.0 is superseded within its own branch; for a host kept for years, the 3.5 LTS line has the longest support.</span></td><td>Win64OpenSSL-4_0_0.exe<br><span class="badge low">not in repository</span></td><td>4.1 (Oct 23 2026); 4.0.3 supported to 14 May 2027; 3.5.9 LTS to 8 Apr 2030<a class="cite" href="references.html#r79">[79]</a> </td></tr>
+      <tr><td><strong id="sw-docker-desktop">Docker Desktop</strong><br><span class="small muted">Docker Inc. &middot; Windows</span><br><span class="small">Download: <a href="https://docs.docker.com/desktop/setup/install/windows-install/" rel="noopener">docs.docker.com</a></span></td><td>Runs Open WebUI, Open Terminal and Jupyter containers; passes the GPU through WSL 2.<br><span class="small">GPU passthrough on Windows needs the WSL 2 backend and an NVIDIA driver with WSL 2 GPU-PV support; no container toolkit is installed on Windows <a class="cite" href="references.html#r51">[51]</a>.</span></td><td>Docker Desktop Installer.exe (version not in file name)<br><span class="badge low">not in repository</span></td><td>4.99.0<a class="cite" href="references.html#r68">[68]</a> </td></tr>
+      <tr><td><strong id="sw-prometheus">Prometheus</strong><br><span class="small muted">Prometheus Authors &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://prometheus.io/download/" rel="noopener">prometheus.io</a></span></td><td>Time-series store that scrapes every exporter.<br><span class="small">The repository holds the 3.5.3 folder's configuration and licence but not <span class="mono">prometheus.exe</span> or <span class="mono">promtool.exe</span> (over GitHub's 100 MB limit). 3.5 was the previous LTS line; the download page now marks 3.13 as LTS.</span></td><td>3.5.3 (zip and extracted with prometheus.exe)<br><span class="badge medium">partly in repository</span></td><td>3.16.0; 3.13.5 LTS<a class="cite" href="references.html#r72">[72]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-grafana">Grafana</strong><br><span class="small muted">Grafana Labs &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://grafana.com/grafana/download?platform=windows" rel="noopener">grafana.com</a></span></td><td>Dashboards over Prometheus.</td><td>13.0.1+security-01 (MSI)<br><span class="badge low">not in repository</span></td><td>13.3.1<a class="cite" href="references.html#r74">[74]</a> </td></tr>
+    </tbody>
+  </table></div>
+  </div>
+</section>
+
+<section id="minimum">
+  <div class="container">
+    <h2>2. The minimum set for your GPU</h2>
+    <div class="table-wrap"><table>
+      <caption>What each vendor's machines need to <em>run</em> a model, and what to add to <em>build</em> llama.cpp from source. Running is enough for single-machine use; building is needed for llama.cpp RPC clusters and for Pascal cards on CUDA 12.x.</caption>
+      <thead><tr><th scope="col">GPU</th><th scope="col">To run</th><th scope="col">Add to build</th></tr></thead>
+      <tbody>
+        <tr><td>NVIDIA</td><td><a href="#sw-nvidia-driver">Driver</a>, <a href="#sw-ollama">Ollama</a></td><td><a href="#sw-cuda">CUDA Toolkit</a> (12.x for Pascal and older), <a href="#sw-vs-buildtools">Build Tools</a>, <a href="#sw-git">Git</a>, <a href="#sw-cmake">CMake</a></td></tr>
+        <tr><td>AMD</td><td><a href="#sw-amd-driver">Adrenalin driver</a>, <a href="#sw-ollama">Ollama</a></td><td><a href="#sw-hip-sdk">HIP SDK</a> for ROCm builds, or the <a href="#sw-vulkan-sdk">Vulkan SDK</a> for Vulkan builds; <a href="#sw-vs-buildtools">Build Tools</a>, <a href="#sw-git">Git</a></td></tr>
+        <tr><td>Intel</td><td>Intel graphics driver, <a href="#sw-ollama">Ollama</a></td><td><a href="#sw-vulkan-sdk">Vulkan SDK</a> or <a href="#sw-oneapi">oneAPI</a></td></tr>
+        <tr><td>Every machine</td><td><a href="#sw-miniforge">Miniforge</a> for the Python steps</td><td>&mdash;</td></tr>
+        <tr><td>Monitoring server</td><td><a href="#sw-prometheus">Prometheus</a>, <a href="#sw-grafana">Grafana</a>, <a href="#sw-nssm">NSSM</a></td><td>&mdash;</td></tr>
+      </tbody>
+    </table></div>
+    <p>Which driver, toolkit and compiler versions to pair for your card is on the <a href="gpu-configuration.html#nvidia-matrix">GPU configuration page</a>.</p>
+  </div>
+</section>
+
+<section id="by-step">
+  <div class="container">
+    <h2>3. Everything, by setup step</h2>
+    <p>Each program appears under the first step that needs it. Optional components are marked.</p>
+
+    <h3 id="step-software">Step 1: Gather the software <span class="small muted">&middot; <a href="downloads.html">go to the page</a></span></h3>
+    <div class="table-wrap"><table>
+    <caption>Programs first needed at step 1, gather the software.</caption>
+    <thead><tr><th scope="col">Program and download</th><th scope="col">What it does here</th><th scope="col">In the folder</th><th scope="col">Current (2026-11-15)</th></tr></thead>
+    <tbody>
+      <tr><td><strong id="sw-nvidia-driver">NVIDIA display driver</strong><br><span class="small muted">NVIDIA &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://www.nvidia.com/en-us/drivers/" rel="noopener">nvidia.com</a></span></td><td>Kernel driver and CUDA runtime for every NVIDIA path, including WSL and Docker.<br><span class="small">Ollama needs driver 550 or newer, and 570 or newer for compute capability 5.0&ndash;6.2 <a class="cite" href="references.html#r40">[40]</a>. The R580 branch is reported as the last to support Maxwell, Pascal and Volta (GTX 900/1000, Titan V) <a class="cite" href="references.html#r59">[59]</a> <span class="badge medium">secondary source</span>. Under WSL, install only the Windows driver: no Linux display driver goes inside WSL <a class="cite" href="references.html#r48">[48]</a>.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>R620 branch (pairs with CUDA 13.5)<a class="cite" href="references.html#r60">[60]</a> </td></tr>
+      <tr><td><strong id="sw-amd-driver">AMD Software: Adrenalin Edition</strong><br><span class="small muted">AMD &middot; Windows</span><br><span class="small">Download: <a href="https://www.amd.com/en/support/download/drivers.html" rel="noopener">amd.com</a></span></td><td>Radeon driver on Windows; also supplies the ROCm runtime that WSL uses.<br><span class="small">For ROCm under WSL, use the driver version AMD lists for your ROCm release in its WSL matrix <a class="cite" href="references.html#r52">[52]</a>. <span class="mono">amd-smi</span> does not work under WSL <a class="cite" href="references.html#r53">[53]</a>.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td><span class="muted">not checked</span><a class="cite" href="references.html#r62">[62]</a> </td></tr>
+      <tr><td><strong id="sw-vs-buildtools">Build Tools for Visual Studio 2022 / 2026</strong><br><span class="small muted">Microsoft &middot; Windows</span><br><span class="small">Download: <a href="https://visualstudio.microsoft.com/downloads/" rel="noopener">visualstudio.microsoft.com</a></span></td><td>MSVC compiler, Windows SDK and the vcvars environment for C++ and CUDA builds.<br><span class="small">Pair the compiler with the CUDA line: <strong>2022</strong> for CUDA 12.x (the Pascal path), <strong>2026</strong> or 2022 for CUDA 13.5 <a class="cite" href="references.html#r46">[46]</a> <a class="cite" href="references.html#r47">[47]</a>.</span></td><td>vs_BuildTools_2022.exe, vs_BuildTools_2026.exe, VisualStudioSetup_2026.exe<br><span class="badge high">in repository</span></td><td>Visual Studio 2026<a class="cite" href="references.html#r64">[64]</a> </td></tr>
+      <tr><td><strong id="sw-vc-redist">Visual C++ Redistributable (x64)</strong><br><span class="small muted">Microsoft &middot; Windows</span><br><span class="small">Download: <a href="https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist" rel="noopener">learn.microsoft.com</a></span></td><td>Runtime DLLs for MSVC-built binaries on machines with no compiler installed.<br><span class="small">Needed on worker nodes that run copied <span class="mono">llama-server</span> or <span class="mono">ggml-rpc-server</span> builds.</span></td><td>VC_redist.x64_2022.exe<br><span class="badge high">in repository</span></td><td>latest supported (v14)<a class="cite" href="references.html#r65">[65]</a> </td></tr>
+      <tr><td><strong id="sw-git">Git for Windows</strong><br><span class="small muted">Git for Windows project &middot; Windows</span><br><span class="small">Download: <a href="https://git-scm.com/downloads/win" rel="noopener">git-scm.com</a></span></td><td>Source control; fetches llama.cpp and this repository.</td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>2.56.1<a class="cite" href="references.html#r80">[80]</a> </td></tr>
+      <tr><td><strong id="sw-miniforge">Miniforge (conda + mamba)</strong><br><span class="small muted">conda-forge &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://github.com/conda-forge/miniforge" rel="noopener">github.com</a></span></td><td>The mamba environment that every Python step runs in.</td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>26.9.4-2<a class="cite" href="references.html#r82">[82]</a> </td></tr>
+      <tr><td><strong id="sw-wsl">Windows Subsystem for Linux</strong><br><span class="small muted">Microsoft &middot; Windows</span><br><span class="small">Download: <a href="https://learn.microsoft.com/en-us/windows/wsl/install" rel="noopener">learn.microsoft.com</a></span></td><td>Linux userland for the Jupyter-on-WSL route and for Docker Desktop's GPU support.<br><span class="small">Install with <span class="mono">wsl --install</span>.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td><span class="muted">not checked</span><a class="cite" href="references.html#r67">[67]</a> </td></tr>
+      <tr><td><strong id="sw-7zip">7-Zip</strong> <span class="badge">optional</span><br><span class="small muted">Igor Pavlov &middot; Windows</span><br><span class="small">Download: <a href="https://www.7-zip.org/" rel="noopener">7-zip.org</a></span></td><td>Extracts the release archives of this page set.</td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td><span class="muted">not checked</span><a class="cite" href="references.html#r85">[85]</a> </td></tr>
+    </tbody>
+  </table></div>
+    <h3 id="step-gpu">Step 2: Match the GPU stack to the card <span class="small muted">&middot; <a href="gpu-configuration.html">go to the page</a></span></h3>
+    <div class="table-wrap"><table>
+    <caption>Programs first needed at step 2, match the GPU stack to the card.</caption>
+    <thead><tr><th scope="col">Program and download</th><th scope="col">What it does here</th><th scope="col">In the folder</th><th scope="col">Current (2026-11-15)</th></tr></thead>
+    <tbody>
+      <tr><td><strong id="sw-cuda">CUDA Toolkit</strong><br><span class="small muted">NVIDIA &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://developer.nvidia.com/cuda-toolkit-archive" rel="noopener">developer.nvidia.com</a></span></td><td>Compiler (<span class="mono">nvcc</span>) and libraries for building llama.cpp with CUDA. Not needed to <em>run</em> Ollama.<br><span class="small">CUDA 13 removed Maxwell, Pascal and Volta <a class="cite" href="references.html#r45">[45]</a>, and llama.cpp only adds the <span class="mono">50/61/70</span> targets when the toolkit is older than 13 <a class="cite" href="references.html#r44">[44]</a>. A GTX 10-series card (<span class="mono">CMAKE_CUDA_ARCHITECTURES=61</span>) must be built with CUDA 12.x. CUDA 12.9 accepts Visual Studio 2019/2022 only <a class="cite" href="references.html#r47">[47]</a>; CUDA 13.5 also accepts 2026 <a class="cite" href="references.html#r46">[46]</a>. See <a href="gpu-configuration.html#nvidia-matrix">the version matrix</a>.</span></td><td>11.8.0, 12.5.0, 12.6.3, 12.8.2, 13.2.1 (installers)<br><span class="badge low">not in repository</span></td><td>13.5 (12.9 Update 1 is the newest 12.x)<a class="cite" href="references.html#r61">[61]</a> </td></tr>
+      <tr><td><strong id="sw-hip-sdk">HIP SDK for Windows</strong> <span class="badge">optional</span><br><span class="small muted">AMD &middot; Windows</span><br><span class="small">Download: <a href="https://www.amd.com/en/developer/resources/rocm-hub/hip-sdk.html" rel="noopener">amd.com</a></span></td><td>HIP compiler for building llama.cpp's ROCm backend natively on Windows.<br><span class="small">Only for building from source. Ollama and the llama.cpp release binaries carry their own HIP runtime.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td><span class="muted">not checked</span><a class="cite" href="references.html#r54">[54]</a> </td></tr>
+      <tr><td><strong id="sw-vulkan-sdk">Vulkan SDK</strong><br><span class="small muted">LunarG &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://vulkan.lunarg.com/sdk/home" rel="noopener">vulkan.lunarg.com</a></span></td><td>Headers and <span class="mono">glslc</span> needed to <em>build</em> llama.cpp's Vulkan backend.<br><span class="small">The Vulkan <em>runtime</em> ships with every current GPU driver; the SDK is needed only on the machine that compiles <a class="cite" href="references.html#r42">[42]</a>.</span></td><td>1.4.350.0<br><span class="badge low">not in repository</span></td><td>1.4.363.1<a class="cite" href="references.html#r63">[63]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-oneapi">Intel oneAPI Base Toolkit</strong> <span class="badge">optional</span><br><span class="small muted">Intel &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html" rel="noopener">intel.com</a></span></td><td>SYCL compiler for llama.cpp on Intel Arc and integrated GPUs.<br><span class="small">Not used by any page beyond the GPU page. Intel GPUs also run llama.cpp through Vulkan, which needs no extra toolkit.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td><span class="muted">not checked</span><a class="cite" href="references.html#r84">[84]</a> </td></tr>
+    </tbody>
+  </table></div>
+    <h3 id="step-model">Step 3: Choose a model that fits <span class="small muted">&middot; <a href="ollama-model-selection.html">go to the page</a></span></h3>
+    <div class="table-wrap"><table>
+    <caption>Programs first needed at step 3, choose a model that fits.</caption>
+    <thead><tr><th scope="col">Program and download</th><th scope="col">What it does here</th><th scope="col">In the folder</th><th scope="col">Current (2026-11-15)</th></tr></thead>
+    <tbody>
+      <tr><td><strong id="sw-ollama">Ollama</strong><br><span class="small muted">Ollama &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://ollama.com/download" rel="noopener">ollama.com</a></span></td><td>Model runtime and registry client on every serving node.<br><span class="small">Bundles its own CUDA, ROCm and Vulkan runtimes; only the GPU driver is needed <a class="cite" href="references.html#r40">[40]</a>.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>0.40.16<a class="cite" href="references.html#r69">[69]</a> </td></tr>
+    </tbody>
+  </table></div>
+    <h3 id="step-serve">Step 4: Serve it on the network <span class="small muted">&middot; <a href="llama-rpc-vulkan-guide.html">go to the page</a></span></h3>
+    <div class="table-wrap"><table>
+    <caption>Programs first needed at step 4, serve it on the network.</caption>
+    <thead><tr><th scope="col">Program and download</th><th scope="col">What it does here</th><th scope="col">In the folder</th><th scope="col">Current (2026-11-15)</th></tr></thead>
+    <tbody>
+      <tr><td><strong id="sw-docker-desktop">Docker Desktop</strong><br><span class="small muted">Docker Inc. &middot; Windows</span><br><span class="small">Download: <a href="https://docs.docker.com/desktop/setup/install/windows-install/" rel="noopener">docs.docker.com</a></span></td><td>Runs Open WebUI, Open Terminal and Jupyter containers; passes the GPU through WSL 2.<br><span class="small">GPU passthrough on Windows needs the WSL 2 backend and an NVIDIA driver with WSL 2 GPU-PV support; no container toolkit is installed on Windows <a class="cite" href="references.html#r51">[51]</a>.</span></td><td>Docker Desktop Installer.exe (version not in file name)<br><span class="badge low">not in repository</span></td><td>4.99.0<a class="cite" href="references.html#r68">[68]</a> </td></tr>
+      <tr><td><strong id="sw-nvidia-ctk">NVIDIA Container Toolkit</strong> <span class="badge">optional</span><br><span class="small muted">NVIDIA &middot; Linux</span><br><span class="small">Download: <a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html" rel="noopener">docs.nvidia.com</a></span></td><td>Gives Docker containers the GPU on a <em>Linux</em> host.<br><span class="small">Linux Docker hosts only. Docker Desktop on Windows does not use it.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>1.20.2<a class="cite" href="references.html#r50">[50]</a> </td></tr>
+      <tr><td><strong id="sw-llama-cpp">llama.cpp</strong><br><span class="small muted">ggml-org &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://github.com/ggml-org/llama.cpp/releases" rel="noopener">github.com</a></span></td><td><span class="mono">llama-server</span> and <span class="mono">ggml-rpc-server</span> for multi-machine serving and the <span class="mono">/metrics</span> endpoint.<br><span class="small">Release builds exist for CUDA 12, CUDA 13, HIP, Vulkan and CPU. Build from source for a Pascal card on CUDA 12.x or to enable RPC.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>b12428<a class="cite" href="references.html#r70">[70]</a> </td></tr>
+      <tr><td><strong id="sw-open-webui">Open WebUI (+ Open Terminal, mcpo)</strong><br><span class="small muted">Open WebUI &middot; Docker image</span><br><span class="small">Download: <a href="https://github.com/open-webui/open-webui" rel="noopener">github.com</a></span></td><td>Browser front end, code execution and the terminal tool server.<br><span class="small">Pulled as container images by <span class="mono">config/docker-compose.openwebui.yml</span>.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>Open WebUI 0.13.3; Open Terminal 0.17.17; mcpo 0.0.20<a class="cite" href="references.html#r71">[71]</a> </td></tr>
+      <tr><td><strong id="sw-nginx">nginx</strong><br><span class="small muted">F5 / nginx &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://nginx.org/en/download.html" rel="noopener">nginx.org</a></span></td><td>Reverse proxy in front of Ollama or Open WebUI.<br><span class="small">The folder's 1.30.2 is on the stable branch and four patch releases behind.</span></td><td>1.30.2 (zip and extracted folder)<br><span class="badge high">in repository</span></td><td>stable 1.30.6; mainline 1.31.8<a class="cite" href="references.html#r75">[75]</a> </td></tr>
+      <tr><td><strong id="sw-nssm">NSSM</strong><br><span class="small muted">Iain Patterson &middot; Windows</span><br><span class="small">Download: <a href="https://nssm.cc/download" rel="noopener">nssm.cc</a></span></td><td>Runs non-service executables (Prometheus, Grafana, llama-server, Jupyter) as Windows services.<br><span class="small">nssm.cc returned HTTP 503 on the download page during verification; the 2.24 release zip was reachable. Not needed for <span class="mono">nvidia_gpu_exporter</span> or <span class="mono">windows_exporter</span>, which register themselves as services <a class="cite" href="references.html#r56">[56]</a>.</span></td><td>2.24 and 2.24-101-g897c7ad (zip and extracted)<br><span class="badge high">in repository</span></td><td>2.24 (release); 2.24-101-g897c7ad (pre-release)<a class="cite" href="references.html#r76">[76]</a> </td></tr>
+    </tbody>
+  </table></div>
+    <h3 id="step-hands">Step 5: Give the model a place to build and test <span class="small muted">&middot; <a href="local-code-build-test.html">go to the page</a></span></h3>
+    <div class="table-wrap"><table>
+    <caption>Programs first needed at step 5, give the model a place to build and test.</caption>
+    <thead><tr><th scope="col">Program and download</th><th scope="col">What it does here</th><th scope="col">In the folder</th><th scope="col">Current (2026-11-15)</th></tr></thead>
+    <tbody>
+      <tr><td><strong id="sw-cmake">CMake</strong><br><span class="small muted">Kitware &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://cmake.org/download/" rel="noopener">cmake.org</a></span></td><td>Build-system generator used by llama.cpp and by <span class="mono">build_cpp.ps1</span>.<br><span class="small">Visual Studio and its Build Tools also install a CMake; a separate install is only needed for a newer one.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>4.5.0<a class="cite" href="references.html#r81">[81]</a> </td></tr>
+      <tr><td><strong id="sw-openssl">OpenSSL (Win64 build)</strong> <span class="badge">optional</span><br><span class="small muted">OpenSSL Project; Windows build by Shining Light Productions &middot; Windows</span><br><span class="small">Download: <a href="https://slproweb.com/products/Win32OpenSSL.html" rel="noopener">slproweb.com</a></span></td><td>TLS for llama.cpp's optional HTTPS features.<br><span class="small">The OpenSSL Project publishes source only <a class="cite" href="references.html#r78">[78]</a>; the Win64 installer is a third-party build. llama.cpp builds and runs without it, minus SSL <a class="cite" href="references.html#r42">[42]</a>. The folder's 4.0.0 is superseded within its own branch; for a host kept for years, the 3.5 LTS line has the longest support.</span></td><td>Win64OpenSSL-4_0_0.exe<br><span class="badge low">not in repository</span></td><td>4.1 (Oct 23 2026); 4.0.3 supported to 14 May 2027; 3.5.9 LTS to 8 Apr 2030<a class="cite" href="references.html#r79">[79]</a> </td></tr>
+    </tbody>
+  </table></div>
+    <h3 id="step-monitor">Step 7: Install Prometheus and Grafana <span class="small muted">&middot; <a href="Grafana_Prometheus_install_windows.html">go to the page</a></span></h3>
+    <div class="table-wrap"><table>
+    <caption>Programs first needed at step 7, install Prometheus and Grafana.</caption>
+    <thead><tr><th scope="col">Program and download</th><th scope="col">What it does here</th><th scope="col">In the folder</th><th scope="col">Current (2026-11-15)</th></tr></thead>
+    <tbody>
+      <tr><td><strong id="sw-prometheus">Prometheus</strong><br><span class="small muted">Prometheus Authors &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://prometheus.io/download/" rel="noopener">prometheus.io</a></span></td><td>Time-series store that scrapes every exporter.<br><span class="small">The repository holds the 3.5.3 folder's configuration and licence but not <span class="mono">prometheus.exe</span> or <span class="mono">promtool.exe</span> (over GitHub's 100 MB limit). 3.5 was the previous LTS line; the download page now marks 3.13 as LTS.</span></td><td>3.5.3 (zip and extracted with prometheus.exe)<br><span class="badge medium">partly in repository</span></td><td>3.16.0; 3.13.5 LTS<a class="cite" href="references.html#r72">[72]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-grafana">Grafana</strong><br><span class="small muted">Grafana Labs &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://grafana.com/grafana/download?platform=windows" rel="noopener">grafana.com</a></span></td><td>Dashboards over Prometheus.</td><td>13.0.1+security-01 (MSI)<br><span class="badge low">not in repository</span></td><td>13.3.1<a class="cite" href="references.html#r74">[74]</a> </td></tr>
+      <tr><td><strong id="sw-windows-exporter">windows_exporter</strong><br><span class="small muted">Prometheus community &middot; Windows</span><br><span class="small">Download: <a href="https://github.com/prometheus-community/windows_exporter/releases" rel="noopener">github.com</a></span></td><td>Host metrics on Windows, and vendor-neutral GPU metrics through its <span class="mono">gpu</span> collector.<br><span class="small">The <span class="mono">gpu</span> collector is off by default. Its utilisation counter is <span class="mono">windows_gpu_engine_time_seconds</span> in 0.31.7 and <span class="mono">windows_gpu_engine_time_seconds_total</span> in 0.32.x, so a dashboard written for one shows nothing on the other <a class="cite" href="references.html#r55">[55]</a>.</span></td><td>0.31.7 (EXE and MSI)<br><span class="badge high">in repository</span></td><td>0.32.1<a class="cite" href="references.html#r73">[73]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-node-exporter">node_exporter</strong><br><span class="small muted">Prometheus Authors &middot; Linux</span><br><span class="small">Download: <a href="https://prometheus.io/download/" rel="noopener">prometheus.io</a></span></td><td>Host metrics on Linux nodes.</td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>1.12.1<a class="cite" href="references.html#r72">[72]</a> </td></tr>
+    </tbody>
+  </table></div>
+    <h3 id="step-gpu-metrics">Step 8: Export GPU metrics <span class="small muted">&middot; <a href="GPU_monitoring_setup.html">go to the page</a></span></h3>
+    <div class="table-wrap"><table>
+    <caption>Programs first needed at step 8, export GPU metrics.</caption>
+    <thead><tr><th scope="col">Program and download</th><th scope="col">What it does here</th><th scope="col">In the folder</th><th scope="col">Current (2026-11-15)</th></tr></thead>
+    <tbody>
+      <tr><td><strong id="sw-nvidia-exporter">nvidia_gpu_exporter</strong><br><span class="small muted">Utku Ozdemir &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases" rel="noopener">github.com</a></span></td><td>Per-GPU utilisation, memory, power and temperature for NVIDIA cards.<br><span class="small">Windows: <span class="mono">winget install utkuozdemir.nvidia_gpu_exporter</span> installs it as a native service on port 9835 <a class="cite" href="references.html#r56">[56]</a>.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td>1.19.0<a class="cite" href="references.html#r83">[83]</a> </td></tr>
+      <tr><td><strong id="sw-amd-dme">AMD Device Metrics Exporter</strong> <span class="badge">optional</span><br><span class="small muted">AMD &middot; Linux</span><br><span class="small">Download: <a href="https://github.com/ROCm/device-metrics-exporter" rel="noopener">github.com</a></span></td><td>GPU metrics on <em>Linux</em> hosts with ROCm.<br><span class="small">AMD's named replacement for <span class="mono">amd_smi_exporter</span>, which receives no further updates <a class="cite" href="references.html#r57">[57]</a>. Its README describes Instinct accelerators; Radeon support was not confirmed. On Windows, use the <span class="mono">windows_exporter</span> gpu collector instead.</span></td><td><span class="muted">&mdash;</span><br><span class="badge">fetch from publisher</span></td><td><span class="muted">not checked</span><a class="cite" href="references.html#r58">[58]</a> </td></tr>
+    </tbody>
+  </table></div>
+  </div>
+</section>
+
+<section id="unused">
+  <div class="container">
+    <h2>4. In the folder, but not yet used by any page</h2>
+    <p>These are in the repository's <span class="mono">Supporting_Software</span> folder but no page in the set configures them. They are listed so the inventory is complete, not as a recommendation to install them.</p>
+    <div class="table-wrap"><table>
+    <caption>Programs present in the folder that no page in the set uses yet.</caption>
+    <thead><tr><th scope="col">Program and download</th><th scope="col">What it does here</th><th scope="col">In the folder</th><th scope="col">Current (2026-11-15)</th></tr></thead>
+    <tbody>
+      <tr><td><strong id="sw-vs-remote">Remote Tools for Visual Studio 2022 / 2026</strong> <span class="badge">optional</span><br><span class="small muted">Microsoft &middot; Windows</span><br><span class="small">Download: <a href="https://learn.microsoft.com/en-us/visualstudio/debugger/remote-debugging" rel="noopener">learn.microsoft.com</a></span></td><td>Remote debugger for stepping through a build running on another node.<br><span class="small">Present in the folder; no page in the set uses it yet.</span></td><td>VS_RemoteTools_2022.exe, VS_RemoteTools_2026.exe<br><span class="badge high">in repository</span></td><td><span class="muted">not checked</span><a class="cite" href="references.html#r66">[66]</a> </td></tr>
+      <tr><td><strong id="sw-go">Go</strong> <span class="badge">optional</span><br><span class="small muted">The Go Authors &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://go.dev/dl/" rel="noopener">go.dev</a></span></td><td>Compiler; only needed to build an exporter from source.<br><span class="small">The notes in the folder build <span class="mono">amd_smi_exporter</span> with Go inside WSL. That exporter cannot read the GPU under WSL <a class="cite" href="references.html#r53">[53]</a>, so this is no longer needed for the AMD path.</span></td><td>1.26.3 (MSI)<br><span class="badge high">in repository</span></td><td>1.27.4<a class="cite" href="references.html#r77">[77]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-alertmanager">Alertmanager</strong> <span class="badge">optional</span><br><span class="small muted">Prometheus Authors &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://prometheus.io/download/" rel="noopener">prometheus.io</a></span></td><td>Routes Prometheus alerts to e-mail, chat or webhooks.<br><span class="small">In the folder; no page in the set configures it yet.</span></td><td>0.32.1<br><span class="badge high">in repository</span></td><td>0.35.0<a class="cite" href="references.html#r72">[72]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-blackbox-exporter">blackbox_exporter</strong> <span class="badge">optional</span><br><span class="small muted">Prometheus Authors &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://prometheus.io/download/" rel="noopener">prometheus.io</a></span></td><td>Probes HTTP endpoints (for example Ollama's port) from outside.<br><span class="small">In the folder; no page in the set configures it yet.</span></td><td>0.28.0<br><span class="badge high">in repository</span></td><td>0.29.1<a class="cite" href="references.html#r72">[72]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-statsd-exporter">statsd_exporter</strong> <span class="badge">optional</span><br><span class="small muted">Prometheus Authors &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://github.com/prometheus/statsd_exporter/releases" rel="noopener">github.com</a></span></td><td>Bridges StatsD metrics into Prometheus.<br><span class="small">In the folder; nothing in this deployment emits StatsD.</span></td><td>0.29.0<br><span class="badge high">in repository</span></td><td>0.31.0<a class="cite" href="references.html#r72">[72]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-graphite-exporter">graphite_exporter</strong> <span class="badge">optional</span><br><span class="small muted">Prometheus Authors &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://prometheus.io/download/" rel="noopener">prometheus.io</a></span></td><td>Bridges Graphite metrics into Prometheus.<br><span class="small">In the folder; nothing in this deployment emits Graphite.</span></td><td>0.16.0<br><span class="badge high">in repository</span></td><td>0.17.0<a class="cite" href="references.html#r72">[72]</a> <span class="badge medium">newer available</span></td></tr>
+      <tr><td><strong id="sw-consul-exporter">consul_exporter</strong> <span class="badge">optional</span><br><span class="small muted">Prometheus Authors &middot; Windows / Linux</span><br><span class="small">Download: <a href="https://prometheus.io/download/" rel="noopener">prometheus.io</a></span></td><td>Exports Consul service health.<br><span class="small">In the folder; this deployment does not run Consul.</span></td><td>0.13.0<br><span class="badge high">in repository</span></td><td>0.13.0<a class="cite" href="references.html#r72">[72]</a> <span class="badge high">current</span></td></tr>
+    </tbody>
+  </table></div>
+  </div>
+</section>
+
+<section id="method">
+  <div class="container">
+    <h2>5. How the versions were checked</h2>
+    <ul>
+      <li><strong>In the folder</strong> is read from the installer and archive file names in <span class="mono">tools/AI_Local</span> on 2026-11-15. It is what was installed from, not a recommendation.</li>
+      <li><strong>Current</strong> for GitHub-hosted projects is the highest release tag in the repository, read with <span class="mono">git ls-remote --tags</span>; for the others, the publisher's download or release-notes page cited in the row.</li>
+      <li><strong>Newer available</strong> appears only where both columns are plain version numbers. A row without it has not been judged, not judged current.</li>
+      <li>Every link on this page and across the set can be re-checked with <span class="mono">python scripts/check_links.py</span>, which reports links that no longer resolve.</li>
+    </ul>
+    <p>Version numbers move weekly. Treat the <strong>Current</strong> column as the state on 2026-11-15 and the link as the thing to trust.</p>
+  </div>
+</section>
+<aside class="ailflow-next" aria-label="Next step"><h2>Step 1 of 10 is done when</h2><p><span class="mono">git --version</span> and <span class="mono">mamba --version</span> answer, and on Windows <span class="mono">cl</span> answers from a Developer prompt.</p><p>Read alongside:</p><ul><li><a href="gpu-configuration.html">Which CUDA and Visual Studio versions to pair</a></li></ul><p><a class="ailflow-go" href="gpu-configuration.html">Next: step 2, match the GPU stack to the card &rarr;</a></p></aside>
+</main>
+<footer class="foot">
+  <div class="container">
+    <p><strong>AI_Local</strong> v0.0.6 &middot; William W. Wallace &middot;
+       <a href="CHANGELOG.html">change log</a> &middot;
+       <a href="references.html">references</a></p>
+    <p class="small">Equations typeset offline with KaTeX. Every page in this set opens
+       from local disk with no network access, and nothing here uses browser storage.</p>
+  </div>
+</footer>
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="assets/equations.js"></script>
+<script src="assets/sitenav.js"></script>
+</body>
+</html>

@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running AI on your own hardware, end to end</title>
+<meta name="description" content="Landing page for the AI_Local set: deploying language models across a home or lab network, and letting them build and test code on hardware you own.">
+<meta name="author" content="William W. Wallace">
+<meta name="generator" content="build_ai_local_site.py 0.0.4">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f5f66'/%3E%3Cg stroke='%23e3efef' stroke-width='2' fill='none'%3E%3Cpath d='M16 9v6M16 15l-6 6M16 15l6 6'/%3E%3C/g%3E%3Cg fill='%23e3efef'%3E%3Ccircle cx='16' cy='8' r='3'/%3E%3Ccircle cx='9' cy='23' r='3'/%3E%3Ccircle cx='23' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/equations.css">
+<link rel="stylesheet" href="assets/sitenav.css">
+<link rel="stylesheet" href="assets/home.css">
+</head>
+<body class="ail">
+<a class="skip" href="#content">Skip to content</a>
+<nav class="ailnav" aria-label="AI_Local page set">
+  <div class="ailnav-inner">
+    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
+    <span class="ailnav-ver">v0.0.6</span>
+    <div class="ailnav-links">
+      <a href="../index.html" class="ailnav-home"><span aria-hidden="true">⌂</span>&nbsp;Repo home</a><a href="index.html">Overview</a><a href="downloads.html">Downloads</a><a href="gpu-configuration.html">GPU setup</a><a href="local-code-build-test.html">Build &amp; test</a><a href="ollama-model-selection.html">Model choice</a><a href="claude-sandbox-local-env.html">Sandbox access</a><a href="monitoring-sizing.html">Monitor sizing</a><a href="llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="GPU_monitoring_setup.html">GPU metrics</a><a href="Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="references.html">References</a><a href="CHANGELOG.html">Change log</a>
+    </div>
+    <button class="ailnav-theme" type="button" aria-label="Switch theme" aria-pressed="false"><span class="ailnav-theme-icon" aria-hidden="true">☾</span><span class="ailnav-theme-label">Dark</span></button>
+  </div>
+</nav>
+<nav class="ailflow" aria-label="Setup path"><span class="ailflow-where">Start page</span><span class="ailflow-dim">10 steps, in order</span><span class="ailflow-move"><a href="#path">Jump to the path</a><a href="downloads.html">Begin with step 1 &rarr;</a></span></nav>
+<main id="content">
+<section class="hero">
+  <div class="container">
+    <div class="eyebrow">AI_Local &middot; v0.0.6 &middot; Start here</div>
+    <h1>Running AI on your own hardware, end to end</h1>
+    <p class="lead">A working set for deploying language models across a home or lab network: choosing the hardware path, serving models on one machine or several, letting a model write, build and test code on machines you own, and monitoring what the hardware is doing. Follow the ten numbered steps below in order; each one ends with a check that tells you it worked.</p>
+    <p class="small muted">Scientific and code-building work is the focus. Every page cites its sources to a numbered row in <a href="references.html">one reference table</a>, every equation carries a variable table with units, and every figure that is an estimate rather than a citation says so.</p>
+  </div>
+</section>
+
+<section id="your-setup">
+  <div class="container">
+    <h2>Your setup</h2>
+    <p>Pick the closest shape. Steps that do not apply are dimmed rather than hidden, so you can see what you are skipping.</p>
+    <div class="tier-grid">
+      <button class="tier" type="button" data-tier="single" aria-pressed="false">
+        <span class="tier-name">One machine</span>
+        <span class="tier-hw small muted">A single desktop or laptop with one GPU</span>
+        <span class="tier-stages xs faint">Required steps: 1, 2, 3, 4, 5</span>
+      </button>
+      <button class="tier" type="button" data-tier="pair" aria-pressed="false">
+        <span class="tier-name">Two machines</span>
+        <span class="tier-hw small muted">A serving machine plus one other machine</span>
+        <span class="tier-stages xs faint">Required steps: 1, 2, 3, 4, 5, 7, 8, 9, 10</span>
+      </button>
+      <button class="tier" type="button" data-tier="cluster" aria-pressed="false">
+        <span class="tier-name">Three or more</span>
+        <span class="tier-hw small muted">An inference host plus llama.cpp RPC workers</span>
+        <span class="tier-stages xs faint">Required steps: 1, 2, 3, 4, 5, 7, 8, 9, 10</span>
+      </button>
+    </div>
+    <div id="tier-notes">
+      <div class="tier-note" data-tier-note="single" hidden><p>On one machine, monitoring (steps 7&ndash;10) is optional: <span class="mono">ollama ps</span> answers the question a dashboard would. Steps 1&ndash;5 are the whole job.</p></div>
+      <div class="tier-note" data-tier-note="pair" hidden><p>With two machines, the monitoring steps earn their place: they are how you see that the second machine is actually being used.</p></div>
+      <div class="tier-note" data-tier-note="cluster" hidden><p>With RPC workers, build llama.cpp on every node for its own card (step 2 explains why mixed generations need different CUDA versions), and do every monitoring step.</p></div>
+      <div class="tier-note" data-tier-note="none"><p class="small muted">No setup chosen: every step is shown.</p></div>
+    </div>
+    <p class="small">GPU vendor shortcuts: <a href="gpu-configuration.html#nvidia-matrix">NVIDIA</a> &middot; <a href="gpu-configuration.html#amd">AMD</a> &middot; <a href="gpu-configuration.html#intel-apple">Intel and Apple</a> &middot; <a href="gpu-configuration.html#vulkan">any vendor through Vulkan</a></p>
+  </div>
+</section>
+
+<section id="path">
+  <div class="container">
+    <h2>The setup path</h2>
+    <p>Each step produces what the next one needs, so the order is a dependency chain rather than a preference. If a step's check does not pass, the next step will fail in a way that is harder to diagnose.</p>
+    <div class="progress-wrap">
+      <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0" aria-label="Steps completed">
+        <div class="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-row">
+        <span class="progress-text small muted">0 of 10 stages marked done</span>
+        <button type="button" class="btn-copy" id="copy-progress">Copy progress</button>
+      </div>
+      <p class="xs faint">Progress is held in this page only and resets when you reload. Nothing is written to browser storage.</p>
+    </div>
+    <div class="stages">
+
+  <article class="stage" id="step-software" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">1</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Gather the software</h3>
+        <p class="stage-goal">Every installer your GPU vendor and operating system need, from the original publisher, at a version this set was checked against.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="software">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="downloads.html">Open the page for this step &rarr;</a></p>
+      
+      <p class="small"><strong>Read alongside:</strong></p><ul class="small"><li><a href="gpu-configuration.html">Which CUDA and Visual Studio versions to pair</a></li></ul>
+      <div class="stage-projects"><h4 class="xs">Software for this step</h4><p class="small"><a href="downloads.html#sw-nvidia-driver">NVIDIA display driver</a>, <a href="downloads.html#sw-amd-driver">AMD Software: Adrenalin Edition</a>, <a href="downloads.html#sw-vs-buildtools">Build Tools for Visual Studio 2022 / 2026</a>, <a href="downloads.html#sw-vc-redist">Visual C++ Redistributable (x64)</a>, <a href="downloads.html#sw-git">Git for Windows</a>, <a href="downloads.html#sw-miniforge">Miniforge (conda + mamba)</a>, <a href="downloads.html#sw-wsl">Windows Subsystem for Linux</a></p></div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> <span class="mono">git --version</span> and <span class="mono">mamba --version</span> answer, and on Windows <span class="mono">cl</span> answers from a Developer prompt.</p>
+        <p class="stage-time xs faint">Typical time: 30&ndash;60 min, mostly downloading (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine</span></li><li><span class="xs">Two machines</span></li><li><span class="xs">Three or more</span></li></ul>
+      </div>
+      <p class="stage-next small muted">When the check passes, go to <a href="#step-gpu">step 2, match the GPU stack to the card</a>.</p>
+    </div>
+  </article>
+
+  <article class="stage" id="step-gpu" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">2</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Match the GPU stack to the card</h3>
+        <p class="stage-goal">A driver, toolkit and compiler chosen for your card's architecture, and the runtime settings that decide how much of a model stays on the GPU.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="gpu">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="gpu-configuration.html">Open the page for this step &rarr;</a></p>
+      
+      <p class="small"><strong>Read alongside:</strong></p><ul class="small"><li><a href="ollama-model-selection.html">How much memory a model and its cache take</a></li><li><a href="llama-rpc-vulkan-guide.html">Vulkan device selection across nodes</a></li></ul>
+      <div class="stage-projects"><h4 class="xs">Software for this step</h4><p class="small"><a href="downloads.html#sw-nvidia-driver">NVIDIA display driver</a>, <a href="downloads.html#sw-cuda">CUDA Toolkit</a>, <a href="downloads.html#sw-amd-driver">AMD Software: Adrenalin Edition</a>, <a href="downloads.html#sw-vulkan-sdk">Vulkan SDK</a></p></div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> <span class="mono">nvidia-smi</span> (or Adrenalin) lists every card, and <span class="mono">ollama ps</span> shows a loaded model at <span class="mono">100% GPU</span>.</p>
+        <p class="stage-time xs faint">Typical time: 30&ndash;90 min (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine</span></li><li><span class="xs">Two machines</span></li><li><span class="xs">Three or more</span></li></ul>
+      </div>
+      <p class="stage-next small muted">When the check passes, go to <a href="#step-model">step 3, choose a model that fits</a>.</p>
+    </div>
+  </article>
+
+  <article class="stage" id="step-model" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">3</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Choose a model that fits</h3>
+        <p class="stage-goal">A model tag whose weights, cache and runtime reservation fit your card with room to spare, and the context length it can afford.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="model">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="ollama-model-selection.html">Open the page for this step &rarr;</a></p>
+      
+      <p class="small"><strong>Read alongside:</strong></p><ul class="small"><li><a href="gpu-configuration.html#kv">Cache type and Flash Attention</a></li></ul>
+      <div class="stage-projects"><h4 class="xs">Software for this step</h4><p class="small"><a href="downloads.html#sw-ollama">Ollama</a></p></div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> The planner on the start page shows the tag fitting with at least 1&nbsp;GiB left for the key/value cache.</p>
+        <p class="stage-time xs faint">Typical time: 15&ndash;30 min (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine</span></li><li><span class="xs">Two machines</span></li><li><span class="xs">Three or more</span></li></ul>
+      </div>
+      <p class="stage-next small muted">When the check passes, go to <a href="#step-serve">step 4, serve it on the network</a>.</p>
+    </div>
+  </article>
+
+  <article class="stage" id="step-serve" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">4</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Serve it on the network</h3>
+        <p class="stage-goal">Ollama (and, for more than one machine, llama.cpp RPC workers) reachable from the network, with Open WebUI in front.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="serve">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="llama-rpc-vulkan-guide.html">Open the page for this step &rarr;</a></p>
+      
+      <p class="small"><strong>Read alongside:</strong></p><ul class="small"><li><a href="gpu-configuration.html#multi">Splitting a model across GPUs</a></li><li><a href="ollama-model-selection.html">When a model does not fit on one machine</a></li></ul>
+      <div class="stage-projects"><h4 class="xs">Software for this step</h4><p class="small"><a href="downloads.html#sw-docker-desktop">Docker Desktop</a>, <a href="downloads.html#sw-ollama">Ollama</a>, <a href="downloads.html#sw-llama-cpp">llama.cpp</a>, <a href="downloads.html#sw-open-webui">Open WebUI (+ Open Terminal, mcpo)</a>, <a href="downloads.html#sw-nginx">nginx</a>, <a href="downloads.html#sw-nssm">NSSM</a></p></div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> Open WebUI answers from another machine; with RPC, the <span class="mono">llama-server</span> log lists every worker.</p>
+        <p class="stage-time xs faint">Typical time: 1&ndash;3 h (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine</span></li><li><span class="xs">Two machines</span></li><li><span class="xs">Three or more</span></li></ul>
+      </div>
+      <p class="stage-next small muted">When the check passes, go to <a href="#step-hands">step 5, give the model a place to build and test</a>.</p>
+    </div>
+  </article>
+
+  <article class="stage" id="step-hands" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">5</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Give the model a place to build and test</h3>
+        <p class="stage-goal">An execution backend with your mamba environment and compilers, so the model can write, build and test C++ and Python against your own tools.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="hands">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="local-code-build-test.html">Open the page for this step &rarr;</a></p>
+      <p class="small"><strong>Alternatives:</strong></p><ul class="small"><li><a href="Jupyter_Server_Setup_wsl.html">Jupyter in WSL 2 with micromamba</a> <span class="small muted">&mdash; if you want the Jupyter engine running directly in WSL</span></li><li><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Jupyter in Docker with GPU passthrough</a> <span class="small muted">&mdash; if you want the Jupyter engine in a container</span></li></ul>
+      <p class="small"><strong>Read alongside:</strong></p><ul class="small"><li><a href="claude-sandbox-local-env.html">Containing an agent that runs on the host</a></li><li><a href="gpu-configuration.html#docker">GPU inside containers</a></li></ul>
+      <div class="stage-projects"><h4 class="xs">Software for this step</h4><p class="small"><a href="downloads.html#sw-vs-buildtools">Build Tools for Visual Studio 2022 / 2026</a>, <a href="downloads.html#sw-cmake">CMake</a>, <a href="downloads.html#sw-miniforge">Miniforge (conda + mamba)</a>, <a href="downloads.html#sw-wsl">Windows Subsystem for Linux</a>, <a href="downloads.html#sw-docker-desktop">Docker Desktop</a>, <a href="downloads.html#sw-open-webui">Open WebUI (+ Open Terminal, mcpo)</a>, <a href="downloads.html#sw-nssm">NSSM</a></p></div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> The verification sequence on that page passes, including the blocked-egress test.</p>
+        <p class="stage-time xs faint">Typical time: 1&ndash;2 h (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine</span></li><li><span class="xs">Two machines</span></li><li><span class="xs">Three or more</span></li></ul>
+      </div>
+      <p class="stage-next small muted">When the check passes, go to <a href="#step-boundary">step 6, decide what the agent may touch</a>.</p>
+    </div>
+  </article>
+
+  <article class="stage" id="step-boundary" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">6</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Decide what the agent may touch</h3>
+        <p class="stage-goal">An OS-enforced boundary for an agent that runs on the host rather than in a container: which folders it may write, which hosts it may reach.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="boundary">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="claude-sandbox-local-env.html">Open the page for this step &rarr;</a></p>
+      
+      <p class="small"><strong>Read alongside:</strong></p><ul class="small"><li><a href="local-code-build-test.html#security">Blast radius of each backend</a></li></ul>
+      
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> The sandbox reports enabled, and a write outside the allowed folders fails.</p>
+        <p class="stage-time xs faint">Typical time: 30 min (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine (optional)</span></li><li><span class="xs">Two machines (optional)</span></li><li><span class="xs">Three or more (optional)</span></li></ul>
+      </div>
+      <p class="stage-next small muted">When the check passes, go to <a href="#step-monitor">step 7, install Prometheus and Grafana</a>.</p>
+    </div>
+  </article>
+
+  <article class="stage" id="step-monitor" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">7</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Install Prometheus and Grafana</h3>
+        <p class="stage-goal">A Prometheus server scraping every node, and Grafana reading from it.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="monitor">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="Grafana_Prometheus_install_windows.html">Open the page for this step &rarr;</a></p>
+      <p class="small"><strong>Alternatives:</strong></p><ul class="small"><li><a href="Grafan_Promethius_install_linux.html">Linux install</a> <span class="small muted">&mdash; if the monitoring server runs Linux</span></li></ul>
+      <p class="small"><strong>Read alongside:</strong></p><ul class="small"><li><a href="monitoring-sizing.html">Disk cost of the retention you choose</a></li></ul>
+      <div class="stage-projects"><h4 class="xs">Software for this step</h4><p class="small"><a href="downloads.html#sw-nssm">NSSM</a>, <a href="downloads.html#sw-prometheus">Prometheus</a>, <a href="downloads.html#sw-grafana">Grafana</a>, <a href="downloads.html#sw-windows-exporter">windows_exporter</a>, <a href="downloads.html#sw-node-exporter">node_exporter</a></p></div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> Prometheus <span class="mono">/targets</span> shows every node <span class="mono">UP</span>.</p>
+        <p class="stage-time xs faint">Typical time: about 1 h (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine (optional)</span></li><li><span class="xs">Two machines</span></li><li><span class="xs">Three or more</span></li></ul>
+      </div>
+      <p class="stage-next small muted">When the check passes, go to <a href="#step-gpu-metrics">step 8, export GPU metrics</a>.</p>
+    </div>
+  </article>
+
+  <article class="stage" id="step-gpu-metrics" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">8</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Export GPU metrics</h3>
+        <p class="stage-goal">Per-GPU utilisation, memory and temperature in Prometheus for every node.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="gpu-metrics">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="GPU_monitoring_setup.html">Open the page for this step &rarr;</a></p>
+      
+      <p class="small"><strong>Read alongside:</strong></p><ul class="small"><li><a href="gpu-configuration.html#monitor">Which exporter works for which vendor</a></li></ul>
+      <div class="stage-projects"><h4 class="xs">Software for this step</h4><p class="small"><a href="downloads.html#sw-windows-exporter">windows_exporter</a>, <a href="downloads.html#sw-nvidia-exporter">nvidia_gpu_exporter</a></p></div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> A utilisation series for every GPU appears in Prometheus.</p>
+        <p class="stage-time xs faint">Typical time: 30&ndash;60 min (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine (optional)</span></li><li><span class="xs">Two machines</span></li><li><span class="xs">Three or more</span></li></ul>
+      </div>
+      <p class="stage-next small muted">When the check passes, go to <a href="#step-fleet">step 9, build the fleet dashboard</a>.</p>
+    </div>
+  </article>
+
+  <article class="stage" id="step-fleet" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">9</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Build the fleet dashboard</h3>
+        <p class="stage-goal">One Grafana dashboard showing every node's host, GPU and <span class="mono">llama-server</span> metrics.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="fleet">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Open the page for this step &rarr;</a></p>
+      
+      <p class="small"><strong>Read alongside:</strong></p><ul class="small"><li><a href="monitoring-sizing.html#windows">Why a panel goes blank</a></li></ul>
+      <div class="stage-projects"><h4 class="xs">Software for this step</h4><p class="small"><a href="downloads.html#sw-llama-cpp">llama.cpp</a>, <a href="downloads.html#sw-prometheus">Prometheus</a>, <a href="downloads.html#sw-grafana">Grafana</a>, <a href="downloads.html#sw-windows-exporter">windows_exporter</a>, <a href="downloads.html#sw-node-exporter">node_exporter</a></p></div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> The dashboard shows token rate, queue depth and GPU load per node.</p>
+        <p class="stage-time xs faint">Typical time: 1&ndash;2 h (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine (optional)</span></li><li><span class="xs">Two machines</span></li><li><span class="xs">Three or more</span></li></ul>
+      </div>
+      <p class="stage-next small muted">When the check passes, go to <a href="#step-size">step 10, size retention and fix blank panels</a>.</p>
+    </div>
+  </article>
+
+  <article class="stage" id="step-size" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">10</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Size retention and fix blank panels</h3>
+        <p class="stage-goal">A retention window chosen from the disk it costs, and rate windows that do not leave panels empty.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="size">
+        <span>Done</span>
+      </label>
+    </header>
+    <div class="stage-body">
+      <p><a class="btn-copy" href="monitoring-sizing.html">Open the page for this step &rarr;</a></p>
+      
+      
+      <div class="stage-projects"><h4 class="xs">Software for this step</h4><p class="small"><a href="downloads.html#sw-prometheus">Prometheus</a></p></div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Done when:</strong> Disk use after a day matches the estimate, and no panel shows <span class="mono">No data</span> at your scrape interval.</p>
+        <p class="stage-time xs faint">Typical time: 30 min (an estimate)</p>
+        <ul class="inline-list"><li><span class="xs">One machine (optional)</span></li><li><span class="xs">Two machines</span></li><li><span class="xs">Three or more</span></li></ul>
+      </div>
+      <p class="stage-next small muted">That completes the path. The <a href="references.html">reference list</a> and <a href="CHANGELOG.html">change log</a> cover the whole set.</p>
+    </div>
+  </article>
+    </div>
+  </div>
+</section>
+
+<section id="fit">
+  <div class="container">
+    <h2>3. Which model, and will it fit?</h2>
+
+    <p>Stage 1 turns on two questions that have to be answered together: which model to run, and whether your card can actually hold it. Reading someone else&rsquo;s worked example is a poor substitute for either, so both are evaluated here against your own hardware. The arithmetic is the same as the <a href="ollama-model-selection.html#fit">model selection page</a>, which shows every derivation; the figures are the same ones that page cites, because both are generated from one catalogue.</p>
+
+    <!-- ===================================================================
+         PLANNER
+
+         One VRAM input drives both halves of this section. The planner
+         names what fits; choosing a model loads its published size into the
+         calculator below, so the reader never retypes a number they have
+         already given and the two halves cannot disagree about it.
+
+         The catalogue is baked into the page at build time (see
+         window.AILocalCatalog in home.js) rather than fetched, because
+         these pages open from local disk with no network access.
+         =================================================================== -->
+    <form class="planner" id="planner" autocomplete="off">
+      <div class="planner-head">
+        <label for="p-vram"><strong>How much VRAM does the card have?</strong>
+          <span class="calc-unit">GB</span>
+        </label>
+        <input type="number" id="p-vram" value="24" min="2" max="192" step="1"
+               aria-describedby="p-note">
+      </div>
+      <p class="small muted" id="p-note">A model &ldquo;fits&rdquo; here when its weight file, the runtime reservation and at least 1&nbsp;GB of cache all sit on the card. A model that is technically resident but cannot hold a useful prompt is not a fit.</p>
+      <div class="planner-out" id="planner-out" role="status" aria-live="polite"></div>
+    </form>
+
+    <div class="eq" id="eq-fit-live">
+      <div class="eq-head">
+        <h3 class="eq-title">Context a card can hold, once weights and runtime are placed</h3>
+        <div class="eq-tools"><span class="pill derived">Derived here</span>
+          <button class="info" aria-controls="v-fit-live" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+      </div>
+      <div class="eq-body">\[ L_{\max} \;=\; \left\lfloor \frac{V_{\text{tot}} - S_{w} - V_{\text{rt}}}{2\,n_{\ell}\,n_{kv}\,d_{h}\,n_{\text{seq}}\,b_{kv}} \right\rfloor \]</div>
+      <p class="eq-note">The window a model page advertises is what its weights were trained to attend over. This is what your hardware can allocate, which is the number that constrains your work.</p>
+      <div class="deriv"><ol>
+        <li>Autoregressive attention caches one key vector and one value vector per token per layer, so one token of context costs \( 2\,n_{\ell}\,n_{kv}\,d_{h}\,b_{kv} \) bytes, times \( n_{\text{seq}} \) for concurrent sequences that each keep their own cache.</li>
+        <li>The cache shares the device with the weights \( S_{w} \) and the runtime's own allocations \( V_{\text{rt}} \), so the bytes available to it are \( V_{\text{tot}} - S_{w} - V_{\text{rt}} \).</li>
+        <li>Divide the remainder by the per-token cost and take the floor, since a partial token cannot be cached.</li>
+        <li>Treat the result as an upper bound. Allocators fragment, and on Windows the display driver can page VRAM out from under the runtime.</li>
+        <li>Each step above is worked in full, with the intermediate forms, on the <a href="ollama-model-selection.html#eq-ctx-budget">model selection page</a>.</li>
+      </ol></div>
+      <div class="vars" id="v-fit-live" hidden><div class="table-wrap"><table>
+        <caption>Symbols in the context-budget relation. Read the architectural quantities from <span class="mono">ollama show &lt;tag&gt;</span>; the defaults below are a plausible shape for a 30B-class model and are not a measurement.</caption>
+        <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+        <tbody>
+          <tr><td>\(L_{\max}\)</td><td>Largest context that fits once weights and runtime are placed</td><td>token</td></tr>
+          <tr><td>\(V_{\text{tot}}\)</td><td>Total device memory on the accelerator</td><td>B</td></tr>
+          <tr><td>\(S_{w}\)</td><td>Weight footprint, the size the model tag lists</td><td>B</td></tr>
+          <tr><td>\(V_{\text{rt}}\)</td><td>Runtime, driver and compute-buffer reservation</td><td>B</td></tr>
+          <tr><td>\(n_{\ell}\)</td><td>Transformer layers</td><td>dimensionless</td></tr>
+          <tr><td>\(n_{kv}\)</td><td>Key/value heads per layer</td><td>dimensionless</td></tr>
+          <tr><td>\(d_{h}\)</td><td>Head dimension</td><td>dimensionless</td></tr>
+          <tr><td>\(n_{\text{seq}}\)</td><td>Concurrent sequences, <span class="mono">--parallel</span> or <span class="mono">OLLAMA_NUM_PARALLEL</span></td><td>dimensionless</td></tr>
+          <tr><td>\(b_{kv}\)</td><td>Bytes per cached element, set by <span class="mono">OLLAMA_KV_CACHE_TYPE</span></td><td>B</td></tr>
+        </tbody>
+      </table></div></div>
+    </div>
+
+    <form class="calc" id="fit-calc" autocomplete="off">
+      <div class="calc-grid">
+        <label>Card VRAM, \(V_{\text{tot}}\)
+          <span class="calc-unit">GB</span>
+          <input type="number" id="c-vram" value="24" min="2" max="192" step="1">
+        </label>
+        <label>Model size, \(S_{w}\)
+          <span class="calc-unit">GB</span>
+          <input type="number" id="c-weights" value="15" min="0.3" max="400" step="0.1">
+        </label>
+        <label>Runtime reserve, \(V_{\text{rt}}\)
+          <span class="calc-unit">GB</span>
+          <input type="number" id="c-runtime" value="1.2" min="0" max="8" step="0.1">
+        </label>
+        <label>Layers, \(n_{\ell}\)
+          <span class="calc-unit">count</span>
+          <input type="number" id="c-layers" value="48" min="1" max="200" step="1">
+        </label>
+        <label>KV heads, \(n_{kv}\)
+          <span class="calc-unit">count</span>
+          <input type="number" id="c-kvheads" value="8" min="1" max="128" step="1">
+        </label>
+        <label>Head dim, \(d_{h}\)
+          <span class="calc-unit">count</span>
+          <input type="number" id="c-headdim" value="128" min="8" max="512" step="8">
+        </label>
+        <label>Concurrent, \(n_{\text{seq}}\)
+          <span class="calc-unit">count</span>
+          <input type="number" id="c-parallel" value="1" min="1" max="16" step="1">
+        </label>
+        <label>Cache type, \(b_{kv}\)
+          <span class="calc-unit">bytes</span>
+          <select id="c-kvtype">
+            <option value="2" selected>f16 (2 B, default)</option>
+            <option value="1">q8_0 (1 B)</option>
+            <option value="0.5">q4_0 (0.5 B)</option>
+          </select>
+        </label>
+      </div>
+
+      <output class="calc-out" id="calc-out" for="c-vram c-weights c-runtime c-layers c-kvheads c-headdim c-parallel c-kvtype"></output>
+    </form>
+
+    <!-- The model catalogue, emitted from model_catalog.py at build time.
+         application/json rather than a <script> that assigns a global: the
+         browser does not execute it, so the page carries no inline
+         executable code and the content-security story stays simple. -->
+    <script type="application/json" id="model-catalog">{
+  "models": [
+    {
+      "tag": "nemotron-3-nano:4b",
+      "family": "nemotron-3-nano",
+      "sizeGb": 2.9,
+      "sizeDisplay": "2.8-2.9 GB",
+      "context": 262144,
+      "quant": "not stated",
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "reference": 34,
+      "positioning": "NVIDIA, trained from scratch, and positioned explicitly as an agentic model rather than a shrunken chat model.",
+      "minVramGb": 8,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 2.9,
+      "isMoe": false,
+      "notes": [
+        "The only shortlisted model that leaves real cache headroom on an 8 GB card."
+      ]
+    },
+    {
+      "tag": "qwen2.5-coder:7b",
+      "family": "qwen2.5-coder",
+      "sizeGb": 4.7,
+      "sizeDisplay": "4.7 GB",
+      "context": 32768,
+      "quant": "not stated",
+      "capabilities": [
+        "tools"
+      ],
+      "reference": 12,
+      "positioning": "Older generation, but the broadest size ladder in the library and generous cache headroom at this budget.",
+      "minVramGb": 12,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 4.7,
+      "isMoe": false,
+      "notes": [
+        "The 32K context ceiling applies to EVERY qwen2.5-coder tag and is the binding limit for agent work, not the size."
+      ]
+    },
+    {
+      "tag": "gpt-oss:20b",
+      "family": "gpt-oss",
+      "sizeGb": 14.0,
+      "sizeDisplay": "14 GB",
+      "context": 131072,
+      "quant": "MXFP4, 4.25 bit/parameter",
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "reference": 16,
+      "positioning": "OpenAI open-weight reasoning and agent model, Apache 2.0.",
+      "minVramGb": 16,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 14.0,
+      "isMoe": false,
+      "notes": [
+        "The model page states MXFP4 lets this run 'on systems with as little as 16GB memory', so 16 GB is the vendor's own stated floor rather than a judgement made here.",
+        "Budget an 8-bit key/value cache at 16 GB to buy back headroom."
+      ]
+    },
+    {
+      "tag": "devstral-small-2:24b",
+      "family": "devstral-small-2",
+      "sizeGb": 15.0,
+      "sizeDisplay": "15 GB",
+      "context": 393216,
+      "quant": "not stated",
+      "capabilities": [
+        "tools",
+        "vision"
+      ],
+      "reference": 13,
+      "positioning": "Built to use tools to explore codebases, edit multiple files and power software-engineering agents. Apache 2.0.",
+      "minVramGb": 24,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 15.0,
+      "isMoe": false,
+      "notes": [
+        "The only shortlisted model whose page publishes agentic software-engineering scores: 65.8% SWE-Bench Verified, 51.6% SWE-Bench Multilingual, 32.0% Terminal Bench.",
+        "Requires Ollama 0.13.3 or later."
+      ]
+    },
+    {
+      "tag": "laguna-xs-2.1:q4_K_M",
+      "family": "laguna-xs-2.1",
+      "sizeGb": 20.0,
+      "sizeDisplay": "20 GB",
+      "context": 262144,
+      "quant": "Q4_K_M",
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "reference": 15,
+      "positioning": "Poolside, designed for agentic coding and long-horizon work on a local machine.",
+      "minVramGb": 24,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 20.0,
+      "isMoe": false,
+      "notes": [
+        "The only shortlisted model publishing a full quantisation ladder (Q4_K_M 20 GB, q8_0 36 GB, bf16 67 GB), so the quality-versus-size trade can be walked rather than guessed.",
+        "At 20 GB on a 24 GB card an 8-bit cache is effectively mandatory."
+      ]
+    },
+    {
+      "tag": "qwen3-coder:30b",
+      "family": "qwen3-coder",
+      "sizeGb": 19.0,
+      "sizeDisplay": "19 GB",
+      "context": 262144,
+      "quant": "not stated",
+      "capabilities": [
+        "tools"
+      ],
+      "reference": 11,
+      "positioning": "Long-context coding and agent model; the page states 256K native, reaching 1M by extrapolation.",
+      "minVramGb": 32,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 19.0,
+      "isMoe": false,
+      "notes": [
+        "Leaves roughly 12 GB for cache on a 32 GB card, which is the most headroom of any 30B-class option here."
+      ]
+    },
+    {
+      "tag": "qwen3.6:35b",
+      "family": "qwen3.6",
+      "sizeGb": 24.0,
+      "sizeDisplay": "23-24 GB",
+      "context": 262144,
+      "quant": "not stated",
+      "capabilities": [
+        "tools",
+        "thinking",
+        "vision"
+      ],
+      "reference": 14,
+      "positioning": "General model with a coding emphasis, plus vision and optional retention of reasoning context across turns.",
+      "minVramGb": 32,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 24.0,
+      "isMoe": false,
+      "notes": [
+        "Pick this over qwen3-coder when the vision capability earns its keep: reading a schematic, a plot, or a GUI screenshot. For RF and instrumentation work it often does."
+      ]
+    },
+    {
+      "tag": "qwen3-coder-next:q4_K_M",
+      "family": "qwen3-coder-next",
+      "sizeGb": 52.0,
+      "sizeDisplay": "52 GB",
+      "context": 262144,
+      "quant": "q4_K_M",
+      "capabilities": [
+        "tools"
+      ],
+      "reference": 33,
+      "positioning": "80B total with 3B active per token, built on Qwen3-Next-80B-A3B-Base.",
+      "minVramGb": 64,
+      "activeParamsB": 3.0,
+      "totalParamsB": 80.0,
+      "streamingGb": 1.95,
+      "isMoe": true,
+      "notes": [
+        "Needs the capacity of a 52 GB model and streams like a 2 GB one. The best capacity-for-speed trade on the shortlist, and the natural target for a pooled multi-node configuration.",
+        "Non-thinking mode only: it emits no reasoning blocks."
+      ]
+    }
+  ],
+  "constants": {
+    "runtimeVramGb": 1.2,
+    "archLayers": 48,
+    "archKvHeads": 8,
+    "archHeadDim": 128,
+    "kvBytes": {
+      "f16": 2.0,
+      "q8_0": 1.0,
+      "q4_0": 0.5
+    },
+    "readOn": "2026-10-18",
+    "notStated": "not stated"
+  }
+}</script>
+
+    <div class="callout">
+      <p><strong>The bandwidth cliff is the thing this is protecting you from.</strong> If the result is negative, the weights do not fit and llama.cpp or Ollama will place some layers in system RAM. The same weight set streams roughly nine times slower from system RAM than from VRAM, so a smaller model fully resident beats a larger one that spills &mdash; essentially always. Confirm residency with <span class="mono">ollama ps</span> rather than assuming it.</p>
+    </div>
+  </div>
+</section>
+
+<div id="every-page"></div>
+<section id="g-setup">
+  <div class="container">
+    <h2>Setup and hardware</h2>
+    <p>The first two steps: what to install, and how to match it to the card.</p>
+    <div class="card-grid">
+      <a class="card" href="downloads.html">
+        <span class="card-kicker"><span class="badge new">new</span> Step 1 &middot; Downloads</span>
+        <h3>Software and downloads</h3>
+        <p class="small muted">Every program the deployment uses, linked to its original creator, with the version in the deployment folder beside the current one.</p>
+      </a>
+      <a class="card" href="gpu-configuration.html">
+        <span class="card-kicker"><span class="badge new">new</span> Step 2 &middot; GPU setup</span>
+        <h3>GPU configuration for local models</h3>
+        <p class="small muted">Driver, toolkit and compiler pairings by card, and the Ollama and llama.cpp settings that decide how much of a model stays on the GPU.</p>
+      </a>
+    </div>
+  </div>
+</section>
+<section id="g-build">
+  <div class="container">
+    <h2>Local code generation and testing</h2>
+    <p>Giving a model a shell, a compiler and your Python environment, and choosing the model.</p>
+    <div class="card-grid">
+      <a class="card" href="local-code-build-test.html">
+        <span class="card-kicker"><span class="badge new">new</span> Step 5 &middot; Build &amp; test</span>
+        <h3>Letting a local model build and test code on your own hardware</h3>
+        <p class="small muted">The execution backends Open WebUI offers, their full variable sets, wiring in a named mamba environment, C++ and Python build paths, and what each containment model actually contains.</p>
+      </a>
+      <a class="card" href="ollama-model-selection.html">
+        <span class="card-kicker"><span class="badge new">new</span> Step 3 &middot; Model choice</span>
+        <h3>Which Ollama models are worth running for local code work</h3>
+        <p class="small muted">Tool-calling models in the Ollama library with every published size, context window and benchmark figure cited, plus the memory and throughput arithmetic that decides what will fit and run.</p>
+      </a>
+      <a class="card" href="claude-sandbox-local-env.html">
+        <span class="card-kicker"><span class="badge new">new</span> Step 6 &middot; Sandbox access</span>
+        <h3>Giving a sandboxed agent access to local mamba environments</h3>
+        <p class="small muted">The OS-enforced command sandbox: what it restricts, how it differs from a container, the settings that grant environment access, and the denial checks that prove a policy took effect.</p>
+      </a>
+      <a class="card" href="Jupyter_Server_Setup_wsl.html">
+        <span class="card-kicker">Step 5 &middot; Jupyter WSL2</span>
+        <h3>Open WebUI + Jupyter GPU Server Setup (Windows 10/11 + WSL2)</h3>
+        <p class="small muted">A Jupyter GPU server under WSL2, wired to Open WebUI for code execution.</p>
+      </a>
+      <a class="card" href="Dockler_Jupyter_withGPU_Passthru_nssm.html">
+        <span class="card-kicker">Step 5 &middot; Docker Jupyter</span>
+        <h3>Open WebUI + Dockerized Jupyter GPU Server (Windows 10/11)</h3>
+        <p class="small muted">The same Jupyter server in Docker with GPU passthrough, run as a Windows service through NSSM.</p>
+      </a>
+    </div>
+  </div>
+</section>
+<section id="g-inference">
+  <div class="container">
+    <h2>Serving the model</h2>
+    <p>Getting a model answering on the network, across several machines when it will not fit on one.</p>
+    <div class="card-grid">
+      <a class="card" href="llama-rpc-vulkan-guide.html">
+        <span class="card-kicker">Step 4 &middot; llama.cpp RPC</span>
+        <h3>llama.cpp RPC + Vulkan — 4-node home network guide</h3>
+        <p class="small muted">Building llama.cpp with RPC and Vulkan, and splitting a model across four machines when it will not fit on one card.</p>
+      </a>
+    </div>
+  </div>
+</section>
+<section id="g-monitoring">
+  <div class="container">
+    <h2>Monitoring</h2>
+    <p>Knowing what the hardware is doing while it serves.</p>
+    <div class="card-grid">
+      <a class="card" href="monitoring-sizing.html">
+        <span class="card-kicker"><span class="badge new">new</span> Step 10 &middot; Monitor sizing</span>
+        <h3>Sizing the monitoring stack, and getting the queries right</h3>
+        <p class="small muted">The four relations the monitoring install pages assume but never state: retention disk cost, ingest rate, the range-vector window lower bound, and counters versus gauges.</p>
+      </a>
+      <a class="card" href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">
+        <span class="card-kicker">Step 9 &middot; Monitoring W11</span>
+        <h3>Windows 11 Prometheus + Grafana — Multi-Node llama-server</h3>
+        <p class="small muted">End-to-end monitoring of a multi-node llama-server deployment on Windows 11.</p>
+      </a>
+      <a class="card" href="GPU_monitoring_setup.html">
+        <span class="card-kicker">Step 8 &middot; GPU metrics</span>
+        <h3>Multi-Vendor GPU Monitoring Documentation</h3>
+        <p class="small muted">GPU exporters for NVIDIA and AMD, including the WSL2 bridge AMD requires on Windows.</p>
+      </a>
+      <a class="card" href="Grafana_Prometheus_install_windows.html">
+        <span class="card-kicker">Step 7 &middot; Install (Win)</span>
+        <h3>Install &amp; Use Prometheus + Grafana on Windows / WSL2</h3>
+        <p class="small muted">Installing Prometheus, windows_exporter and Grafana on Windows, with a WSL2 node_exporter alternative.</p>
+      </a>
+      <a class="card" href="Grafan_Promethius_install_linux.html">
+        <span class="card-kicker">Step 7 &middot; Install (Linux)</span>
+        <h3>Install &amp; Use Prometheus + Grafana on Node A</h3>
+        <p class="small muted">The same stack on a systemd Linux host, with node_exporter and a first dashboard.</p>
+      </a>
+    </div>
+  </div>
+</section>
+<section id="g-meta">
+  <div class="container">
+    <h2>Reference</h2>
+    <p>Sources and revision history for the whole set.</p>
+    <div class="card-grid">
+      <a class="card" href="references.html">
+        <span class="card-kicker"><span class="badge new">new</span> References</span>
+        <h3>Sources — AI_Local</h3>
+        <p class="small muted">One IEEE-format reference table for the whole set, with a sourcing-confidence class per row and a list of the figures that are estimates rather than citations.</p>
+      </a>
+      <a class="card" href="CHANGELOG.html">
+        <span class="card-kicker"><span class="badge new">new</span> Change log</span>
+        <h3>Version history — AI_Local</h3>
+        <p class="small muted">What changed in each revision of the set, what was deliberately left alone, and the candidates for the next revision.</p>
+      </a>
+    </div>
+  </div>
+</section><section id="conventions">
+  <div class="container">
+    <h2>Conventions used across the set</h2>
+
+    <div class="table-wrap">
+      <table>
+        <caption>Reading conventions. The provenance pills and the variable-table disclosure follow the pattern established in the <em>Atomic Theory Atlas</em> page set in this repository.</caption>
+        <thead><tr><th scope="col">Convention</th><th scope="col">Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill stated">Stated</span></td><td>Quoted from a cited source. Nothing was algebraically manipulated</td></tr>
+          <tr><td><span class="pill derived">Derived here</span></td><td>Algebra or a numerical evaluation performed on these pages. Always followed by an explicit step list</td></tr>
+          <tr><td><span class="pill data">Measured value</span></td><td>A tabulated experimental or defined number</td></tr>
+          <tr><td><span class="badge high">primary</span></td><td>A normative or first-party specification: vendor documentation, a standards body, a reference manual</td></tr>
+          <tr><td><span class="badge medium">vendor</span></td><td>First-party but commercial and revised without notice: a model card, a product page</td></tr>
+          <tr><td><span class="badge low">secondary</span></td><td>A press or third-party report of a first-party statement whose original was not retrieved. Marked beside the citation wherever it is used</td></tr>
+          <tr><td><span class="badge medium">estimate</span></td><td>A planning figure for this class of hardware, stated as a range. Measure it before relying on it</td></tr>
+          <tr><td><em>Define variables</em> button</td><td>Opens a table of every symbol in the equation with its SI or stated unit. Variable tables are always expanded when a page is printed</td></tr>
+          <tr><td>Citation <span class="mono">[n]</span></td><td>Links to row <span class="mono">n</span> of the <a href="references.html">reference table</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Offline by design</h3>
+    <p>Every page in the set opens from a local disk with no network access. KaTeX<a class="cite" href="references.html#r31">[31]</a> is vendored into <span class="mono">assets/katex/</span> rather than loaded from a content-delivery network &mdash; it has no dependencies and is designed to be bundled with a site's own resources &mdash; and nothing in the set uses browser storage &mdash; so the pages also render correctly inside a sandboxed frame, where storage access throws. The theme follows the operating-system preference and can be overridden for the current page view.</p>
+
+    <h3>Files you will need that are not in the repository</h3>
+    <p>Installers specific to your hardware &mdash; CUDA, the Vulkan SDK, OpenSSL, Docker Desktop, Grafana and the Prometheus executables &mdash; are not in the repository. The <a href="downloads.html#not-in-repo">downloads page</a> lists each with its original creator's download link, and matches <span class="mono">Files_you_Will_need_that_areNot_here.txt</span><a class="cite" href="references.html#r32">[32]</a>.</p>
+  </div>
+</section>
+
+</main>
+<footer class="foot">
+  <div class="container">
+    <p><strong>AI_Local</strong> v0.0.6 &middot; William W. Wallace &middot;
+       <a href="CHANGELOG.html">change log</a> &middot;
+       <a href="references.html">references</a></p>
+    <p class="small">Equations typeset offline with KaTeX. Every page in this set opens
+       from local disk with no network access, and nothing here uses browser storage.</p>
+  </div>
+</footer>
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="assets/equations.js"></script>
+<script src="assets/sitenav.js"></script>
+<script src="assets/home.js"></script>
+</body>
+</html>

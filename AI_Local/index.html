@@ -3,24 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Running AI on your own hardware, end to end</title>
-<meta name="description" content="Landing page for the AI_Local set: deploying language models across a home or lab network, and letting them build and test code on hardware you own.">
+<title>Local AI and engineering tools — Braveheart53/tools</title>
+<meta name="description" content="A staged implementation flow for deploying language models on your own hardware and pointing them at real engineering code, plus a catalogue of every tool in this repository.">
 <meta name="author" content="William W. Wallace">
-<meta name="generator" content="build_ai_local_site.py 0.0.1">
+<meta name="generator" content="build_ai_local_site.py 0.0.4">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f5f66'/%3E%3Cg stroke='%23e3efef' stroke-width='2' fill='none'%3E%3Cpath d='M16 9v6M16 15l-6 6M16 15l6 6'/%3E%3C/g%3E%3Cg fill='%23e3efef'%3E%3Ccircle cx='16' cy='8' r='3'/%3E%3Ccircle cx='9' cy='23' r='3'/%3E%3Ccircle cx='23' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
-<link rel="stylesheet" href="assets/site.css">
-<link rel="stylesheet" href="assets/katex/katex.min.css">
-<link rel="stylesheet" href="assets/equations.css">
-<link rel="stylesheet" href="assets/sitenav.css">
+<link rel="stylesheet" href="AI_Local/assets/site.css">
+<link rel="stylesheet" href="AI_Local/assets/katex/katex.min.css">
+<link rel="stylesheet" href="AI_Local/assets/equations.css">
+<link rel="stylesheet" href="AI_Local/assets/sitenav.css">
+<link rel="stylesheet" href="AI_Local/assets/home.css">
 </head>
 <body class="ail">
 <a class="skip" href="#content">Skip to content</a>
 <nav class="ailnav" aria-label="AI_Local page set">
   <div class="ailnav-inner">
-    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
-    <span class="ailnav-ver">v0.0.4</span>
+    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>tools</span></a>
+    <span class="ailnav-ver">v0.0.6</span>
     <div class="ailnav-links">
-      <a href="../index.html" class="ailnav-home"><span aria-hidden="true">⌂</span>&nbsp;Repo home</a><a href="index.html">Overview</a><a href="local-code-build-test.html">Build &amp; test</a><a href="ollama-model-selection.html">Model choice</a><a href="claude-sandbox-local-env.html">Sandbox access</a><a href="monitoring-sizing.html">Monitor sizing</a><a href="llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="GPU_monitoring_setup.html">GPU metrics</a><a href="Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="references.html">References</a><a href="CHANGELOG.html">Change log</a>
+      <a href="AI_Local/index.html">Overview</a><a href="AI_Local/downloads.html">Downloads</a><a href="AI_Local/gpu-configuration.html">GPU setup</a><a href="AI_Local/local-code-build-test.html">Build &amp; test</a><a href="AI_Local/ollama-model-selection.html">Model choice</a><a href="AI_Local/claude-sandbox-local-env.html">Sandbox access</a><a href="AI_Local/monitoring-sizing.html">Monitor sizing</a><a href="AI_Local/llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="AI_Local/Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="AI_Local/Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="AI_Local/Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="AI_Local/GPU_monitoring_setup.html">GPU metrics</a><a href="AI_Local/Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="AI_Local/Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="AI_Local/references.html">References</a><a href="AI_Local/CHANGELOG.html">Change log</a>
     </div>
     <button class="ailnav-theme" type="button" aria-label="Switch theme" aria-pressed="false"><span class="ailnav-theme-icon" aria-hidden="true">☾</span><span class="ailnav-theme-label">Dark</span></button>
   </div>
@@ -28,200 +29,662 @@
 <main id="content">
 <section class="hero">
   <div class="container">
-    <div class="eyebrow">AI_Local &middot; v0.0.4</div>
-    <h1>Running AI on your own hardware, end to end</h1>
-    <p class="lead">A working set for deploying language models across a home or lab network: serving them, distributing them across several machines when one is not enough, monitoring what the hardware is doing, and &mdash; the part this revision adds &mdash; letting a model write, build and test code on machines you own, with nothing leaving the network.</p>
-    <p class="small muted">Scientific and code-building work is the focus. Every page cites its sources to a numbered row in <a href="references.html">one reference table</a>, every equation carries a variable table with units, and every figure that is an estimate rather than a citation says so.</p>
+    <div class="eyebrow">Braveheart53 / tools &middot; v0.0.3</div>
+    <h1>Local AI, and the engineering work it is for</h1>
+    <p class="lead">This repository is a working set for deploying language models across your own hardware and then pointing them at real engineering code. It is not a collection of unrelated utilities: everything in it either builds one Python environment, runs inside that environment, or documents the physics behind something that does.</p>
+    <p>That single fact is what the page below is organised around. 5 stages take you from an empty machine to a model that writes, compiles and tests code in your environment, and every one of the 18 projects in this repository has a place in that sequence.</p>
+    <div class="callout info-box">
+      <p><strong>If you only read one thing:</strong> do <a href="#stage-foundation">stage 0</a> before anything else. Every Python tool here is written against one named mamba environment, and the local model in <a href="#stage-hands">stage 2</a> is explicitly told to use it. Skipping it produces a model that reports libraries are missing when it is simply looking at the wrong interpreter, and that failure is tedious to diagnose from the other end.</p>
+    </div>
   </div>
 </section>
 
-<section id="start-here">
+
+<section id="your-setup">
   <div class="container">
-    <h2>Start here</h2>
-    <div class="grid-2">
-      <div>
-        <p>The set assumes one inference host with optional worker nodes. If you are building this from nothing, the order below gets you to a working loop with the fewest dead ends.</p>
-        <ol>
-          <li><strong>Pick a model that fits.</strong> <a href="ollama-model-selection.html">Model selection</a> has the criteria and the memory arithmetic. Doing this first avoids installing a stack around a model your card cannot hold.</li>
-          <li><strong>Serve it.</strong> Ollama alone on one machine, or <a href="llama-rpc-vulkan-guide.html">llama.cpp with RPC workers</a> when the model is larger than any single card.</li>
-          <li><strong>Give it a shell.</strong> <a href="local-code-build-test.html">Local build and test</a> covers Open Terminal, the Jupyter engine and wiring in a mamba environment.</li>
-          <li><strong>Decide the boundary.</strong> <a href="claude-sandbox-local-env.html">Sandboxed access to local environments</a> covers the other containment model, for work that needs the host itself.</li>
-          <li><strong>Watch it.</strong> The <a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Prometheus and Grafana</a> pages, which is how you find out a model quietly spilled to system RAM.</li>
-        </ol>
+    <h2>1. Start with what you have</h2>
+    <p>The flow below adapts to the hardware you are working with. Pick the closest shape; stages that do not apply to it are dimmed rather than hidden, so you can still see what you are skipping and why.</p>
+
+    <div class="tier-grid">
+      <button class="tier" type="button" data-tier="single"
+              aria-pressed="false">
+        <span class="tier-name">One machine</span>
+        <span class="tier-hw small muted">A single desktop or laptop with one GPU</span>
+        <span class="tier-stages xs faint">Stages 0, 1, 2, 4</span>
+      </button>
+      <button class="tier" type="button" data-tier="pair"
+              aria-pressed="false">
+        <span class="tier-name">Two machines</span>
+        <span class="tier-hw small muted">A workstation plus one other machine with a GPU</span>
+        <span class="tier-stages xs faint">Stages 0, 1, 2, 3, 4</span>
+      </button>
+      <button class="tier" type="button" data-tier="cluster"
+              aria-pressed="false">
+        <span class="tier-name">Four machines</span>
+        <span class="tier-hw small muted">One inference host plus three RPC workers, as the existing pages document</span>
+        <span class="tier-stages xs faint">Stages 0, 1, 2, 3, 4</span>
+      </button>
+    </div>
+
+    <div id="tier-notes">
+      <div class="tier-note" data-tier-note="single" hidden>
+        <p><strong>One machine.</strong> Monitoring is optional on one machine: ollama ps answers the question a dashboard would. Skip stage 3 until you have a second node.</p>
+        <p class="small muted"><strong>Model sizing:</strong> Pick the largest tag that leaves roughly a third of VRAM free for the key/value cache. Below 16 GB, prefer a small model that fits entirely over a large one that spills.</p>
       </div>
-      <div class="card">
-        <h3 style="margin-top:0">What this revision adds</h3>
-        <p class="small">The set previously stopped at serving and monitoring a model. Three pages now cover the loop from a prompt to a passing test suite:</p>
-        <ul class="small">
-          <li>Execution backends and their variables, quoted verbatim</li>
-          <li>Named mamba environments reached from a sandbox</li>
-          <li>C++ and Python build and test paths</li>
-          <li>Model selection with the fit arithmetic shown</li>
-          <li>What each containment model actually contains</li>
-        </ul>
-        <p class="small muted" style="margin-bottom:0">See the <a href="CHANGELOG.html">change log</a> for the full list.</p>
+      <div class="tier-note" data-tier-note="pair" hidden>
+        <p><strong>Two machines.</strong> This is the shape where separating inference from execution first pays off, and where monitoring starts to earn its keep.</p>
+        <p class="small muted"><strong>Model sizing:</strong> Keep the model on whichever machine has the most VRAM and put the execution sandbox on the other, so a build cannot evict the model from memory.</p>
+      </div>
+      <div class="tier-note" data-tier-note="cluster" hidden>
+        <p><strong>Four machines.</strong> The llama.cpp RPC guide and the monitoring pages are written for exactly this layout.</p>
+        <p class="small muted"><strong>Model sizing:</strong> Distribution is for escaping a spill, not for adding bandwidth. Check the break-even condition before switching a worker on.</p>
+      </div>
+      <div class="tier-note" data-tier-note="none">
+        <p class="small muted">No shape selected, so every stage is shown. Choosing one dims the stages it does not need.</p>
       </div>
     </div>
   </div>
 </section>
 
-<section id="g-build">
+
+<section id="flow">
   <div class="container">
-    <h2>Local code generation and testing</h2>
-    <p>Giving a local model a real shell, a real compiler and a real Python environment, and choosing the model that will fit.</p>
-    <div class="card-grid">
-      <a class="card" href="local-code-build-test.html">
-        <span class="card-kicker"><span class="badge new">new</span> Build & test</span>
-        <h3>Letting a local model build and test code on your own hardware</h3>
-        <p class="small muted">The execution backends Open WebUI offers, their full variable sets, wiring in a named mamba environment, C++ and Python build paths, and what each containment model actually contains.</p>
-      </a>
-      <a class="card" href="ollama-model-selection.html">
-        <span class="card-kicker"><span class="badge new">new</span> Model choice</span>
-        <h3>Which Ollama models are worth running for local code work</h3>
-        <p class="small muted">Tool-calling models in the Ollama library with every published size, context window and benchmark figure cited, plus the memory and throughput arithmetic that decides what will fit and run.</p>
-      </a>
-      <a class="card" href="claude-sandbox-local-env.html">
-        <span class="card-kicker"><span class="badge new">new</span> Sandbox access</span>
-        <h3>Giving a sandboxed agent access to local mamba environments</h3>
-        <p class="small muted">The OS-enforced command sandbox: what it restricts, how it differs from a container, the settings that grant environment access, and the denial checks that prove a policy took effect.</p>
-      </a>
-      <a class="card" href="Jupyter_Server_Setup_wsl.html">
-        <span class="card-kicker">Jupyter WSL2</span>
-        <h3>Open WebUI + Jupyter GPU Server Setup (Windows 10/11 + WSL2)</h3>
-        <p class="small muted">A Jupyter GPU server under WSL2, wired to Open WebUI for code execution.</p>
-      </a>
-      <a class="card" href="Dockler_Jupyter_withGPU_Passthru_nssm.html">
-        <span class="card-kicker">Docker Jupyter</span>
-        <h3>Open WebUI + Dockerized Jupyter GPU Server (Windows 10/11)</h3>
-        <p class="small muted">The same Jupyter server in Docker with GPU passthrough, run as a Windows service through NSSM.</p>
-      </a>
-      <a class="card" href="Archive/Jupyter_Code_Eval_Setup.html">
-        <span class="card-kicker">Archive: Jupyter</span>
-        <h3>Archived — Jupyter code-evaluation setup</h3>
-        <p class="small muted">Earlier revision of the Jupyter code-evaluation setup, kept for reference.</p>
-      </a>
+    <h2>2. The implementation flow</h2>
+    <p>Each stage produces the thing the next one needs, so the order is a dependency chain rather than a preference. Every stage ends with a checkpoint that is a command or an observation, not a feeling &mdash; if the checkpoint does not pass, the next stage will fail in a way that is harder to diagnose.</p>
+
+    <div class="progress-wrap">
+      <div class="progress-bar" role="progressbar" aria-valuemin="0"
+           aria-valuemax="5" aria-valuenow="0"
+           aria-label="Stages completed">
+        <div class="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-row">
+        <span class="progress-text small muted">0 of 5 stages marked done</span>
+        <button type="button" class="btn-copy" id="copy-progress">Copy progress</button>
+      </div>
+      <p class="xs faint">Progress is held in this page only and resets when you reload. Nothing here writes to browser storage, because these pages are opened from local disk and sometimes inside sandboxed frames where storage access throws. Use <em>Copy progress</em> to paste a snapshot into your own notes.</p>
+    </div>
+
+    <div class="stages">
+  <article class="stage" id="stage-foundation" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">0</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Build the foundation</h3>
+        <p class="stage-goal">A named Py3p12 mamba environment exists and activates in your shell, and a C++ toolchain is on PATH.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="foundation">
+        <span>Done</span>
+      </label>
+    </header>
+
+    <div class="stage-body">
+      <p class="stage-why"><strong>Why here:</strong> Every Python tool in this repository is written against this one environment, and the local model in stage 2 will be told to run Python only through it. Getting it right once removes a whole class of problem later: a model that reports a library is missing when it is simply looking at the system interpreter.</p>
+
+      <ol class="stage-steps">
+        <li>Read the setup guide, particularly the PowerShell activation and CONDA_ENVS_DIRS sections<br><span class="step-where"><a class="mono" href="Py3p12_Mamba_Yamls/Mamba%20on%20Windows%20%E2%80%94%20Install,%20Shell%20Setup,%20and%20YAML%20Environments.md">Py3p12_Mamba_Yamls/Mamba on Windows — Install, Shell Setup, and YAML Environments.md</a></span></li>
+        <li>Create the base environment: mamba env create -c conda-forge --strict-channel-priority -f Py3p12_Clean.yml<br><span class="step-where"><a class="mono" href="Py3p12_Mamba_Yamls/Py3p12_Clean.yml">Py3p12_Mamba_Yamls/Py3p12_Clean.yml</a></span></li>
+        <li>Update it to the full working set: mamba env update -c conda-forge --strict-channel-priority -n Py3p12 -f Py3p12_20260904_2245.yml<br><span class="step-where"><a class="mono" href="Py3p12_Mamba_Yamls/Py3p12_20260904_2245.yml">Py3p12_Mamba_Yamls/Py3p12_20260904_2245.yml</a></span></li>
+        <li>Install the Visual Studio C++ build tools, so the model can compile in stage 2<br><span class="step-where"><a class="mono" href="AI_Local/local-code-build-test.html#cpp">AI_Local/local-code-build-test.html#cpp</a></span></li>
+      </ol>
+
+      <div class="stage-projects">
+        <h4 class="xs">In this repository</h4>
+        <ul class="inline-list"><li><a class="mono" href="Py3p12_Mamba_Yamls">Py3p12 mamba environment</a> <span class="xs faint">vPy3p12_Clean + 20260904_2245</span></li><li><a class="mono" href="devenv/pip_updates.py">pip update helper</a></li></ul>
+      </div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Checkpoint.</strong> <span class="mono">mamba run -n Py3p12 python -c &quot;import PySide6, numpy, h5py; print(&#x27;ok&#x27;)&quot;  prints ok</span></p>
+        <p class="stage-time xs faint">Typical time: 45–90 min, mostly the solve</p>
+      </div>
+      <p class="stage-next small muted">Once the checkpoint passes, go to <a href="#stage-serve">stage 1, serve a model</a>.</p>
+    </div>
+  </article>
+  <article class="stage" id="stage-serve" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">1</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Serve a model</h3>
+        <p class="stage-goal">A model answers on your network, and you know why you picked that model rather than another.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="serve">
+        <span>Done</span>
+      </label>
+    </header>
+
+    <div class="stage-body">
+      <p class="stage-why"><strong>Why here:</strong> This comes before giving the model a shell because the model choice constrains everything after it. Picking the model first avoids building a stack around something your card cannot hold, which is the expensive version of this mistake.</p>
+
+      <ol class="stage-steps">
+        <li>Work out what will fit: the criteria, then the memory arithmetic<br><span class="step-where"><a class="mono" href="AI_Local/ollama-model-selection.html">AI_Local/ollama-model-selection.html</a></span></li>
+        <li>Install Ollama and pull the chosen tag; raise OLLAMA_CONTEXT_LENGTH from its 4096 default<br><span class="step-where"><a class="mono" href="AI_Local/ollama-model-selection.html#recommend">AI_Local/ollama-model-selection.html#recommend</a></span></li>
+        <li>If the model will not fit on one machine, build llama.cpp with RPC and split it across nodes<br><span class="step-where"><a class="mono" href="AI_Local/llama-rpc-vulkan-guide.html">AI_Local/llama-rpc-vulkan-guide.html</a></span></li>
+        <li>Put Open WebUI in front of it<br><span class="step-where"><a class="mono" href="AI_Local/local-code-build-test.html#topology">AI_Local/local-code-build-test.html#topology</a></span></li>
+      </ol>
+
+      <div class="stage-projects">
+        <h4 class="xs">In this repository</h4>
+        <ul class="inline-list"><li><a class="mono" href="AI_Local">AI_Local — local AI deployment set</a> <span class="xs faint">v0.0.1</span></li></ul>
+      </div>
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Checkpoint.</strong> <span class="mono">ollama ps shows the model resident on the GPU, not split with the CPU</span></p>
+        <p class="stage-time xs faint">Typical time: 1–3 h, plus model download</p>
+      </div>
+      <p class="stage-next small muted">Once the checkpoint passes, go to <a href="#stage-hands">stage 2, give the model hands</a>.</p>
+    </div>
+  </article>
+  <article class="stage" id="stage-hands" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">2</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Give the model hands</h3>
+        <p class="stage-goal">The model can run a command, compile code and read the error, against the Py3p12 environment from stage 0.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="hands">
+        <span>Done</span>
+      </label>
+    </header>
+
+    <div class="stage-body">
+      <p class="stage-why"><strong>Why here:</strong> This is the stage that turns a chat window into something that does work. It is also the stage with a real blast radius, which is why the containment decision is made here and verified rather than assumed.</p>
+
+      <ol class="stage-steps">
+        <li>Choose an execution backend. Open Terminal in Docker is the recommended default<br><span class="step-where"><a class="mono" href="AI_Local/local-code-build-test.html#decision">AI_Local/local-code-build-test.html#decision</a></span></li>
+        <li>Wire in the Py3p12 environment, by host kernel or by rebuilding it inside the container<br><span class="step-where"><a class="mono" href="AI_Local/local-code-build-test.html#mamba">AI_Local/local-code-build-test.html#mamba</a></span></li>
+        <li>Bound what it can reach: egress allowlist, CORS, file-browser root, session cap<br><span class="step-where"><a class="mono" href="AI_Local/local-code-build-test.html#security">AI_Local/local-code-build-test.html#security</a></span></li>
+        <li>For work that must touch the host itself, use the OS-enforced sandbox instead and run its denial checks<br><span class="step-where"><a class="mono" href="AI_Local/claude-sandbox-local-env.html#project">AI_Local/claude-sandbox-local-env.html#project</a></span></li>
+      </ol>
+
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Checkpoint.</strong> <span class="mono">Ask the model to run the tests, fix the first failure and re-run. Two test runs with an edit between them.</span></p>
+        <p class="stage-time xs faint">Typical time: 1–2 h</p>
+      </div>
+      <p class="stage-next small muted">Once the checkpoint passes, go to <a href="#stage-watch">stage 3, watch the hardware</a>.</p>
+    </div>
+  </article>
+  <article class="stage" id="stage-watch" data-applies="pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">3</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Watch the hardware</h3>
+        <p class="stage-goal">You can see GPU utilisation, VRAM and token rate, and you would notice a model quietly spilling to system RAM.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="watch">
+        <span>Done</span>
+      </label>
+    </header>
+
+    <div class="stage-body">
+      <p class="stage-why"><strong>Why here:</strong> The failure that wastes the most time in a local deployment is invisible from the chat window: weights spill to system RAM and throughput drops roughly ninefold while everything still works. A VRAM gauge makes it obvious.</p>
+
+      <ol class="stage-steps">
+        <li>Size the stack before installing it: retention disk, ingest rate, and the query window that stops panels emptying<br><span class="step-where"><a class="mono" href="AI_Local/monitoring-sizing.html">AI_Local/monitoring-sizing.html</a></span></li>
+        <li>Install Prometheus and Grafana<br><span class="step-where"><a class="mono" href="AI_Local/Grafana_Prometheus_install_windows.html">AI_Local/Grafana_Prometheus_install_windows.html</a></span></li>
+        <li>Add the GPU exporters, checking which metrics are counters and which are gauges<br><span class="step-where"><a class="mono" href="AI_Local/GPU_monitoring_setup.html">AI_Local/GPU_monitoring_setup.html</a></span></li>
+        <li>Scrape llama-server&#x27;s own metrics and add a resident-VRAM gauge<br><span class="step-where"><a class="mono" href="AI_Local/Promethius_Grafana_windows11-llama-monitoring-tutorial.html">AI_Local/Promethius_Grafana_windows11-llama-monitoring-tutorial.html</a></span></li>
+      </ol>
+
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Checkpoint.</strong> <span class="mono">A Grafana panel shows resident VRAM per node next to decode rate</span></p>
+        <p class="stage-time xs faint">Typical time: 2–4 h</p>
+      </div>
+      <p class="stage-next small muted">Once the checkpoint passes, go to <a href="#stage-work">stage 4, put it to work</a>.</p>
+    </div>
+  </article>
+  <article class="stage" id="stage-work" data-applies="single pair cluster">
+    <header class="stage-head">
+      <div class="stage-num" aria-hidden="true">4</div>
+      <div class="stage-title-wrap">
+        <h3 class="stage-title">Put it to work</h3>
+        <p class="stage-goal">The model is maintaining real code in this repository, in the environment from stage 0.</p>
+      </div>
+      <label class="stage-done">
+        <input type="checkbox" data-stage="work">
+        <span>Done</span>
+      </label>
+    </header>
+
+    <div class="stage-body">
+      <p class="stage-why"><strong>Why here:</strong> Everything above is scaffolding. These are the programs the scaffolding exists to maintain, and they are also the honest test of whether the setup works: a model that cannot get a Qt test to run headless has not been configured, however good its benchmark scores are.</p>
+
+      <ol class="stage-steps">
+        <li>Point it at a tool with tests and a clear entry point<br><span class="step-where"><a class="mono" href="ISP_Speed_Test">ISP_Speed_Test</a></span></li>
+        <li>For instrument and signal work, the FFT analyzer and its Veusz writer<br><span class="step-where"><a class="mono" href="Narda_Probes_FFT">Narda_Probes_FFT</a></span></li>
+        <li>For batch document work, the drawing converter<br><span class="step-where"><a class="mono" href="DWG_2_PDF">DWG_2_PDF</a></span></li>
+        <li>Remember the Qt rule: there is no display in a container, so set QT_QPA_PLATFORM=offscreen<br><span class="step-where"><a class="mono" href="AI_Local/local-code-build-test.html#python">AI_Local/local-code-build-test.html#python</a></span></li>
+      </ol>
+
+      <div class="stage-foot">
+        <p class="stage-check"><strong>Checkpoint.</strong> <span class="mono">A change the model wrote, built and tested is in your working tree and you have reviewed it</span></p>
+        <p class="stage-time xs faint">Typical time: ongoing</p>
+      </div>
+    </div>
+  </article>
     </div>
   </div>
 </section>
 
-<section id="g-inference">
+
+<section id="fit">
   <div class="container">
-    <h2>Serving the model</h2>
-    <p>Getting a model answering on the network, including across several machines when it will not fit on one.</p>
-    <div class="card-grid">
-      <a class="card" href="llama-rpc-vulkan-guide.html">
-        <span class="card-kicker">llama.cpp RPC</span>
-        <h3>llama.cpp RPC + Vulkan — 4-node home network guide</h3>
-        <p class="small muted">Building llama.cpp with RPC and Vulkan, and splitting a model across four machines when it will not fit on one card.</p>
-      </a>
+    <h2>3. Which model, and will it fit?</h2>
+
+    <p>Stage 1 turns on two questions that have to be answered together: which model to run, and whether your card can actually hold it. Reading someone else&rsquo;s worked example is a poor substitute for either, so both are evaluated here against your own hardware. The arithmetic is the same as the <a href="AI_Local/ollama-model-selection.html#fit">model selection page</a>, which shows every derivation; the figures are the same ones that page cites, because both are generated from one catalogue.</p>
+
+    <!-- ===================================================================
+         PLANNER
+
+         One VRAM input drives both halves of this section. The planner
+         names what fits; choosing a model loads its published size into the
+         calculator below, so the reader never retypes a number they have
+         already given and the two halves cannot disagree about it.
+
+         The catalogue is baked into the page at build time (see
+         window.AILocalCatalog in home.js) rather than fetched, because
+         these pages open from local disk with no network access.
+         =================================================================== -->
+    <form class="planner" id="planner" autocomplete="off">
+      <div class="planner-head">
+        <label for="p-vram"><strong>How much VRAM does the card have?</strong>
+          <span class="calc-unit">GB</span>
+        </label>
+        <input type="number" id="p-vram" value="24" min="2" max="192" step="1"
+               aria-describedby="p-note">
+      </div>
+      <p class="small muted" id="p-note">A model &ldquo;fits&rdquo; here when its weight file, the runtime reservation and at least 1&nbsp;GB of cache all sit on the card. A model that is technically resident but cannot hold a useful prompt is not a fit.</p>
+      <div class="planner-out" id="planner-out" role="status" aria-live="polite"></div>
+    </form>
+
+    <div class="eq" id="eq-fit-live">
+      <div class="eq-head">
+        <h3 class="eq-title">Context a card can hold, once weights and runtime are placed</h3>
+        <div class="eq-tools"><span class="pill derived">Derived here</span>
+          <button class="info" aria-controls="v-fit-live" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+      </div>
+      <div class="eq-body">\[ L_{\max} \;=\; \left\lfloor \frac{V_{\text{tot}} - S_{w} - V_{\text{rt}}}{2\,n_{\ell}\,n_{kv}\,d_{h}\,n_{\text{seq}}\,b_{kv}} \right\rfloor \]</div>
+      <p class="eq-note">The window a model page advertises is what its weights were trained to attend over. This is what your hardware can allocate, which is the number that constrains your work.</p>
+      <div class="deriv"><ol>
+        <li>Autoregressive attention caches one key vector and one value vector per token per layer, so one token of context costs \( 2\,n_{\ell}\,n_{kv}\,d_{h}\,b_{kv} \) bytes, times \( n_{\text{seq}} \) for concurrent sequences that each keep their own cache.</li>
+        <li>The cache shares the device with the weights \( S_{w} \) and the runtime's own allocations \( V_{\text{rt}} \), so the bytes available to it are \( V_{\text{tot}} - S_{w} - V_{\text{rt}} \).</li>
+        <li>Divide the remainder by the per-token cost and take the floor, since a partial token cannot be cached.</li>
+        <li>Treat the result as an upper bound. Allocators fragment, and on Windows the display driver can page VRAM out from under the runtime.</li>
+        <li>Each step above is worked in full, with the intermediate forms, on the <a href="AI_Local/ollama-model-selection.html#eq-ctx-budget">model selection page</a>.</li>
+      </ol></div>
+      <div class="vars" id="v-fit-live" hidden><div class="table-wrap"><table>
+        <caption>Symbols in the context-budget relation. Read the architectural quantities from <span class="mono">ollama show &lt;tag&gt;</span>; the defaults below are a plausible shape for a 30B-class model and are not a measurement.</caption>
+        <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+        <tbody>
+          <tr><td>\(L_{\max}\)</td><td>Largest context that fits once weights and runtime are placed</td><td>token</td></tr>
+          <tr><td>\(V_{\text{tot}}\)</td><td>Total device memory on the accelerator</td><td>B</td></tr>
+          <tr><td>\(S_{w}\)</td><td>Weight footprint, the size the model tag lists</td><td>B</td></tr>
+          <tr><td>\(V_{\text{rt}}\)</td><td>Runtime, driver and compute-buffer reservation</td><td>B</td></tr>
+          <tr><td>\(n_{\ell}\)</td><td>Transformer layers</td><td>dimensionless</td></tr>
+          <tr><td>\(n_{kv}\)</td><td>Key/value heads per layer</td><td>dimensionless</td></tr>
+          <tr><td>\(d_{h}\)</td><td>Head dimension</td><td>dimensionless</td></tr>
+          <tr><td>\(n_{\text{seq}}\)</td><td>Concurrent sequences, <span class="mono">--parallel</span> or <span class="mono">OLLAMA_NUM_PARALLEL</span></td><td>dimensionless</td></tr>
+          <tr><td>\(b_{kv}\)</td><td>Bytes per cached element, set by <span class="mono">OLLAMA_KV_CACHE_TYPE</span></td><td>B</td></tr>
+        </tbody>
+      </table></div></div>
+    </div>
+
+    <form class="calc" id="fit-calc" autocomplete="off">
+      <div class="calc-grid">
+        <label>Card VRAM, \(V_{\text{tot}}\)
+          <span class="calc-unit">GB</span>
+          <input type="number" id="c-vram" value="24" min="2" max="192" step="1">
+        </label>
+        <label>Model size, \(S_{w}\)
+          <span class="calc-unit">GB</span>
+          <input type="number" id="c-weights" value="15" min="0.3" max="400" step="0.1">
+        </label>
+        <label>Runtime reserve, \(V_{\text{rt}}\)
+          <span class="calc-unit">GB</span>
+          <input type="number" id="c-runtime" value="1.2" min="0" max="8" step="0.1">
+        </label>
+        <label>Layers, \(n_{\ell}\)
+          <span class="calc-unit">count</span>
+          <input type="number" id="c-layers" value="48" min="1" max="200" step="1">
+        </label>
+        <label>KV heads, \(n_{kv}\)
+          <span class="calc-unit">count</span>
+          <input type="number" id="c-kvheads" value="8" min="1" max="128" step="1">
+        </label>
+        <label>Head dim, \(d_{h}\)
+          <span class="calc-unit">count</span>
+          <input type="number" id="c-headdim" value="128" min="8" max="512" step="8">
+        </label>
+        <label>Concurrent, \(n_{\text{seq}}\)
+          <span class="calc-unit">count</span>
+          <input type="number" id="c-parallel" value="1" min="1" max="16" step="1">
+        </label>
+        <label>Cache type, \(b_{kv}\)
+          <span class="calc-unit">bytes</span>
+          <select id="c-kvtype">
+            <option value="2" selected>f16 (2 B, default)</option>
+            <option value="1">q8_0 (1 B)</option>
+            <option value="0.5">q4_0 (0.5 B)</option>
+          </select>
+        </label>
+      </div>
+
+      <output class="calc-out" id="calc-out" for="c-vram c-weights c-runtime c-layers c-kvheads c-headdim c-parallel c-kvtype"></output>
+    </form>
+
+    <!-- The model catalogue, emitted from model_catalog.py at build time.
+         application/json rather than a <script> that assigns a global: the
+         browser does not execute it, so the page carries no inline
+         executable code and the content-security story stays simple. -->
+    <script type="application/json" id="model-catalog">{
+  "models": [
+    {
+      "tag": "nemotron-3-nano:4b",
+      "family": "nemotron-3-nano",
+      "sizeGb": 2.9,
+      "sizeDisplay": "2.8-2.9 GB",
+      "context": 262144,
+      "quant": "not stated",
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "reference": 34,
+      "positioning": "NVIDIA, trained from scratch, and positioned explicitly as an agentic model rather than a shrunken chat model.",
+      "minVramGb": 8,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 2.9,
+      "isMoe": false,
+      "notes": [
+        "The only shortlisted model that leaves real cache headroom on an 8 GB card."
+      ]
+    },
+    {
+      "tag": "qwen2.5-coder:7b",
+      "family": "qwen2.5-coder",
+      "sizeGb": 4.7,
+      "sizeDisplay": "4.7 GB",
+      "context": 32768,
+      "quant": "not stated",
+      "capabilities": [
+        "tools"
+      ],
+      "reference": 12,
+      "positioning": "Older generation, but the broadest size ladder in the library and generous cache headroom at this budget.",
+      "minVramGb": 12,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 4.7,
+      "isMoe": false,
+      "notes": [
+        "The 32K context ceiling applies to EVERY qwen2.5-coder tag and is the binding limit for agent work, not the size."
+      ]
+    },
+    {
+      "tag": "gpt-oss:20b",
+      "family": "gpt-oss",
+      "sizeGb": 14.0,
+      "sizeDisplay": "14 GB",
+      "context": 131072,
+      "quant": "MXFP4, 4.25 bit/parameter",
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "reference": 16,
+      "positioning": "OpenAI open-weight reasoning and agent model, Apache 2.0.",
+      "minVramGb": 16,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 14.0,
+      "isMoe": false,
+      "notes": [
+        "The model page states MXFP4 lets this run 'on systems with as little as 16GB memory', so 16 GB is the vendor's own stated floor rather than a judgement made here.",
+        "Budget an 8-bit key/value cache at 16 GB to buy back headroom."
+      ]
+    },
+    {
+      "tag": "devstral-small-2:24b",
+      "family": "devstral-small-2",
+      "sizeGb": 15.0,
+      "sizeDisplay": "15 GB",
+      "context": 393216,
+      "quant": "not stated",
+      "capabilities": [
+        "tools",
+        "vision"
+      ],
+      "reference": 13,
+      "positioning": "Built to use tools to explore codebases, edit multiple files and power software-engineering agents. Apache 2.0.",
+      "minVramGb": 24,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 15.0,
+      "isMoe": false,
+      "notes": [
+        "The only shortlisted model whose page publishes agentic software-engineering scores: 65.8% SWE-Bench Verified, 51.6% SWE-Bench Multilingual, 32.0% Terminal Bench.",
+        "Requires Ollama 0.13.3 or later."
+      ]
+    },
+    {
+      "tag": "laguna-xs-2.1:q4_K_M",
+      "family": "laguna-xs-2.1",
+      "sizeGb": 20.0,
+      "sizeDisplay": "20 GB",
+      "context": 262144,
+      "quant": "Q4_K_M",
+      "capabilities": [
+        "tools",
+        "thinking"
+      ],
+      "reference": 15,
+      "positioning": "Poolside, designed for agentic coding and long-horizon work on a local machine.",
+      "minVramGb": 24,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 20.0,
+      "isMoe": false,
+      "notes": [
+        "The only shortlisted model publishing a full quantisation ladder (Q4_K_M 20 GB, q8_0 36 GB, bf16 67 GB), so the quality-versus-size trade can be walked rather than guessed.",
+        "At 20 GB on a 24 GB card an 8-bit cache is effectively mandatory."
+      ]
+    },
+    {
+      "tag": "qwen3-coder:30b",
+      "family": "qwen3-coder",
+      "sizeGb": 19.0,
+      "sizeDisplay": "19 GB",
+      "context": 262144,
+      "quant": "not stated",
+      "capabilities": [
+        "tools"
+      ],
+      "reference": 11,
+      "positioning": "Long-context coding and agent model; the page states 256K native, reaching 1M by extrapolation.",
+      "minVramGb": 32,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 19.0,
+      "isMoe": false,
+      "notes": [
+        "Leaves roughly 12 GB for cache on a 32 GB card, which is the most headroom of any 30B-class option here."
+      ]
+    },
+    {
+      "tag": "qwen3.6:35b",
+      "family": "qwen3.6",
+      "sizeGb": 24.0,
+      "sizeDisplay": "23-24 GB",
+      "context": 262144,
+      "quant": "not stated",
+      "capabilities": [
+        "tools",
+        "thinking",
+        "vision"
+      ],
+      "reference": 14,
+      "positioning": "General model with a coding emphasis, plus vision and optional retention of reasoning context across turns.",
+      "minVramGb": 32,
+      "activeParamsB": null,
+      "totalParamsB": null,
+      "streamingGb": 24.0,
+      "isMoe": false,
+      "notes": [
+        "Pick this over qwen3-coder when the vision capability earns its keep: reading a schematic, a plot, or a GUI screenshot. For RF and instrumentation work it often does."
+      ]
+    },
+    {
+      "tag": "qwen3-coder-next:q4_K_M",
+      "family": "qwen3-coder-next",
+      "sizeGb": 52.0,
+      "sizeDisplay": "52 GB",
+      "context": 262144,
+      "quant": "q4_K_M",
+      "capabilities": [
+        "tools"
+      ],
+      "reference": 33,
+      "positioning": "80B total with 3B active per token, built on Qwen3-Next-80B-A3B-Base.",
+      "minVramGb": 64,
+      "activeParamsB": 3.0,
+      "totalParamsB": 80.0,
+      "streamingGb": 1.95,
+      "isMoe": true,
+      "notes": [
+        "Needs the capacity of a 52 GB model and streams like a 2 GB one. The best capacity-for-speed trade on the shortlist, and the natural target for a pooled multi-node configuration.",
+        "Non-thinking mode only: it emits no reasoning blocks."
+      ]
+    }
+  ],
+  "constants": {
+    "runtimeVramGb": 1.2,
+    "archLayers": 48,
+    "archKvHeads": 8,
+    "archHeadDim": 128,
+    "kvBytes": {
+      "f16": 2.0,
+      "q8_0": 1.0,
+      "q4_0": 0.5
+    },
+    "readOn": "2026-10-18",
+    "notStated": "not stated"
+  }
+}</script>
+
+    <div class="callout">
+      <p><strong>The bandwidth cliff is the thing this is protecting you from.</strong> If the result is negative, the weights do not fit and llama.cpp or Ollama will place some layers in system RAM. The same weight set streams roughly nine times slower from system RAM than from VRAM, so a smaller model fully resident beats a larger one that spills &mdash; essentially always. Confirm residency with <span class="mono">ollama ps</span> rather than assuming it.</p>
     </div>
   </div>
 </section>
 
-<section id="g-monitoring">
+
+<section id="toolbox">
+  <div class="container-wide">
+    <h2>4. The toolbox</h2>
+    <p>What actually runs once the foundation is in place. The <strong>Environment</strong> column is the one to read first: <span class="badge high">Py3p12</span> means the shared environment from stage 0, <span class="badge medium">own env</span> means the project ships its own YAML and can be installed standalone, and <span class="badge">no Python</span> means it needs something else entirely.</p>
+
+    <div class="table-wrap"><table>
+      <caption>Engineering and instrumentation tools in this repository, with the entry point and environment each one needs. Versions are as each project's own README or module header states them, read on 2026-10-20.</caption>
+      <thead><tr><th scope="col">Project</th><th scope="col">Version</th><th scope="col">Language</th><th scope="col">Entry point</th><th scope="col">Environment</th><th scope="col">What it does</th></tr></thead>
+      <tbody><tr><td><a class="mono" href="Narda_Probes_FFT">EMF Envelope FFT Analyzer</a><div class="xs faint">Narda_Probes_FFT</div></td><td><span class="mono">0.0.4</span></td><td>Python / QtPy</td><td><span class="mono">emf_envelope_fft_v0_0_4.py</span></td><td><span class="badge medium">own env</span></td><td class="small">Computes envelope (modulation) spectra from broadband EMF probe and spectrum-analyzer logs, writing native Veusz .vszh5 output. Built for Narda probe data.<div class="xs muted" style="margin-top:.35rem">Ships its own environment YAML and a LaTeX-built manual. vszh5_writer.py is the reusable Veusz HDF5 writer, shared in spirit with the FitsAutoPlot repository.</div><div class="xs" style="margin-top:.35rem"><a class="mono" href="Narda_Probes_FFT/docs/EMF_Envelope_FFT_Manual_v0.0.4.pdf">EMF_Envelope_FFT_Manual_v0.0.4.pdf</a> <a class="mono" href="Narda_Probes_FFT/emf_envelope_fft.yml">emf_envelope_fft.yml</a></div></td></tr><tr><td><a class="mono" href="ISP_Speed_Test">ISP Speed Monitor</a><div class="xs faint">ISP_Speed_Test</div></td><td><span class="mono">1.7.2 (script 1.3.1)</span></td><td>Python / QtPy</td><td><span class="mono">isp_speed_monitor.py</span></td><td><span class="badge medium">own env</span></td><td class="small">Long-running internet speed monitoring with a Qt GUI, campaign configuration files and native Veusz .vszh5 output for the plots.<div class="xs muted" style="margin-top:.35rem">Has its own environment.yml, a pyproject.toml and a uv.lock, so it can be installed standalone. A GUI smoke test lives in tests/gui_smoke.py.</div><div class="xs" style="margin-top:.35rem"><a class="mono" href="ISP_Speed_Test/README.md">README.md</a> <a class="mono" href="ISP_Speed_Test/CHANGELOG.md">CHANGELOG.md</a> <a class="mono" href="ISP_Speed_Test/docs/BUILD_PLAN.md">BUILD_PLAN.md</a> <a class="mono" href="ISP_Speed_Test/environment.yml">environment.yml</a></div></td></tr><tr><td><a class="mono" href="DWG_2_PDF">dwg2pdf — batch drawing conversion</a><div class="xs faint">DWG_2_PDF</div></td><td><span class="mono">engine 0.5.2 / GUI 0.2.21</span></td><td>Python / QtPy, around LibreDWG</td><td><span class="mono">README.md</span></td><td><span class="badge high">Py3p12</span></td><td class="small">Converts a tree of 2D AutoCAD drawings (.dwg, .dxf) into a mirrored tree of PDFs with a manifest recording what happened to every sheet. Command line for the batch, GUI for the rest.<div class="xs muted" style="margin-top:.35rem">MIT-licensed tooling around GPL-3 LibreDWG. Validated on real production sheets mixing AutoCAD R14 and R2018. The working code ships as dated .7z bundles under Archive/.</div><div class="xs" style="margin-top:.35rem"><a class="mono" href="DWG_2_PDF/README.md">README.md</a> <a class="mono" href="DWG_2_PDF/docs/Dwg2Pdf_0.5.1_pass1_field_results.md">Dwg2Pdf_0.5.1_pass1_field_results.md</a> <a class="mono" href="DWG_2_PDF/MANIFEST.sha256">MANIFEST.sha256</a></div></td></tr><tr><td><a class="mono" href="GBO%20Sidelobe">Sidelobe — telescope strayscan computation</a><div class="xs faint">GBO Sidelobe</div></td><td><span class="faint">&mdash;</span></td><td>Python + a legacy binary</td><td><span class="mono">sidelobe.py</span></td><td><span class="badge high">Py3p12</span></td><td class="small">Computes telescope sidelobe contributions, convolving the sidelobe pattern with an all-sky map to produce strayscan correction files. Supports GBT and the NRAO 140-foot, in both SDD and SDFITS formats.<div class="xs muted" style="margin-top:.35rem">Includes sidelobe_gui.py and PreReqsInstall.py. The base32 and base64 text files are encoded copies of the legacy binary; secret scanners flag them as false positives because &#x27;AKIA&#x27; occurs by chance in base32 data.</div><div class="xs" style="margin-top:.35rem"><a class="mono" href="GBO%20Sidelobe/sidelobe-readme.md">sidelobe-readme.md</a> <a class="mono" href="GBO%20Sidelobe/sidelobe-technical.md">sidelobe-technical.md</a> <a class="mono" href="GBO%20Sidelobe/sidelobe-userguide.md">sidelobe-userguide.md</a></div></td></tr><tr><td><a class="mono" href="Dysh_Play">Dysh GUI experiments</a><div class="xs faint">Dysh_Play</div></td><td><span class="faint">&mdash;</span></td><td>Python</td><td><span class="mono">Daves_dysh_setup.py</span></td><td><span class="badge high">Py3p12</span></td><td class="small">A GUI front end and setup helper for dysh, the GBO single-dish data reduction package.<div class="xs muted" style="margin-top:.35rem">Exploratory. Each .py has a matching .txt copy, so diff them before assuming which is current.</div></td></tr><tr><td><a class="mono" href="Keysight_Agilent_RS232_test.py">Keysight/Agilent RS-232 test</a><div class="xs faint">Keysight_Agilent_RS232_test.py</div></td><td><span class="faint">&mdash;</span></td><td>Python</td><td><span class="mono">Keysight_Agilent_RS232_test.py</span></td><td><span class="badge high">Py3p12</span></td><td class="small">Serial instrument communication against Keysight and Agilent equipment over RS-232, for bringing up a link before writing a full driver.<div class="xs muted" style="margin-top:.35rem">The fuller instrument-control work lives in the companion RF_Equipment_Comms repository.</div></td></tr><tr><td><a class="mono" href="Inventor_Parameter_XML2XLSX.py">Inventor parameter export</a><div class="xs faint">Inventor_Parameter_XML2XLSX.py</div></td><td><span class="faint">&mdash;</span></td><td>Python</td><td><span class="mono">Inventor_Parameter_XML2XLSX.py</span></td><td><span class="badge high">Py3p12</span></td><td class="small">Exports Autodesk Inventor user parameters from the XML files Inventor writes into Excel workbooks, for review and bulk edit outside the CAD tool.<div class="xs muted" style="margin-top:.35rem">Example_Inventor_XML_File.xml at the repository root is the sample input.</div><div class="xs" style="margin-top:.35rem"><a class="mono" href="Example_Inventor_XML_File.xml">Example_Inventor_XML_File.xml</a></div></td></tr><tr><td><a class="mono" href="Convert-VisioLegacyFiles.ps1">Visio legacy file converter</a><div class="xs faint">Convert-VisioLegacyFiles.ps1</div></td><td><span class="faint">&mdash;</span></td><td>PowerShell</td><td><span class="mono">Convert-VisioLegacyFiles.ps1</span></td><td><span class="badge">no Python</span></td><td class="small">Batch-converts legacy Visio binary files (.vsd, .vss, .vst) to the modern Open XML formats via Visio COM automation, then sorts the output into per-extension folders.<div class="xs muted" style="margin-top:.35rem">Needs a local Visio installation; it drives a hidden COM instance. An alternative implementation and three older single-purpose scripts are in Archive/.</div></td></tr><tr><td><a class="mono" href="misc/github-repo-size.py">GitHub repository size report</a><div class="xs faint">misc/github-repo-size.py</div></td><td><span class="faint">&mdash;</span></td><td>Python</td><td><span class="mono">github-repo-size.py</span></td><td><span class="badge high">Py3p12</span></td><td class="small">Reports the size of a list of GitHub repositories and opens the result in a browser, for finding which repository is carrying the weight.<div class="xs muted" style="margin-top:.35rem">Reads the repository list from misc/repos.txt.</div></td></tr></tbody>
+    </table></div>
+
+
+    <h3>Reference material</h3>
+    <p>The physics and signal processing behind the tools above. The Atomic Theory Atlas is also the source of the equation and variable-definition pattern used throughout the AI_Local pages.</p>
+
+    <div class="table-wrap"><table>
+      <caption>Educational and reference material. The archives are page sets: unpack one and open its index.html.</caption>
+      <thead><tr><th scope="col">Project</th><th scope="col">Version</th><th scope="col">Language</th><th scope="col">Entry point</th><th scope="col">Environment</th><th scope="col">What it does</th></tr></thead>
+      <tbody><tr><td><span class="mono">Atomic Theory Atlas</span><div class="xs faint">Educational/Atomic Theory Atlas.zip</div></td><td><span class="faint">&mdash;</span></td><td>HTML page set</td><td><span class="mono">index.html (inside the archive)</span></td><td><span class="badge">no Python</span></td><td class="small">A cited reference on atomic theory from QED up to the macroscopic permittivity an electromagnetic solver consumes, stopping at the atomic transitions used for masing and timekeeping.<div class="xs muted" style="margin-top:.35rem">This is the page set whose equation and variable-definition pattern the AI_Local pages follow: a provenance pill, a &#x27;Define variables&#x27; table with SI units, and an explicit derivation behind every derived result.</div></td></tr><tr><td><span class="mono">Precision Timing Reference</span><div class="xs faint">Educational/Precision Timing Reference — Local _ Deploy Bundle.zip</div></td><td><span class="faint">&mdash;</span></td><td>HTML page set</td><td><span class="faint">&mdash;</span></td><td><span class="badge">no Python</span></td><td class="small">Reference bundle on precision timing and frequency standards, packaged to deploy locally.</td></tr><tr><td><span class="mono">Matched filtering</span><div class="xs faint">Educational/matched-filtering-v3.zip</div></td><td><span class="faint">&mdash;</span></td><td>HTML page set</td><td><span class="faint">&mdash;</span></td><td><span class="badge">no Python</span></td><td class="small">Reference material on matched filtering, the detection problem it solves and its signal-processing derivation.</td></tr><tr><td><a class="mono" href="Educational/fourier_visualizer_qtpy.py">Fourier visualizer</a><div class="xs faint">Educational/fourier_visualizer_qtpy.py</div></td><td><span class="faint">&mdash;</span></td><td>Python / QtPy</td><td><span class="mono">fourier_visualizer_qtpy.py</span></td><td><span class="badge high">Py3p12</span></td><td class="small">Interactive Qt visualiser for Fourier decomposition, for building intuition and for teaching.</td></tr><tr><td><a class="mono" href="Educational/convolution_visualizer.py">Convolution visualizer</a><div class="xs faint">Educational/convolution_visualizer.py</div></td><td><span class="faint">&mdash;</span></td><td>Python / QtPy</td><td><span class="mono">convolution_visualizer.py</span></td><td><span class="badge high">Py3p12</span></td><td class="small">Interactive Qt visualiser for convolution, the operation underlying both the matched filter and the sidelobe strayscan computation in this repository.</td></tr><tr><td><a class="mono" href="Educational/trig_function_plotter.py">Trig function plotter</a><div class="xs faint">Educational/trig_function_plotter.py</div></td><td><span class="faint">&mdash;</span></td><td>Python / QtPy</td><td><span class="mono">trig_function_plotter.py</span></td><td><span class="badge high">Py3p12</span></td><td class="small">Interactive plotter for trigonometric functions.</td></tr></tbody>
+    </table></div>
+
+  </div>
+</section>
+
+
+<section id="companions">
   <div class="container">
-    <h2>Monitoring</h2>
-    <p>Knowing what the hardware is doing while it serves, on Windows and on Linux.</p>
-    <div class="card-grid">
-      <a class="card" href="monitoring-sizing.html">
-        <span class="card-kicker"><span class="badge new">new</span> Monitor sizing</span>
-        <h3>Sizing the monitoring stack, and getting the queries right</h3>
-        <p class="small muted">The four relations the monitoring install pages assume but never state: retention disk cost, ingest rate, the range-vector window lower bound, and counters versus gauges.</p>
-      </a>
-      <a class="card" href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">
-        <span class="card-kicker">Monitoring W11</span>
-        <h3>Windows 11 Prometheus + Grafana — Multi-Node llama-server</h3>
-        <p class="small muted">End-to-end monitoring of a multi-node llama-server deployment on Windows 11.</p>
-      </a>
-      <a class="card" href="GPU_monitoring_setup.html">
-        <span class="card-kicker">GPU metrics</span>
-        <h3>Multi-Vendor GPU Monitoring Documentation</h3>
-        <p class="small muted">GPU exporters for NVIDIA and AMD, including the WSL2 bridge AMD requires on Windows.</p>
-      </a>
-      <a class="card" href="Grafana_Prometheus_install_windows.html">
-        <span class="card-kicker">Install (Win)</span>
-        <h3>Install & Use Prometheus + Grafana on Windows / WSL2</h3>
-        <p class="small muted">Installing Prometheus, windows_exporter and Grafana on Windows, with a WSL2 node_exporter alternative.</p>
-      </a>
-      <a class="card" href="Grafan_Promethius_install_linux.html">
-        <span class="card-kicker">Install (Linux)</span>
-        <h3>Install & Use Prometheus + Grafana on Node A</h3>
-        <p class="small muted">The same stack on a systemd Linux host, with node_exporter and a first dashboard.</p>
-      </a>
-      <a class="card" href="Archive/Windows_Exporter_Grafana_dashboard.html">
-        <span class="card-kicker">Archive: dashboard</span>
-        <h3>Archived — windows_exporter Grafana dashboard</h3>
-        <p class="small muted">Earlier revision of the windows_exporter dashboard notes, kept for reference.</p>
-      </a>
+    <h2>5. Companion repositories</h2>
+    <p>Three related repositories by the same author. They are separate because they have separate lifecycles, but they share conventions with this one &mdash; the Veusz <span class="mono">.vszh5</span> writing approach in particular appears in three of the four.</p>
+
+    <div class="table-wrap"><table>
+      <caption>Related repositories, with how each connects to the work here. Commit counts and licences were read from clones on 2026-10-20.</caption>
+      <thead><tr><th scope="col">Repository</th><th scope="col">Holds</th><th scope="col">Connection</th><th scope="col">As of 2026-10-20</th></tr></thead>
+      <tbody><tr><td><a href="https://github.com/Braveheart53/RF_Equipment_Comms" target="_blank" rel="noopener noreferrer">RF_Equipment_Comms</a></td><td class="small">Instrument communication and control: SCPI drivers, signal-generator control and the USB/RS-232 adapter drivers that go with them.</td><td class="small">The full version of the RS-232 bring-up script in this repository.</td><td class="xs faint">39 commits, GPL-2.0, 3 stale branches</td></tr><tr><td><a href="https://github.com/Braveheart53/FitsAutoPlot" target="_blank" rel="noopener noreferrer">FitsAutoPlot</a></td><td class="small">FITS and Touchstone auto-plotting: S-parameter processing, time gating, Smith charts, and native Veusz .vszh5 HDF5 export.</td><td class="small">Shares the Veusz .vszh5 writing approach with the EMF FFT analyzer here.</td><td class="xs faint">301 commits, GPL-3.0, 13 branches</td></tr><tr><td><a href="https://github.com/Braveheart53/PowerLineRFI" target="_blank" rel="noopener noreferrer">PowerLineRFI</a></td><td class="small">Power-line EMI and radio-telescope interference: literature reference and site analysis.</td><td class="small">The interference side of the same EMF measurement work the FFT analyzer here supports.</td><td class="xs faint">3 commits, GPL-3.0, new as of 2026-10-18</td></tr></tbody>
+    </table></div>
+
+    <div class="callout">
+      <p><strong>Licence mismatch worth knowing about.</strong> <span class="mono">RF_Equipment_Comms</span> is GPL-2.0 while <span class="mono">FitsAutoPlot</span> and <span class="mono">PowerLineRFI</span> are GPL-3.0. GPL-2.0-only code cannot be combined with GPL-3.0 code, so if a module is ever shared between them that is a real conflict rather than a paperwork detail. This repository currently carries no licence at all, which means default copyright: nobody may legally reuse it.</p>
     </div>
   </div>
 </section>
 
-<section id="g-meta">
+
+<section id="map">
   <div class="container">
-    <h2>Reference</h2>
-    <p>Sources and revision history for the whole set.</p>
-    <div class="card-grid">
-      <a class="card" href="index.html">
-        <span class="card-kicker"><span class="badge new">new</span> Overview</span>
-        <h3>Running AI on your own hardware, end to end</h3>
-        <p class="small muted">Landing page for the set, with a suggested build order and the reading conventions used throughout.</p>
-      </a>
-      <a class="card" href="references.html">
-        <span class="card-kicker"><span class="badge new">new</span> References</span>
-        <h3>Sources — AI_Local</h3>
-        <p class="small muted">One IEEE-format reference table for the whole set, with a sourcing-confidence class per row and a list of the figures that are estimates rather than citations.</p>
-      </a>
-      <a class="card" href="CHANGELOG.html">
-        <span class="card-kicker"><span class="badge new">new</span> Change log</span>
-        <h3>Version history — AI_Local</h3>
-        <p class="small muted">What changed in each revision of the set, what was deliberately left alone, and the candidates for the next revision.</p>
-      </a>
+    <h2>6. Repository map</h2>
+    <p>Every top-level directory, and where it sits in the flow. Use this when you know what you want and do not need the guided path.</p>
+
+    <div class="table-wrap"><table>
+      <caption>Top-level directories of this repository, as surveyed on 2026-10-20, with the flow stage each belongs to.</caption>
+      <thead><tr><th scope="col">Path</th><th scope="col">Stage</th><th scope="col">What it is</th></tr></thead>
+      <tbody><tr><td><a class="mono" href="Py3p12_Mamba_Yamls">Py3p12_Mamba_Yamls</a></td><td>Stage 0</td><td class="small">Py3p12 mamba environment</td></tr><tr><td><a class="mono" href="devenv">devenv</a></td><td>Stage 0</td><td class="small">pip update helper</td></tr><tr><td><a class="mono" href="AI_Local">AI_Local</a></td><td>Stage 1</td><td class="small">AI_Local — local AI deployment set</td></tr><tr><td><a class="mono" href="Narda_Probes_FFT">Narda_Probes_FFT</a></td><td>Toolbox</td><td class="small">EMF Envelope FFT Analyzer</td></tr><tr><td><a class="mono" href="ISP_Speed_Test">ISP_Speed_Test</a></td><td>Toolbox</td><td class="small">ISP Speed Monitor</td></tr><tr><td><a class="mono" href="DWG_2_PDF">DWG_2_PDF</a></td><td>Toolbox</td><td class="small">dwg2pdf — batch drawing conversion</td></tr><tr><td><a class="mono" href="GBO%20Sidelobe">GBO Sidelobe</a></td><td>Toolbox</td><td class="small">Sidelobe — telescope strayscan computation</td></tr><tr><td><a class="mono" href="Dysh_Play">Dysh_Play</a></td><td>Toolbox</td><td class="small">Dysh GUI experiments</td></tr><tr><td><a class="mono" href="Keysight_Agilent_RS232_test.py">Keysight_Agilent_RS232_test.py</a></td><td>Toolbox</td><td class="small">Keysight/Agilent RS-232 test</td></tr><tr><td><a class="mono" href="Inventor_Parameter_XML2XLSX.py">Inventor_Parameter_XML2XLSX.py</a></td><td>Toolbox</td><td class="small">Inventor parameter export</td></tr><tr><td><a class="mono" href="Convert-VisioLegacyFiles.ps1">Convert-VisioLegacyFiles.ps1</a></td><td>Toolbox</td><td class="small">Visio legacy file converter</td></tr><tr><td><a class="mono" href="misc">misc</a></td><td>Toolbox</td><td class="small">GitHub repository size report</td></tr><tr><td><a class="mono" href="Educational">Educational</a></td><td>Reference</td><td class="small">Atomic Theory Atlas</td></tr><tr><td><a class="mono" href="Archive">Archive</a></td><td>Toolbox</td><td class="small">Earlier single-purpose Visio conversion scripts, superseded by Convert-VisioLegacyFiles.ps1</td></tr></tbody>
+    </table></div>
+
+    <div class="callout info-box">
+      <p><strong>Large binaries.</strong> <span class="mono">AI_Local/</span> carries about 488&nbsp;MB of third-party installers &mdash; Visual Studio build tools, the Go MSI, Prometheus exporters &mdash; which is most of this repository's weight. <span class="mono">AI_Local/Files_you_Will_need_that_areNot_here.txt</span> lists the ones that are <em>not</em> committed and must be downloaded for your own hardware, CUDA and the Vulkan SDK among them.</p>
     </div>
   </div>
 </section>
+
 
 <section id="conventions">
   <div class="container">
-    <h2>Conventions used across the set</h2>
+    <h2>7. How to read the documentation here</h2>
+
+    <p>The HTML page sets in this repository share one set of conventions, borrowed from the <span class="mono">Atomic Theory Atlas</span> and applied to the AI_Local pages during the v0.0.1 rebuild. They are worth two minutes before reading a page in anger.</p>
 
     <div class="table-wrap">
       <table>
-        <caption>Reading conventions. The provenance pills and the variable-table disclosure follow the pattern established in the <em>Atomic Theory Atlas</em> page set in this repository.</caption>
-        <thead><tr><th scope="col">Convention</th><th scope="col">Meaning</th></tr></thead>
+        <caption>Reading conventions shared by the AI_Local pages and the Educational page sets.</caption>
+        <thead><tr><th scope="col">Marker</th><th scope="col">Means</th></tr></thead>
         <tbody>
           <tr><td><span class="pill stated">Stated</span></td><td>Quoted from a cited source. Nothing was algebraically manipulated</td></tr>
-          <tr><td><span class="pill derived">Derived here</span></td><td>Algebra or a numerical evaluation performed on these pages. Always followed by an explicit step list</td></tr>
+          <tr><td><span class="pill derived">Derived here</span></td><td>Algebra or a numerical evaluation performed on the page. Always followed by an explicit step list</td></tr>
           <tr><td><span class="pill data">Measured value</span></td><td>A tabulated experimental or defined number</td></tr>
           <tr><td><span class="badge high">primary</span></td><td>A normative or first-party specification: vendor documentation, a standards body, a reference manual</td></tr>
-          <tr><td><span class="badge medium">vendor</span></td><td>First-party but commercial and revised without notice: a model card, a product page</td></tr>
-          <tr><td><span class="badge medium">estimate</span></td><td>A planning figure for this class of hardware, stated as a range. Measure it before relying on it</td></tr>
-          <tr><td><em>Define variables</em> button</td><td>Opens a table of every symbol in the equation with its SI or stated unit. Variable tables are always expanded when a page is printed</td></tr>
-          <tr><td>Citation <span class="mono">[n]</span></td><td>Links to row <span class="mono">n</span> of the <a href="references.html">reference table</a></td></tr>
+          <tr><td><span class="badge medium">vendor</span></td><td>First-party but commercial and revised in place without notice: a model card, a product page</td></tr>
+          <tr><td><em>Define variables</em> button</td><td>Opens a table of every symbol in the equation with its SI or stated unit. Always expanded when a page is printed</td></tr>
+          <tr><td>Citation <span class="mono">[n]</span></td><td>Links to row <span class="mono">n</span> of that page set's reference table</td></tr>
         </tbody>
       </table>
     </div>
 
     <h3>Offline by design</h3>
-    <p>Every page in the set opens from a local disk with no network access. KaTeX<a class="cite" href="references.html#r31">[31]</a> is vendored into <span class="mono">assets/katex/</span> rather than loaded from a content-delivery network &mdash; it has no dependencies and is designed to be bundled with a site's own resources &mdash; and nothing in the set uses browser storage &mdash; so the pages also render correctly inside a sandboxed frame, where storage access throws. The theme follows the operating-system preference and can be overridden for the current page view.</p>
+    <p>Every HTML page in this repository opens from local disk with no network access. KaTeX is vendored rather than loaded from a content-delivery network, and nothing uses browser storage, so the pages also render correctly inside a sandboxed frame. The theme follows your operating-system preference and can be overridden for the current page view.</p>
 
-    <h3>Files you will need that are not in the repository</h3>
-    <p>Installers specific to your hardware &mdash; CUDA, the Vulkan SDK, Docker Desktop, the Grafana MSI &mdash; are listed in <span class="mono">Files_you_Will_need_that_areNot_here.txt</span> alongside these pages<a class="cite" href="references.html#r32">[32]</a>.</p>
+    <h3>Where the numbers come from</h3>
+    <p>Figures in the AI_Local pages are either cited to a source or shown with their derivation. The ones that are neither &mdash; planning estimates for a class of hardware, such as per-compiler memory or the throughput realisation factor &mdash; are listed together with their values and how to measure them on <a href="AI_Local/references.html#not-cited">the references page</a>. That list exists so an estimate is never mistaken for a citation.</p>
   </div>
 </section>
 </main>
 <footer class="foot">
   <div class="container">
-    <p><strong>AI_Local</strong> v0.0.4 &middot; William W. Wallace &middot;
-       <a href="CHANGELOG.html">change log</a> &middot;
-       <a href="references.html">references</a></p>
-    <p class="small">Equations typeset offline with KaTeX. Every page in this set opens
-       from local disk with no network access, and nothing here uses browser storage.</p>
+    <p><strong>Braveheart53/tools</strong> homepage v0.0.3
+       &middot; AI_Local page set v0.0.6
+       &middot; William W. Wallace</p>
+    <p class="small">Every page in this repository opens from local disk with no
+       network access. Equations are typeset offline with KaTeX, and nothing here
+       uses browser storage.</p>
   </div>
 </footer>
-<script src="assets/katex/katex.min.js"></script>
-<script src="assets/katex/contrib/auto-render.min.js"></script>
-<script src="assets/equations.js"></script>
-<script src="assets/sitenav.js"></script>
+<script src="AI_Local/assets/katex/katex.min.js"></script>
+<script src="AI_Local/assets/katex/contrib/auto-render.min.js"></script>
+<script src="AI_Local/assets/equations.js"></script>
+<script src="AI_Local/assets/sitenav.js"></script>
+<script src="AI_Local/assets/home.js"></script>
 </body>
 </html>

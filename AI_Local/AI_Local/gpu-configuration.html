@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU configuration for local models</title>
+<meta name="description" content="NVIDIA, AMD, Intel and Apple GPU setup for Ollama and llama.cpp: compute capability, CUDA and Visual Studio pairing, ROCm and WSL, Vulkan, placement settings, mixture-of-experts offload, multi-GPU splits, containers and GPU monitoring.">
+<meta name="author" content="William W. Wallace">
+<meta name="generator" content="build_ai_local_site.py 0.0.4">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f5f66'/%3E%3Cg stroke='%23e3efef' stroke-width='2' fill='none'%3E%3Cpath d='M16 9v6M16 15l-6 6M16 15l6 6'/%3E%3C/g%3E%3Cg fill='%23e3efef'%3E%3Ccircle cx='16' cy='8' r='3'/%3E%3Ccircle cx='9' cy='23' r='3'/%3E%3Ccircle cx='23' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/equations.css">
+<link rel="stylesheet" href="assets/sitenav.css">
+</head>
+<body class="ail">
+<a class="skip" href="#content">Skip to content</a>
+<nav class="ailnav" aria-label="AI_Local page set">
+  <div class="ailnav-inner">
+    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
+    <span class="ailnav-ver">v0.0.6</span>
+    <div class="ailnav-links">
+      <a href="../index.html" class="ailnav-home"><span aria-hidden="true">⌂</span>&nbsp;Repo home</a><a href="index.html">Overview</a><a href="downloads.html">Downloads</a><a href="gpu-configuration.html">GPU setup</a><a href="local-code-build-test.html">Build &amp; test</a><a href="ollama-model-selection.html">Model choice</a><a href="claude-sandbox-local-env.html">Sandbox access</a><a href="monitoring-sizing.html">Monitor sizing</a><a href="llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="GPU_monitoring_setup.html">GPU metrics</a><a href="Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="references.html">References</a><a href="CHANGELOG.html">Change log</a>
+    </div>
+    <button class="ailnav-theme" type="button" aria-label="Switch theme" aria-pressed="false"><span class="ailnav-theme-icon" aria-hidden="true">☾</span><span class="ailnav-theme-label">Dark</span></button>
+  </div>
+</nav>
+<nav class="ailflow" aria-label="Setup path"><span class="ailflow-where"><span class="ailflow-n">2</span>Step 2 of 10: Match the GPU stack to the card</span><span class="ailflow-move"><a href="index.html#step-gpu">On the path</a><a href="downloads.html">&larr; 1. Gather the software</a><a href="ollama-model-selection.html">3. Choose a model that fits &rarr;</a></span></nav>
+<main id="content">
+<section class="hero">
+  <div class="container">
+    <div class="eyebrow">Step 2 &middot; GPU configuration</div>
+    <h1>Matching the GPU stack to the card, and the settings that decide placement</h1>
+    <p class="lead">A model runs at GPU speed only when four things agree: the card's architecture, the driver, the toolkit the runtime was built with, and the runtime settings that decide how much of the model and its cache stay in video memory. This page sets out each of the four for NVIDIA, AMD, Intel and Apple hardware, for both runtimes in the set.</p>
+    <p class="small muted">Everything here was read from the runtimes' own sources on 2026-11-15<a class="cite" href="references.html#r40">[40]</a><a class="cite" href="references.html#r41">[41]</a><a class="cite" href="references.html#r42">[42]</a><a class="cite" href="references.html#r43">[43]</a>. Two things changed recently enough to break older guides, including some pages in this set: CUDA 13 can no longer build for GTX 10-series cards<a class="cite" href="references.html#r45">[45]</a><a class="cite" href="references.html#r44">[44]</a>, and llama.cpp now fits a model to memory on its own unless you tell it not to<a class="cite" href="references.html#r43">[43]</a>.</p>
+  </div>
+</section>
+
+<section id="on-this-page">
+  <div class="container">
+    <h2>On this page</h2>
+    <ul class="toc">
+      <li><a href="#start">1. Start from the card</a></li>
+      <li><a href="#nvidia-matrix">2. NVIDIA: driver, toolkit and compiler that go together</a></li>
+      <li><a href="#amd">3. AMD: ROCm, HIP, WSL and Vulkan</a></li>
+      <li><a href="#intel-apple">4. Intel, Apple and CPU-only machines</a></li>
+      <li><a href="#vulkan">5. Vulkan, the cross-vendor path</a></li>
+      <li><a href="#devices">6. Choosing which GPU a runtime uses</a></li>
+      <li><a href="#ollama">7. How Ollama places a model</a></li>
+      <li><a href="#llamacpp">8. How llama.cpp places a model</a></li>
+      <li><a href="#moe">9. Mixture-of-experts models on a small card</a></li>
+      <li><a href="#kv">10. Cache type and attention kernel</a></li>
+      <li><a href="#multi">11. More than one GPU</a></li>
+      <li><a href="#docker">12. GPUs inside containers</a></li>
+      <li><a href="#monitor">13. Reading GPU load into Prometheus</a></li>
+      <li><a href="#trouble">14. When the GPU is not being used</a></li>
+      <li><a href="#gaps">15. What this page does not settle</a></li>
+    </ul>
+  </div>
+</section>
+
+<section id="start">
+  <div class="container">
+    <h2>1. Start from the card</h2>
+    <p>For NVIDIA cards the number that decides everything downstream is the <strong>compute capability</strong>: a version number for the GPU architecture. It decides which driver Ollama will accept, which CUDA toolkit can compile for the card, and which value goes into <span class="mono">CMAKE_CUDA_ARCHITECTURES</span> when llama.cpp is built for it. Look the card up in NVIDIA's list<a class="cite" href="references.html#r49">[49]</a> or in Ollama's table<a class="cite" href="references.html#r40">[40]</a> before downloading anything.</p>
+    <div class="table-wrap"><table>
+    <caption>NVIDIA architectures in the cards this set is likely to meet. Compute capability and example cards from Ollama's hardware table<a class="cite" href="references.html#r40">[40]</a> (NVIDIA's own list is <a class="cite" href="references.html#r49">[49]</a>); CUDA 13 support from the CUDA 13.5 release notes<a class="cite" href="references.html#r45">[45]</a> and llama.cpp's build file<a class="cite" href="references.html#r44">[44]</a>; driver minimums from Ollama<a class="cite" href="references.html#r40">[40]</a>.</caption>
+    <thead><tr><th scope="col">Compute capability</th><th scope="col">Architecture</th><th scope="col">Example cards</th><th scope="col">Can CUDA 13.5 build for it?</th><th scope="col">Ollama minimum driver</th></tr></thead>
+    <tbody>
+      <tr><td>12.0</td><td>Blackwell</td><td>RTX 5060 to RTX 5090</td><td>Yes, toolkit 12.8 or newer<a class="cite" href="references.html#r44">[44]</a></td><td>550</td></tr>
+      <tr><td>8.9</td><td>Ada</td><td>RTX 4060 to RTX 4090</td><td>Yes</td><td>550</td></tr>
+      <tr><td>8.6</td><td>Ampere</td><td>RTX 3060 to RTX 3090 Ti</td><td>Yes</td><td>550</td></tr>
+      <tr><td>7.5</td><td>Turing</td><td>GTX 1650 Ti, RTX 2060 to RTX 2080 Ti, TITAN RTX</td><td>Yes</td><td>550</td></tr>
+      <tr><td>7.0</td><td>Volta</td><td>TITAN V, V100</td><td><strong>No</strong>: use CUDA 12.x</td><td>550</td></tr>
+      <tr><td>6.1</td><td>Pascal</td><td>GTX 1050 to GTX 1080 Ti, TITAN Xp</td><td><strong>No</strong>: use CUDA 12.x</td><td><strong>570</strong></td></tr>
+      <tr><td>5.0, 5.2</td><td>Maxwell</td><td>GTX 750 to GTX 980 Ti</td><td><strong>No</strong>: use CUDA 12.x</td><td><strong>570</strong></td></tr>
+    </tbody>
+  </table></div>
+    <div class="callout danger">
+      <p><strong>If your card is Pascal, Maxwell or Volta, CUDA 13 is the wrong toolkit for building.</strong> NVIDIA's release notes record the removal of Maxwell, Pascal and Volta support<a class="cite" href="references.html#r45">[45]</a>, and llama.cpp only adds its <span class="mono">50-virtual 61-virtual 70-virtual</span> targets when the toolkit is older than 13<a class="cite" href="references.html#r44">[44]</a>. The build notes in the deployment folder target <span class="mono">CMAKE_CUDA_ARCHITECTURES=61</span>, which is Pascal, so those machines stay on CUDA 12.x. Running Ollama is unaffected: it ships its own runtime and only needs a driver of version 570 or newer for these cards<a class="cite" href="references.html#r40">[40]</a>.</p>
+    </div>
+    <p>AMD, Intel and Apple hardware do not use compute capability. For AMD, what matters is whether the card is on ROCm's support list (section 3); everything else runs through Vulkan (section 5).</p>
+  </div>
+</section>
+
+<section id="nvidia-matrix">
+  <div class="container">
+    <h2>2. NVIDIA: driver, toolkit and compiler that go together</h2>
+    <p>Three version numbers have to agree on a build machine: the driver, the CUDA toolkit, and the Visual Studio compiler that <span class="mono">nvcc</span> hands host code to. Only the driver is needed to <em>run</em> Ollama or a prebuilt llama.cpp release.</p>
+    <div class="table-wrap"><table>
+    <caption>CUDA toolkit lines, the minimum Windows driver each needs, the Visual Studio versions its installation guide lists as host compilers, and the architectures llama.cpp builds for with it. &ldquo;Not checked&rdquo; means that guide was not read, not that the pairing fails.</caption>
+    <thead><tr><th scope="col">Toolkit</th><th scope="col">Windows driver</th><th scope="col">Visual Studio host compiler</th><th scope="col">Builds for compute capability</th></tr></thead>
+    <tbody>
+      <tr><td>CUDA 13.5</td><td>R620 branch<a class="cite" href="references.html#r45">[45]</a></td><td>2019, 2022, 2026<a class="cite" href="references.html#r46">[46]</a></td><td>7.5 and newer</td></tr>
+      <tr><td>CUDA 13.0</td><td>R580 branch<a class="cite" href="references.html#r45">[45]</a></td><td>not checked</td><td>7.5 and newer</td></tr>
+      <tr><td>CUDA 12.9 Update 1</td><td>576.57 or newer<a class="cite" href="references.html#r45">[45]</a></td><td>2019, 2022 only<a class="cite" href="references.html#r47">[47]</a></td><td>5.0 and newer<a class="cite" href="references.html#r44">[44]</a></td></tr>
+      <tr><td>CUDA 12.8 GA</td><td>570.65 or newer<a class="cite" href="references.html#r45">[45]</a></td><td>not checked</td><td>5.0 and newer; first with Blackwell<a class="cite" href="references.html#r44">[44]</a></td></tr>
+      <tr><td>CUDA 12.6 Update 3</td><td>561.17 or newer<a class="cite" href="references.html#r45">[45]</a></td><td>not checked</td><td>5.0 and newer</td></tr>
+    </tbody>
+  </table></div>
+
+    <h3>2.1 What to install</h3>
+    <div class="table-wrap"><table>
+      <caption>Install sets by situation. The driver ceiling for older cards comes from a press report of NVIDIA's schedule<a class="cite" href="references.html#r59">[59]</a> <span class="badge medium">secondary source</span>; the rest from the table above.</caption>
+      <thead><tr><th scope="col">Situation</th><th scope="col">Driver</th><th scope="col">Toolkit</th><th scope="col">Compiler</th></tr></thead>
+      <tbody>
+        <tr><td>Running Ollama only, any supported card</td><td>550 or newer; 570 or newer for compute capability 5.0&ndash;6.2<a class="cite" href="references.html#r40">[40]</a></td><td>none</td><td>none</td></tr>
+        <tr><td>Building llama.cpp, Turing (7.5) or newer</td><td>Current, R620 branch for CUDA 13.5</td><td>CUDA 13.5</td><td>Build Tools 2026 or 2022</td></tr>
+        <tr><td>Building llama.cpp, Pascal / Maxwell / Volta</td><td>570&ndash;580 series; R580 is reported as the last branch for these cards<a class="cite" href="references.html#r59">[59]</a></td><td>CUDA 12.9 Update 1, or the 12.6 / 12.8 installers already in the folder</td><td><strong>Build Tools 2022</strong>; CUDA 12.9 does not list 2026<a class="cite" href="references.html#r47">[47]</a></td></tr>
+        <tr><td>Building for RTX 50-series (Blackwell)</td><td>Current</td><td>12.8 or newer; 13.5 preferred</td><td>2026 or 2022</td></tr>
+      </tbody>
+    </table></div>
+    <p>In a cluster that mixes generations, for example an RTX 3090 serving node with GTX 1080 RPC workers, build each machine for its own card. Each RPC worker runs its own <span class="mono">ggml-rpc-server</span> binary, so nothing requires the builds to match. <span class="pill derived">Derived here</span> from the RPC design in <a class="cite" href="references.html#r37">[37]</a>.</p>
+
+    <h3>2.2 Building llama.cpp with CUDA</h3>
+    <p>The documented build is two commands<a class="cite" href="references.html#r42">[42]</a>. With <span class="mono">GGML_NATIVE</span> on (the default) and a recent CMake, llama.cpp builds for the GPU in the build machine and nothing else<a class="cite" href="references.html#r44">[44]</a>; set the architecture explicitly only when building for a different machine:</p>
+<pre><code># In a "Developer PowerShell for VS 2022" (Pascal, CUDA 12.x) or VS 2026 (CUDA 13.5)
+cmake -B build -DGGML_CUDA=ON
+cmake --build build --config Release -j
+
+# Building for another machine's card: name its compute capability without the dot.
+# 61 = Pascal (GTX 10-series), 86 = RTX 30-series, 89 = RTX 40-series.
+cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="61"</code></pre>
+    <p class="small muted">The explicit-architecture form follows the documented example <span class="mono">-DCMAKE_CUDA_ARCHITECTURES="86;89"</span><a class="cite" href="references.html#r42">[42]</a>. The <span class="mono">scripts/build_cpp.ps1</span> wrapper on the <a href="local-code-build-test.html#cpp">build-and-test page</a> sets up the Visual Studio environment for you.</p>
+
+    <h3>2.3 CUDA settings at run time</h3>
+    <div class="table-wrap"><table>
+    <caption>Runtime CUDA variables that llama.cpp documents<a class="cite" href="references.html#r42">[42]</a>.</caption>
+    <thead><tr><th scope="col">Variable</th><th scope="col">Effect</th><th scope="col">When to use it</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">CUDA_VISIBLE_DEVICES</span></td><td>Hides devices from the process; llama.cpp's example uses <span class="mono">"-0"</span> to hide the first one</td><td>Keep a display card or a second job's card out of the model</td></tr>
+      <tr><td><span class="mono">GGML_CUDA_ENABLE_UNIFIED_MEMORY=1</span></td><td>On Linux, "allows swapping to system RAM instead of crashing when the GPU VRAM is exhausted"</td><td>A model slightly too large for the card, accepting a large speed loss</td></tr>
+    </tbody>
+  </table></div>
+  </div>
+</section>
+
+<section id="amd">
+  <div class="container">
+    <h2>3. AMD: ROCm, HIP, WSL and Vulkan</h2>
+    <p>AMD cards reach the runtimes by two routes. <strong>ROCm</strong> (and its HIP compiler) is AMD's compute stack and the faster route, but it supports a specific list of cards, and the list differs between Linux, Windows and WSL. Every other recent Radeon runs through <strong>Vulkan</strong>, which needs nothing beyond the normal driver on Windows<a class="cite" href="references.html#r40">[40]</a>.</p>
+
+    <div class="table-wrap"><table>
+    <caption>Which AMD cards Ollama runs through ROCm, by platform<a class="cite" href="references.html#r40">[40]</a>, and which AMD supports for ROCm inside WSL<a class="cite" href="references.html#r52">[52]</a>. Cards outside a row's list fall back to Vulkan.</caption>
+    <thead><tr><th scope="col">Platform</th><th scope="col">Requirement</th><th scope="col">Supported Radeon cards (abridged)</th></tr></thead>
+    <tbody>
+      <tr><td>Linux</td><td>ROCm v7 driver, installed with <span class="mono">amdgpu-install</span></td><td>RX 9070 / 9060 series, RX 7900 to 7600 series, RX 6950 XT to 6800, Radeon PRO W7000 and W6000 series, Ryzen AI Max and HX series</td></tr>
+      <tr><td>Windows</td><td>ROCm v7 / HIP7-capable driver stack</td><td>RX 7900 XTX, 7900 XT, 7900 GRE, 7800 XT, 7700 XT, 7600 XT, 7600; Radeon PRO W7900 to W7500</td></tr>
+      <tr><td>WSL 2</td><td>ROCm 7.2.1 with Adrenalin 26.1.1 for WSL2; Ubuntu 22.04 or 24.04</td><td>RX 9070 / 9060 series, AI PRO R9700 / R9600D, RX 7900 XTX / XT / GRE, RX 7800 XT, RX 7700 / 7700 XT, PRO W7900 / W7800 / W7700</td></tr>
+    </tbody>
+  </table></div>
+
+    <h3>3.1 Cards just outside the Linux list</h3>
+    <p>On Linux, Ollama can be told to treat an unsupported card as a close supported target with <span class="mono">HSA_OVERRIDE_GFX_VERSION</span>. Its own example maps an RX 5400 (<span class="mono">gfx1034</span>) onto <span class="mono">gfx1030</span> with <span class="mono">HSA_OVERRIDE_GFX_VERSION="10.3.0"</span>, and per-device forms (<span class="mono">HSA_OVERRIDE_GFX_VERSION_0</span>, <span class="mono">_1</span>) exist for mixed cards<a class="cite" href="references.html#r40">[40]</a>. This is a Linux mechanism; the older Jupyter pages in this set that compute it inside WSL are not following a documented procedure.</p>
+
+    <h3>3.2 ROCm inside WSL, and what it cannot do</h3>
+    <p>AMD's current WSL procedure is: install the Adrenalin driver version listed for your ROCm release, install WSL with Ubuntu 22.04 or 24.04, then install the ROCDXG user-mode library<a class="cite" href="references.html#r87">[87]</a>. It does not install Linux kernel modules: WSL runs Microsoft's kernel. The ROCDXG repository is itself marked deprecated, its source having moved into AMD's <span class="mono">rocm-systems</span> tree<a class="cite" href="references.html#r88">[88]</a>, so follow AMD's how-to page<a class="cite" href="references.html#r87">[87]</a> for the commands rather than any copy of them, this page included.</p>
+    <div class="callout danger">
+      <p><strong><span class="mono">amd-smi</span> does not work under WSL.</strong> AMD's limitations page states that "due to WSL architectural limitations for native Linux User Kernel Interface (UKI), amd-smi is not supported"<a class="cite" href="references.html#r53">[53]</a>. Anything that reads AMD GPU metrics through <span class="mono">amd-smi</span> inside WSL, including <span class="mono">amd_smi_exporter</span>, cannot report the GPU there. Section 13 gives the route that works on Windows.</p>
+    </div>
+
+    <h3>3.3 Building llama.cpp with HIP</h3>
+    <p>The documented Linux build<a class="cite" href="references.html#r42">[42]</a>; <span class="mono">GPU_TARGETS</span> "is optional, omitting it will build the code for all GPUs in the current system":</p>
+<pre><code>HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -R)" \
+    cmake -S . -B build -DGGML_HIP=ON -DGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
+    &amp;&amp; cmake --build build --config Release -- -j 16</code></pre>
+    <p>Building natively on Windows needs AMD's HIP SDK<a class="cite" href="references.html#r54">[54]</a>. Neither is needed to run Ollama or a prebuilt llama.cpp HIP release.</p>
+  </div>
+</section>
+
+<section id="intel-apple">
+  <div class="container">
+    <h2>4. Intel, Apple and CPU-only machines</h2>
+    <div class="table-wrap"><table>
+    <caption>The remaining hardware routes.</caption>
+    <thead><tr><th scope="col">Hardware</th><th scope="col">Ollama</th><th scope="col">llama.cpp</th><th scope="col">Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Intel Arc and integrated GPUs</td><td>Vulkan; bundled with the driver on Windows<a class="cite" href="references.html#r40">[40]</a></td><td>Vulkan, or SYCL with <span class="mono">-DGGML_SYCL=ON</span> and the oneAPI toolkit<a class="cite" href="references.html#r42">[42]</a></td><td>SYCL needs oneAPI on the build machine only</td></tr>
+      <tr><td>Apple silicon</td><td>Metal<a class="cite" href="references.html#r40">[40]</a></td><td>Metal, on by default on macOS<a class="cite" href="references.html#r42">[42]</a></td><td>Unified memory: the model shares RAM with the system</td></tr>
+      <tr><td>CPU only</td><td>Automatic when no GPU qualifies</td><td>Default build</td><td>Speed is bounded by system memory bandwidth; see the model page</td></tr>
+    </tbody>
+  </table></div>
+    <p>Intel and Apple machines are outside the hardware this set was written for. The routes above are documented by the runtimes, but none of the procedures on the other pages has been run on them.</p>
+  </div>
+</section>
+
+<section id="vulkan">
+  <div class="container">
+    <h2>5. Vulkan, the cross-vendor path</h2>
+    <p>Vulkan is the route for any card that ROCm or CUDA does not cover, and the one the multi-node guide in this set builds on. In Ollama it "is enabled by default when the backend is installed", and on Windows "most GPU vendors drivers come bundled with Vulkan support and require no additional setup steps"<a class="cite" href="references.html#r40">[40]</a>. Linux needs the vendor's or Mesa's Vulkan driver, and on Linux Ollama needs <span class="mono">cap_perfmon</span> or root to read free VRAM through Vulkan; without it, it schedules from approximate model sizes<a class="cite" href="references.html#r40">[40]</a>.</p>
+    <p>Building llama.cpp's Vulkan backend (<span class="mono">-DGGML_VULKAN=ON</span>) needs the Vulkan SDK on the build machine<a class="cite" href="references.html#r42">[42]</a>; running it needs only the driver. The SDK in the deployment folder is 1.4.350.0 and the current one is 1.4.363.1<a class="cite" href="references.html#r63">[63]</a>. Per-node device selection for AMD cards over Vulkan is covered in <a href="llama-rpc-vulkan-guide.html">the multi-node guide</a>.</p>
+  </div>
+</section>
+
+<section id="devices">
+  <div class="container">
+    <h2>6. Choosing which GPU a runtime uses</h2>
+    <p>Each GPU library has its own visibility variable, and they do not affect one another: hiding a card from CUDA does not hide it from Vulkan.</p>
+    <div class="table-wrap"><table>
+    <caption>Device-selection settings, by library. All of them are read when the server process starts, so set them in the service definition, not in an interactive shell.</caption>
+    <thead><tr><th scope="col">Setting</th><th scope="col">Applies to</th><th scope="col">Values</th><th scope="col">Source</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">CUDA_VISIBLE_DEVICES</span></td><td>NVIDIA (Ollama, llama.cpp)</td><td>Comma-separated IDs; UUIDs from <span class="mono">nvidia-smi -L</span> are more reliable than indices; an invalid ID such as <span class="mono">-1</span> forces CPU</td><td><a class="cite" href="references.html#r40">[40]</a><a class="cite" href="references.html#r42">[42]</a></td></tr>
+      <tr><td><span class="mono">ROCR_VISIBLE_DEVICES</span></td><td>AMD ROCm (Ollama)</td><td>IDs or <span class="mono">Uuid</span> from <span class="mono">rocminfo</span>; <span class="mono">-1</span> forces CPU</td><td><a class="cite" href="references.html#r40">[40]</a></td></tr>
+      <tr><td><span class="mono">GGML_VK_VISIBLE_DEVICES</span></td><td>Vulkan (Ollama, llama.cpp)</td><td>Numeric IDs; <span class="mono">-1</span> disables all Vulkan GPUs. On iGPU + dGPU systems, set it to the discrete card</td><td><a class="cite" href="references.html#r40">[40]</a></td></tr>
+      <tr><td><span class="mono">OLLAMA_VULKAN=0</span></td><td>Ollama</td><td>Disables the Vulkan backend entirely</td><td><a class="cite" href="references.html#r40">[40]</a></td></tr>
+      <tr><td><span class="mono">--device</span> / <span class="mono">--list-devices</span></td><td>llama.cpp</td><td>Comma-separated device names to offload to (<span class="mono">none</span> = no offload); <span class="mono">--list-devices</span> prints the names</td><td><a class="cite" href="references.html#r43">[43]</a></td></tr>
+    </tbody>
+  </table></div>
+  </div>
+</section>
+
+<section id="ollama">
+  <div class="container">
+    <h2>7. How Ollama places a model</h2>
+    <p>Ollama decides placement itself from the VRAM each GPU library reports. The settings below change its inputs. Names and descriptions are from the server's own configuration source<a class="cite" href="references.html#r41">[41]</a> and its FAQ<a class="cite" href="references.html#r9">[9]</a>; set them on the server process, which on Windows means the user or system environment, then restart Ollama.</p>
+    <div class="table-wrap"><table>
+    <caption>Ollama server settings that affect GPU placement<a class="cite" href="references.html#r41">[41]</a>.</caption>
+    <thead><tr><th scope="col">Variable</th><th scope="col">What it does</th><th scope="col">Why it matters here</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">OLLAMA_FLASH_ATTENTION</span></td><td>Unset: used automatically where backend and device support it; <span class="mono">1</span> forces it on, <span class="mono">0</span> off<a class="cite" href="references.html#r9">[9]</a></td><td>Precondition for a quantised cache</td></tr>
+      <tr><td><span class="mono">OLLAMA_KV_CACHE_TYPE</span></td><td>Key/value cache type (default <span class="mono">f16</span>)</td><td>Halves the cache at <span class="mono">q8_0</span>; see section 10</td></tr>
+      <tr><td><span class="mono">OLLAMA_CONTEXT_LENGTH</span></td><td>Context length; <span class="mono">0</span> means pick from VRAM</td><td>Explicit value overrides the VRAM tiers</td></tr>
+      <tr><td><span class="mono">OLLAMA_NUM_PARALLEL</span></td><td>Maximum parallel requests; default 1</td><td>Each slot needs its own cache</td></tr>
+      <tr><td><span class="mono">OLLAMA_MAX_LOADED_MODELS</span></td><td>Maximum loaded models per GPU</td><td>Two models need room for both</td></tr>
+      <tr><td><span class="mono">OLLAMA_SCHED_SPREAD</span></td><td>Always schedule a model across all GPUs</td><td>Multi-GPU machines; section 11</td></tr>
+      <tr><td><span class="mono">OLLAMA_GPU_OVERHEAD</span></td><td>VRAM to reserve per GPU, in bytes; default 0</td><td>A card that also drives displays</td></tr>
+      <tr><td><span class="mono">OLLAMA_KEEP_ALIVE</span></td><td>How long models stay loaded; default <span class="mono">5m</span></td><td>Reload cost versus VRAM held</td></tr>
+      <tr><td><span class="mono">OLLAMA_LLM_LIBRARY</span></td><td>Sets the runtime library, bypassing autodetection</td><td>Diagnosis only</td></tr>
+    </tbody>
+  </table></div>
+    <p>To see where a loaded model ended up, run <span class="mono">ollama ps</span>: the <span class="mono">PROCESSOR</span> column reads <span class="mono">100% GPU</span> when the whole model is in video memory, and shows a CPU/GPU split when part of it is not<a class="cite" href="references.html#r9">[9]</a>. A split is the single most common reason a model is slower than the model page predicts.</p>
+    <p>When <span class="mono">OLLAMA_CONTEXT_LENGTH</span> is unset, Ollama picks the default context from total VRAM; the thresholds in the code are 23 and 47&nbsp;GiB rather than the 24 and 48 the prose states. The <a href="local-code-build-test.html#model-settings">build-and-test page</a> has the table<a class="cite" href="references.html#r35">[35]</a><a class="cite" href="references.html#r38">[38]</a>.</p>
+  </div>
+</section>
+
+<section id="llamacpp">
+  <div class="container">
+    <h2>8. How llama.cpp places a model</h2>
+    <p>Current llama.cpp builds fit a model to memory automatically. With <span class="mono">--fit on</span>, the default, the server adjusts every argument you did not set, layer count and context included, until each device keeps a free margin<a class="cite" href="references.html#r43">[43]</a>. Options and defaults below are from <span class="mono">common/arg.cpp</span> and <span class="mono">common/common.h</span><a class="cite" href="references.html#r43">[43]</a>.</p>
+    <div class="table-wrap"><table>
+    <caption>llama.cpp placement options<a class="cite" href="references.html#r43">[43]</a>. Every option with an environment name can be set that way instead, which is convenient in an NSSM service definition.</caption>
+    <thead><tr><th scope="col">Option</th><th scope="col">Environment</th><th scope="col">Default</th><th scope="col">Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">--fit on|off</span></td><td><span class="mono">LLAMA_ARG_FIT</span></td><td><span class="mono">on</span></td><td>Adjust unset arguments to fit device memory</td></tr>
+      <tr><td><span class="mono">--fit-target MiB0,MiB1,...</span></td><td>&mdash;</td><td>1024 per device</td><td>Free margin to leave on each device</td></tr>
+      <tr><td><span class="mono">--fit-ctx N</span></td><td><span class="mono">LLAMA_ARG_FIT_CTX</span></td><td>4096</td><td>Smallest context --fit may choose</td></tr>
+      <tr><td><span class="mono">--fit-print on|off</span></td><td>&mdash;</td><td><span class="mono">off</span></td><td>Print the memory estimate</td></tr>
+      <tr><td><span class="mono">-ngl, --n-gpu-layers</span></td><td><span class="mono">LLAMA_ARG_N_GPU_LAYERS</span></td><td><span class="mono">auto</span></td><td>An exact number, <span class="mono">auto</span> or <span class="mono">all</span></td></tr>
+      <tr><td><span class="mono">-c, --ctx-size</span></td><td><span class="mono">LLAMA_ARG_CTX_SIZE</span></td><td><span class="mono">0</span> (from the model)</td><td>Context length</td></tr>
+      <tr><td><span class="mono">-np, --parallel</span></td><td><span class="mono">LLAMA_ARG_N_PARALLEL</span></td><td><span class="mono">-1</span> (auto)</td><td>Server slots; each holds cache</td></tr>
+    </tbody>
+  </table></div>
+    <div class="eq" id="eq-fit-margin">
+  <div class="eq-head">
+    <h3 class="eq-title">What <span class="mono">--fit</span> guarantees on each device</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-fit-margin" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ V_{\text{tot},d} - \bigl(S_{w,d} + S_{kv,d} + V_{\text{rt},d}\bigr) \;\ge\; m_{\text{fit},d} \quad \text{for every device } d, \qquad n_{\text{ctx}} \;\ge\; n_{\text{ctx,min}} \]</div>
+  <p class="eq-note">llama.cpp's option text says <span class="mono">--fit</span> decides "whether to adjust unset arguments to fit in device memory", with <span class="mono">--fit-target</span> giving a "target margin per device" and <span class="mono">--fit-ctx</span> the "minimum ctx size that can be set by --fit"<a class="cite" href="references.html#r43">[43]</a>. Written as an inequality, that is the condition above. The order in which it gives up layers versus context is not stated in the option text; <span class="mono">--fit-print on</span> prints the estimate it used.</p>
+  <div class="deriv"><ol>
+    <li>Quoted defaults from <span class="mono">common/common.h</span><a class="cite" href="references.html#r43">[43]</a>: <span class="mono">fit_params</span> is on, <span class="mono">fit_params_target</span> is \( 1024 \times 1024 \times 1024 \) bytes per device (the 1024&nbsp;MiB the option text reports), and <span class="mono">fit_params_min_ctx</span> is 4096.</li>
+    <li>Device \( d \) holds its share of the weights \( S_{w,d} \), its share of the key/value cache \( S_{kv,d} \) (the cache is split with the layers in the default <span class="mono">layer</span> split mode), and the runtime reservation \( V_{\text{rt},d} \).</li>
+    <li>Reading "margin" as the memory left free once those are allocated gives \( V_{\text{tot},d} - (S_{w,d} + S_{kv,d} + V_{\text{rt},d}) \ge m_{\text{fit},d} \). This reading is ours; the option text does not define the term further.</li>
+    <li>The context may be reduced to meet the margin, but not below \( n_{\text{ctx,min}} \).</li>
+    <li>Only <em>unset</em> arguments are adjusted. An explicit <span class="mono">-ngl</span> or <span class="mono">-c</span> is held fixed, so a hand-tuned service definition opts out of the mechanism for that argument.</li>
+  </ol></div>
+  <div class="vars" id="v-fit-margin" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the fit-margin condition.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(V_{\text{tot},d}\)</td><td>Total memory of device \(d\)</td><td>B</td></tr>
+      <tr><td>\(S_{w,d}\)</td><td>Weight bytes placed on device \(d\)</td><td>B</td></tr>
+      <tr><td>\(S_{kv,d}\)</td><td>Key/value cache bytes placed on device \(d\)</td><td>B</td></tr>
+      <tr><td>\(V_{\text{rt},d}\)</td><td>Runtime, driver and compute-buffer reservation on device \(d\)</td><td>B</td></tr>
+      <tr><td>\(m_{\text{fit},d}\)</td><td>Target free margin, <span class="mono">--fit-target</span>; default 1024&nbsp;MiB</td><td>B</td></tr>
+      <tr><td>\(n_{\text{ctx}}\)</td><td>Context length the server ends up with</td><td>tokens</td></tr>
+      <tr><td>\(n_{\text{ctx,min}}\)</td><td>Floor on the context <span class="mono">--fit</span> may set, <span class="mono">--fit-ctx</span>; default 4096</td><td>tokens</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+    <div class="callout">
+      <p><strong>The service definitions in this set pass <span class="mono">-ngl</span> explicitly.</strong> An explicit value is held fixed, so those services do not benefit from <span class="mono">--fit</span> for the layer count. On a single machine, removing <span class="mono">-ngl</span> lets the server choose; keep an explicit value where you need placement to stay identical across restarts. Whether <span class="mono">--fit</span> accounts for RPC workers was not established from the option text, so keep explicit values on RPC clusters.</p>
+    </div>
+    <p>When you do set the layer count yourself, start from this:</p>
+    <div class="eq" id="eq-ngl-layers">
+  <div class="eq-head">
+    <h3 class="eq-title">Layer count to pass to <span class="mono">--n-gpu-layers</span></h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-ngl-layers" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ n_{\text{gpu}} \;=\; \left\lfloor \frac{\bigl(V_{\text{tot}} - V_{\text{rt}} - S_{kv}\bigr)\,n_{\ell}}{S_{w}} \right\rfloor, \qquad 0 \le n_{\text{gpu}} \le n_{\ell} \]</div>
+  <p class="eq-note">Current llama.cpp builds default to <span class="mono">-ngl auto</span> with <span class="mono">--fit on</span>, which adjusts every argument you did not set until the model fits (next relation)<a class="cite" href="references.html#r43">[43]</a>. This relation is for when you set <span class="mono">-ngl</span> yourself, as the service definitions in this set do: an explicit value is not adjusted, so the failure mode of overshooting is an out-of-memory abort part-way through loading rather than a graceful fallback.</p>
+  <div class="deriv"><ol>
+    <li>llama.cpp offloads whole transformer blocks, so the granularity is one layer. Averaged over the stack, one layer is \( S_{w}/n_{\ell} \) bytes.</li>
+    <li>The device must also hold the runtime reservation \( V_{\text{rt}} \) and the whole key/value cache \( S_{kv} \), both of which are allocated regardless of how many layers are resident.</li>
+    <li>The bytes left for weights are therefore \( V_{\text{tot}} - V_{\text{rt}} - S_{kv} \).</li>
+    <li>Divide by the per-layer size and take the floor: \( n_{\text{gpu}} = \lfloor (V_{\text{tot}} - V_{\text{rt}} - S_{kv})\,n_{\ell}/S_{w} \rfloor \).</li>
+    <li>Clamp into \( [0,\,n_{\ell}] \), then subtract one or two before the first run. Layers are not uniform in size, the output projection is usually the largest single tensor, and allocator fragmentation costs real megabytes.</li>
+    <li>If the result equals \( n_{\ell} \), pass <span class="mono">-ngl all</span> (accepted by current builds<a class="cite" href="references.html#r43">[43]</a>; older builds need <span class="mono">-ngl 999</span>) rather than the exact count, so the setting survives a change of model.</li>
+  </ol></div>
+  <div class="vars" id="v-ngl-layers" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the layer-offload relation. All memory symbols carry the meanings established in the cache and footprint relations.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(n_{\text{gpu}}\)</td><td>Layers to place on the accelerator, the <span class="mono">-ngl</span> argument</td><td>dimensionless</td></tr>
+      <tr><td>\(n_{\ell}\)</td><td>Total transformer layers in the model</td><td>dimensionless</td></tr>
+      <tr><td>\(V_{\text{tot}}\)</td><td>Total device memory</td><td>B</td></tr>
+      <tr><td>\(V_{\text{rt}}\)</td><td>Runtime, driver and compute-buffer reservation</td><td>B</td></tr>
+      <tr><td>\(S_{kv}\)</td><td>Key/value cache size for the chosen context and parallelism</td><td>B</td></tr>
+      <tr><td>\(S_{w}\)</td><td>Total weight footprint</td><td>B</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+  </div>
+</section>
+
+<section id="moe">
+  <div class="container">
+    <h2>9. Mixture-of-experts models on a small card</h2>
+    <p>Most of the strongest open models in the shortlist are routed mixtures of experts: they occupy memory like their total size and stream like their active subset (<a href="ollama-model-selection.html#fit-moe">model page, section 3.3</a>). That asymmetry is what makes the options below worthwhile. Moving the expert weights to system memory frees the most VRAM for the least speed, because each token reads only the few experts it is routed to.</p>
+    <div class="table-wrap"><table>
+    <caption>llama.cpp mixture-of-experts placement options<a class="cite" href="references.html#r43">[43]</a>.</caption>
+    <thead><tr><th scope="col">Option</th><th scope="col">Environment</th><th scope="col">Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">-cmoe, --cpu-moe</span></td><td><span class="mono">LLAMA_ARG_CPU_MOE</span></td><td>Keep all MoE weights in the CPU</td></tr>
+      <tr><td><span class="mono">-ncmoe, --n-cpu-moe N</span></td><td><span class="mono">LLAMA_ARG_N_CPU_MOE</span></td><td>Keep the MoE weights of the first N layers in the CPU</td></tr>
+      <tr><td><span class="mono">--moe-cache-mib N</span></td><td>&mdash;</td><td>GPU cache for the experts kept in the CPU; default 0 (disabled)</td></tr>
+      <tr><td><span class="mono">-ot, --override-tensor</span></td><td><span class="mono">LLAMA_ARG_OVERRIDE_TENSOR</span></td><td>Override the buffer type of tensors matching a name pattern; the general form of the options above</td></tr>
+    </tbody>
+  </table></div>
+    <div class="eq" id="eq-moe-cpu-offload">
+  <div class="eq-head">
+    <h3 class="eq-title">Keeping mixture-of-experts weights in system memory</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-moe-cpu-offload" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ S_{\text{gpu}} \;\approx\; S_{w} - N_{\text{cpu}}\,\frac{S_{\text{exp}}}{n_{\text{moe}}}, \qquad t_{\text{tok}} \;\approx\; \frac{S_{\text{act}} - N_{\text{cpu}}\,a}{B_{\text{gpu}}} + \frac{N_{\text{cpu}}\,a}{B_{\text{cpu}}}, \qquad a \;=\; \frac{k}{E}\,\frac{S_{\text{exp}}}{n_{\text{moe}}} \]</div>
+  <p class="eq-note"><span class="mono">--n-cpu-moe N</span> "keep[s] the Mixture of Experts (MoE) weights of the first N layers in the CPU"<a class="cite" href="references.html#r43">[43]</a>. The relation shows why that costs so much less speed than lowering <span class="mono">-ngl</span> by the same memory: a token reads only the \( k \) routed experts of each layer, so the CPU streams a fraction \( k/E \) of those layers' expert bytes, not all of them.</p>
+  <div class="deriv"><ol>
+    <li>Split the weights into expert tensors \( S_{\text{exp}} \), spread over \( n_{\text{moe}} \) MoE layers, and everything else (attention, shared experts, embeddings). Assume the expert bytes are equal across MoE layers.</li>
+    <li>Moving the experts of \( N_{\text{cpu}} \) layers to system memory removes \( N_{\text{cpu}}\,S_{\text{exp}}/n_{\text{moe}} \) from the card, which gives \( S_{\text{gpu}} \).</li>
+    <li>Each layer has \( E \) experts and routes each token to \( k \) of them, so a token reads \( a = (k/E)\,S_{\text{exp}}/n_{\text{moe}} \) expert bytes per MoE layer. This is the per-layer form of the active-parameter relation on the model page.</li>
+    <li>By the bandwidth-ceiling argument, the GPU part of a token costs its bytes over \( B_{\text{gpu}} \) and the CPU part its bytes over \( B_{\text{cpu}} \). The two run in sequence for one token, so they add, giving \( t_{\text{tok}} \).</li>
+    <li>Neglected: moving activations across PCIe (small per token), CPU compute speed (the CPU side can be compute-bound rather than bandwidth-bound), and the optional <span class="mono">--moe-cache-mib</span> GPU cache for offloaded experts<a class="cite" href="references.html#r43">[43]</a>. Treat \( t_{\text{tok}} \) as a lower bound and measure.</li>
+  </ol></div>
+  <div class="vars" id="v-moe-cpu-offload" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the expert-offload relation.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(S_{\text{gpu}}\)</td><td>Weight bytes left on the GPU</td><td>B</td></tr>
+      <tr><td>\(S_{w}\)</td><td>Total weight footprint</td><td>B</td></tr>
+      <tr><td>\(S_{\text{exp}}\)</td><td>Bytes of all routed-expert tensors</td><td>B</td></tr>
+      <tr><td>\(n_{\text{moe}}\)</td><td>Number of MoE layers</td><td>dimensionless</td></tr>
+      <tr><td>\(N_{\text{cpu}}\)</td><td>Layers whose experts stay in system memory, the <span class="mono">--n-cpu-moe</span> value</td><td>dimensionless</td></tr>
+      <tr><td>\(S_{\text{act}}\)</td><td>Bytes read per token with everything on the GPU</td><td>B</td></tr>
+      <tr><td>\(a\)</td><td>Expert bytes read per token per MoE layer</td><td>B</td></tr>
+      <tr><td>\(k,\;E\)</td><td>Experts routed per token, and experts per layer</td><td>dimensionless</td></tr>
+      <tr><td>\(B_{\text{gpu}},\;B_{\text{cpu}}\)</td><td>Memory bandwidth of the card and of system memory</td><td>B&nbsp;s<sup>&minus;1</sup></td></tr>
+      <tr><td>\(t_{\text{tok}}\)</td><td>Time per generated token, lower bound</td><td>s</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+    <p>The practical method: let <span class="mono">--fit</span> place everything, and if the context it chooses is too short, raise <span class="mono">--n-cpu-moe</span> until the context you need fits, measuring token rate at each step with the probe script on the model page. Ollama does not expose these options.</p>
+  </div>
+</section>
+
+<section id="kv">
+  <div class="container">
+    <h2>10. Cache type and attention kernel</h2>
+    <p>After the weights, the key/value cache is the largest allocation, and it grows linearly with context and with parallel slots:</p>
+    <div class="eq" id="eq-kv-cache">
+  <div class="eq-head">
+    <h3 class="eq-title">Key/value cache footprint</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-kv-cache" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ S_{kv} \;=\; 2\,n_{\ell}\,n_{kv}\,d_{h}\,L_{\text{ctx}}\,n_{\text{seq}}\,b_{kv} \]</div>
+  <p class="eq-note">The cache is the term people forget. It is linear in context length and linear in the number of concurrent sequences, so raising <span class="mono">--ctx-size</span> from 8192 to 32768 while also raising <span class="mono">--parallel</span> from 1 to 4 multiplies this term by sixteen.</p>
+  <div class="deriv"><ol>
+    <li>Autoregressive attention caches one key vector and one value vector for every token already generated, for every attention layer. That is the leading factor of 2.</li>
+    <li>Grouped-query attention shares each key/value pair across several query heads, so the count that matters is \( n_{kv} \), the number of key/value heads, not the number of query heads.</li>
+    <li>Each cached vector has \( d_{h} \) components, so one token costs \( 2\,n_{\ell}\,n_{kv}\,d_{h} \) elements.</li>
+    <li>Multiply by the context length \( L_{\text{ctx}} \) that the cache is sized for, and by the number of concurrent sequences \( n_{\text{seq}} \) (<span class="mono">--parallel</span> in <span class="mono">llama-server</span>), each of which keeps its own cache.</li>
+    <li>Multiply by the bytes per cached element \( b_{kv} \). Ollama exposes this as <span class="mono">OLLAMA_KV_CACHE_TYPE</span>, documented with a default of <span class="mono">f16</span> and options <span class="mono">q8_0</span> and <span class="mono">q4_0</span><a class="cite" href="references.html#r9">[9]</a>, giving \( b_{kv} = 2,\ 1,\ 0.5\ \mathrm{B} \) respectively. <strong>Reducing \( b_{kv} \) below 2 is conditional:</strong> the cache can be quantised only &ldquo;when Flash Attention is enabled&rdquo;<a class="cite" href="references.html#r9">[9]</a>, so on a backend or device without it the setting does not buy the memory this step assumes.</li>
+  </ol></div>
+  <div class="vars" id="v-kv-cache" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the key/value cache relation. The architectural quantities are read from the model card or from <span class="mono">ollama show &lt;tag&gt;</span>; the operational ones are set on the command line.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(S_{kv}\)</td><td>Total key/value cache size held in VRAM or RAM</td><td>B</td></tr>
+      <tr><td>\(n_{\ell}\)</td><td>Number of transformer layers</td><td>dimensionless</td></tr>
+      <tr><td>\(n_{kv}\)</td><td>Key/value heads per layer (equal to the query-head count only when grouped-query attention is not used)</td><td>dimensionless</td></tr>
+      <tr><td>\(d_{h}\)</td><td>Head dimension</td><td>dimensionless</td></tr>
+      <tr><td>\(L_{\text{ctx}}\)</td><td>Context length the cache is allocated for, <span class="mono">--ctx-size</span> or <span class="mono">OLLAMA_CONTEXT_LENGTH</span>. Ollama's default is chosen from available VRAM &mdash; 4k below 24&nbsp;GiB, 32k from 24 to 48&nbsp;GiB, 256k at 48&nbsp;GiB and above &mdash; and its documentation asks for at least 64000 for agent and coding work<a class="cite" href="references.html#r35">[35]</a></td><td>token</td></tr>
+      <tr><td>\(n_{\text{seq}}\)</td><td>Concurrent sequences, <span class="mono">--parallel</span> in <span class="mono">llama-server</span> or <span class="mono">OLLAMA_NUM_PARALLEL</span></td><td>dimensionless</td></tr>
+      <tr><td>\(b_{kv}\)</td><td>Bytes per cached element, set by the cache data type: <span class="mono">f16</span> = 2 (default), <span class="mono">q8_0</span> = 1, <span class="mono">q4_0</span> = 0.5. Anything below 2 requires Flash Attention, is a <em>global</em> setting applying to every loaded model, and costs some precision &mdash; more so on a high-GQA architecture<a class="cite" href="references.html#r9">[9]</a></td><td>B</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+    <div class="table-wrap"><table>
+    <caption>Cache and attention settings in both runtimes<a class="cite" href="references.html#r41">[41]</a><a class="cite" href="references.html#r43">[43]</a>.</caption>
+    <thead><tr><th scope="col">Setting</th><th scope="col">Runtime</th><th scope="col">Default</th><th scope="col">Notes</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">-fa, --flash-attn</span></td><td>llama.cpp</td><td><span class="mono">auto</span></td><td>Picks the Flash Attention kernel where the backend supports it</td></tr>
+      <tr><td><span class="mono">OLLAMA_FLASH_ATTENTION</span></td><td>Ollama</td><td>automatic where supported<a class="cite" href="references.html#r9">[9]</a></td><td>Must be in effect for a quantised cache to save memory</td></tr>
+      <tr><td><span class="mono">-ctk / -ctv</span></td><td>llama.cpp</td><td><span class="mono">f16</span></td><td>Separate K and V cache types</td></tr>
+      <tr><td><span class="mono">OLLAMA_KV_CACHE_TYPE</span></td><td>Ollama</td><td><span class="mono">f16</span></td><td><span class="mono">q8_0</span> about halves the cache, <span class="mono">q4_0</span> about quarters it; global to all models<a class="cite" href="references.html#r9">[9]</a></td></tr>
+      <tr><td><span class="mono">-nkvo, --no-kv-offload</span></td><td>llama.cpp</td><td>offload on</td><td>Keeps the cache in system memory: frees VRAM, costs speed</td></tr>
+    </tbody>
+  </table></div>
+    <p>Halving the cache with <span class="mono">q8_0</span> has three conditions (Flash Attention must be on, the setting is global, and models with many query heads per key/value head lose more precision), set out on the <a href="ollama-model-selection.html#fit-q8">model page, section 3.2</a>.</p>
+  </div>
+</section>
+
+<section id="multi">
+  <div class="container">
+    <h2>11. More than one GPU</h2>
+    <p>Within one machine, llama.cpp splits a model across cards in one of four ways<a class="cite" href="references.html#r43">[43]</a>:</p>
+    <div class="table-wrap"><table>
+    <caption>llama.cpp split modes, <span class="mono">-sm, --split-mode</span><a class="cite" href="references.html#r43">[43]</a>.</caption>
+    <thead><tr><th scope="col">Mode</th><th scope="col">What is split</th><th scope="col">Use</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">none</span></td><td>Nothing: one GPU only, chosen with <span class="mono">-mg</span></td><td>A model that fits on one card</td></tr>
+      <tr><td><span class="mono">layer</span> (default)</td><td>Layers and cache, pipelined</td><td>The general case</td></tr>
+      <tr><td><span class="mono">row</span></td><td>Weights by rows, in parallel; <span class="mono">-mg</span> holds intermediate results and cache</td><td>Equal cards with a fast interconnect</td></tr>
+      <tr><td><span class="mono">tensor</span></td><td>Weights and cache, in parallel; marked experimental</td><td>Testing only</td></tr>
+    </tbody>
+  </table></div>
+    <div class="eq" id="eq-tensor-split">
+  <div class="eq-head">
+    <h3 class="eq-title">Share of the model each GPU receives under <span class="mono">--tensor-split</span></h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-tensor-split" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ f_{i} \;=\; \frac{t_{i}}{\sum_{j=1}^{G} t_{j}}, \qquad S_{w,i} \;\approx\; f_{i}\,S_{w}, \qquad t_{i} \;\propto\; V_{\text{tot},i} - V_{\text{rt},i} \;\;\text{to balance free memory} \]</div>
+  <p class="eq-note">The option takes "a comma-separated list of proportions, e.g. 3,1" giving the "fraction of the model to offload to each GPU"<a class="cite" href="references.html#r43">[43]</a>. Proportions are normalised, so <span class="mono">3,1</span> and <span class="mono">75,25</span> mean the same split.</p>
+  <div class="deriv"><ol>
+    <li>A list of proportions describes a split only once normalised, which gives \( f_{i} = t_{i}/\sum_j t_{j} \) with \( \sum_i f_{i} = 1 \).</li>
+    <li>In the default <span class="mono">layer</span> mode whole layers are assigned, so \( S_{w,i} \approx f_{i}\,S_{w} \) holds to within one layer's size.</li>
+    <li>For two unequal cards, setting \( t_{i} \) to each card's memory after its runtime reservation gives both the same fraction of free memory. Because the cache is split with the layers, the cache then divides in the same proportion.</li>
+  </ol></div>
+  <div class="vars" id="v-tensor-split" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the tensor-split relation.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(t_{i}\)</td><td>The \(i\)-th value passed to <span class="mono">--tensor-split</span></td><td>dimensionless</td></tr>
+      <tr><td>\(f_{i}\)</td><td>Fraction of the model placed on GPU \(i\)</td><td>dimensionless</td></tr>
+      <tr><td>\(G\)</td><td>Number of GPUs in the split</td><td>dimensionless</td></tr>
+      <tr><td>\(S_{w,i},\;S_{w}\)</td><td>Weight bytes on GPU \(i\), and in total</td><td>B</td></tr>
+      <tr><td>\(V_{\text{tot},i},\;V_{\text{rt},i}\)</td><td>Total memory and runtime reservation of GPU \(i\)</td><td>B</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+    <p>Ollama exposes none of these; it decides placement itself, and <span class="mono">OLLAMA_SCHED_SPREAD</span> forces it to spread a model over every GPU rather than keep it on one<a class="cite" href="references.html#r41">[41]</a>. Across machines the split is llama.cpp's RPC backend, covered on the <a href="llama-rpc-vulkan-guide.html">multi-node guide</a> and costed on the <a href="ollama-model-selection.html#distributed">model page</a>.</p>
+  </div>
+</section>
+
+<section id="docker">
+  <div class="container">
+    <h2>12. GPUs inside containers</h2>
+    <p>The build-and-test page runs Open WebUI, Open Terminal and Jupyter in containers. Whether those containers can see the GPU depends on the host:</p>
+    <div class="table-wrap"><table>
+    <caption>GPU access from containers, by host.</caption>
+    <thead><tr><th scope="col">Host</th><th scope="col">NVIDIA</th><th scope="col">AMD</th><th scope="col">Source</th></tr></thead>
+    <tbody>
+      <tr><td>Windows, Docker Desktop</td><td>Yes, through WSL 2 GPU paravirtualisation: needs the WSL 2 backend, a current NVIDIA driver with WSL 2 support, and <span class="mono">wsl --update</span>. Pass <span class="mono">--gpus=all</span></td><td>Not covered by Docker Desktop's <span class="mono">--gpus</span> support, which it describes for NVIDIA GPUs</td><td><a class="cite" href="references.html#r51">[51]</a></td></tr>
+      <tr><td>Linux, Docker Engine</td><td>Install the NVIDIA Container Toolkit, run <span class="mono">sudo nvidia-ctk runtime configure --runtime=docker</span>, restart Docker, then pass <span class="mono">--gpus=all</span></td><td>Pass <span class="mono">--device /dev/kfd --device /dev/dri</span> and use a ROCm image such as <span class="mono">ollama/ollama:rocm</span></td><td><a class="cite" href="references.html#r50">[50]</a><a class="cite" href="references.html#r89">[89]</a></td></tr>
+    </tbody>
+  </table></div>
+<pre><code># Check that a container sees the NVIDIA GPU (Ollama's documented form)
+docker run -d --gpus=all -v ollama:/root/.ollama -p 11434:11434 --name ollama ollama/ollama
+docker exec ollama ollama ps        # after a request: PROCESSOR should read 100% GPU</code></pre>
+    <p>Two consequences for the older pages in this set. On Windows, the AMD container route on the Docker Jupyter page has no documented support from Docker, and <span class="mono">/dev/kfd</span> is a Linux ROCm device that WSL does not provide (section 3.2). The working AMD-on-Windows routes are Ollama or llama.cpp running natively, or ROCm inside a WSL distro.</p>
+  </div>
+</section>
+
+<section id="monitor">
+  <div class="container">
+    <h2>13. Reading GPU load into Prometheus</h2>
+    <p>Which exporter to run depends on vendor and operating system, and two common choices no longer work as older guides describe them.</p>
+    <div class="table-wrap"><table>
+    <caption>GPU exporters that work, by vendor and host.</caption>
+    <thead><tr><th scope="col">Vendor</th><th scope="col">Host</th><th scope="col">Exporter and install</th><th scope="col">Source</th></tr></thead>
+    <tbody>
+      <tr><td>NVIDIA</td><td>Windows</td><td><span class="mono">nvidia_gpu_exporter</span>: <span class="mono">winget install --scope machine utkuozdemir.nvidia_gpu_exporter</span>, then <span class="mono">nvidia_gpu_exporter install --collect.backend=nvml</span>; port 9835; a native service, no NSSM</td><td><a class="cite" href="references.html#r56">[56]</a></td></tr>
+      <tr><td>NVIDIA</td><td>Linux</td><td><span class="mono">nvidia_gpu_exporter</span> from its <span class="mono">.deb</span>, <span class="mono">.rpm</span> or tarball</td><td><a class="cite" href="references.html#r56">[56]</a></td></tr>
+      <tr><td>AMD, Intel, NVIDIA</td><td>Windows</td><td><span class="mono">windows_exporter</span> with the <span class="mono">gpu</span> collector turned on; vendor-neutral, from the same Windows counters Task Manager reads</td><td><a class="cite" href="references.html#r55">[55]</a><a class="cite" href="references.html#r86">[86]</a></td></tr>
+      <tr><td>AMD</td><td>WSL</td><td><strong>Not possible</strong>: <span class="mono">amd-smi</span> is unsupported under WSL</td><td><a class="cite" href="references.html#r53">[53]</a></td></tr>
+      <tr><td>AMD</td><td>Linux</td><td>AMD Device Metrics Exporter, which replaces <span class="mono">amd_smi_exporter</span>; its README describes Instinct accelerators and Radeon support was not confirmed</td><td><a class="cite" href="references.html#r57">[57]</a><a class="cite" href="references.html#r58">[58]</a></td></tr>
+      <tr><td>Any</td><td>Any</td><td><span class="mono">llama-server --metrics</span>: token rate, queue and cache use, which is load as the model sees it</td><td><a class="cite" href="references.html#r39">[39]</a></td></tr>
+    </tbody>
+  </table></div>
+
+    <h3>13.1 The Windows GPU collector</h3>
+    <p>The <span class="mono">gpu</span> collector is off by default<a class="cite" href="references.html#r55">[55]</a>. Add it to the default set with the documented <span class="mono">[defaults]</span> placeholder<a class="cite" href="references.html#r86">[86]</a>:</p>
+<pre><code># Command line (also the form for an NSSM or sc.exe service definition)
+.\windows_exporter.exe --collectors.enabled "[defaults],gpu"
+
+# MSI install: the same list through the installer property
+msiexec /i windows_exporter-0.32.1-amd64.msi --% ENABLED_COLLECTORS="[defaults],gpu"</code></pre>
+    <p class="small muted">The MSI form passes the <span class="mono">[defaults],gpu</span> list through <span class="mono">ENABLED_COLLECTORS</span>, which the README describes as taking the same list as the flag<a class="cite" href="references.html#r86">[86]</a>. <span class="pill derived">Derived here</span>: the README's own MSI examples list collectors explicitly.</p>
+    <p>Utilisation comes from a busy-time counter, so it needs <span class="mono">rate()</span>. The documented query<a class="cite" href="references.html#r55">[55]</a>:</p>
+<pre><code>sum by (phys) (
+  rate(windows_gpu_engine_time_seconds_total{phys="0", engtype="3D"}[1m])
+) * 100</code></pre>
+    <div class="callout">
+      <p><strong>The metric was renamed between versions.</strong> It is <span class="mono">windows_gpu_engine_time_seconds</span> in 0.31.7, the version in the deployment folder, and <span class="mono">windows_gpu_engine_time_seconds_total</span> in 0.32.x<a class="cite" href="references.html#r55">[55]</a>. A panel written for one shows nothing on the other. Compute work may run on an engine other than <span class="mono">3D</span>; list the engine types your driver reports with <span class="mono">count by (engtype) (windows_gpu_engine_time_seconds_total)</span> before choosing one.</p>
+    </div>
+    <div class="eq" id="eq-gpu-utilisation">
+  <div class="eq-head">
+    <h3 class="eq-title">Utilisation from a cumulative busy-time counter</h3>
+    <div class="eq-tools"><span class="pill derived">Derived here</span>
+      <button class="info" aria-controls="v-gpu-utilisation" aria-expanded="false">&#9432;&nbsp;<span class="info-label">Define variables</span></button></div>
+  </div>
+  <div class="eq-body">\[ U(w) \;=\; \frac{c(t) - c(t-w)}{w} \;=\; \mathrm{rate}\bigl(c[w]\bigr), \qquad 0 \le U \le n_{\text{dev}} \]</div>
+  <p class="eq-note">Worth stating explicitly because the GPU exporters publish both kinds of metric and they are not interchangeable: a cumulative busy-seconds counter must be differenced, while an instantaneous percentage gauge must not be. Applying <span class="mono">rate()</span> to a gauge, or omitting it on a counter, are the two failure modes that produce plausible-looking but wrong dashboards.</p>
+  <div class="deriv"><ol>
+    <li>A busy-time counter \( c(t) \) accumulates seconds during which the device was executing work, and only ever increases.</li>
+    <li>Over a window \( w \) the device was busy for \( c(t) - c(t-w) \) seconds out of \( w \) seconds elapsed.</li>
+    <li>The ratio of those two is the fraction of wall-clock time the device was busy, which is the definition of utilisation.</li>
+    <li>That ratio is precisely what PromQL <span class="mono">rate()</span> computes over a counter. The function reference states that breaks in monotonicity, such as a counter reset when the exporter or driver restarts, are adjusted for automatically<a class="cite" href="references.html#r19">[19]</a>, which is why the raw difference must not be taken by hand.</li>
+    <li>When the counter aggregates \( n_{\text{dev}} \) devices the result saturates at \( n_{\text{dev}} \) rather than 1, so divide by the device count before plotting a percentage.</li>
+    <li>\( w \) must satisfy the window condition derived above, otherwise the panel empties whenever a scrape is missed.</li>
+  </ol></div>
+  <div class="vars" id="v-gpu-utilisation" hidden><div class="table-wrap"><table>
+    <caption>Symbols in the counter-based utilisation relation, applicable to GPU busy time, CPU time and any other cumulative seconds counter.</caption>
+    <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Unit</th></tr></thead>
+    <tbody>
+      <tr><td>\(U(w)\)</td><td>Mean utilisation over the window</td><td>dimensionless (&times;100 for per cent)</td></tr>
+      <tr><td>\(c(t)\)</td><td>Cumulative busy-seconds counter at time \(t\)</td><td>s</td></tr>
+      <tr><td>\(w\)</td><td>Range-vector window</td><td>s</td></tr>
+      <tr><td>\(n_{\text{dev}}\)</td><td>Devices or cores the counter aggregates</td><td>dimensionless</td></tr>
+    </tbody>
+  </table></div></div>
+</div>
+  </div>
+</section>
+
+<section id="trouble">
+  <div class="container">
+    <h2>14. When the GPU is not being used</h2>
+    <div class="table-wrap"><table>
+    <caption>Symptoms, causes and checks.</caption>
+    <thead><tr><th scope="col">Symptom</th><th scope="col">Likely cause</th><th scope="col">Check or fix</th><th scope="col">Source</th></tr></thead>
+    <tbody>
+      <tr><td><span class="mono">ollama ps</span> shows CPU or a CPU/GPU split</td><td>Driver below the minimum for the card; card not on the ROCm list; model plus cache larger than VRAM</td><td>Driver version against section 1; card against section 3; the fit relation on the model page</td><td><a class="cite" href="references.html#r40">[40]</a><a class="cite" href="references.html#r9">[9]</a></td></tr>
+      <tr><td>CUDA 13 build fails for a GTX 10-series card</td><td>CUDA 13 cannot target compute capability below 7.5</td><td>Use CUDA 12.x</td><td><a class="cite" href="references.html#r45">[45]</a><a class="cite" href="references.html#r44">[44]</a></td></tr>
+      <tr><td><span class="mono">nvcc</span> rejects the Visual Studio version</td><td>CUDA 12.x with Visual Studio 2026</td><td>Use Build Tools 2022 with CUDA 12.x</td><td><a class="cite" href="references.html#r47">[47]</a></td></tr>
+      <tr><td>llama.cpp context is smaller than requested</td><td>--fit reduced it to meet the per-device margin</td><td>Run with <span class="mono">--fit-print on</span>; raise <span class="mono">--n-cpu-moe</span> or quantise the cache</td><td><a class="cite" href="references.html#r43">[43]</a></td></tr>
+      <tr><td>Out-of-memory part-way through loading</td><td>Explicit <span class="mono">-ngl</span> too high, so --fit does not adjust it</td><td>Remove <span class="mono">-ngl</span>, or use the layer-count relation in section 8</td><td><a class="cite" href="references.html#r43">[43]</a></td></tr>
+      <tr><td>No AMD GPU metrics from inside WSL</td><td><span class="mono">amd-smi</span> is unsupported under WSL</td><td>Use the <span class="mono">windows_exporter</span> gpu collector on the Windows host</td><td><a class="cite" href="references.html#r53">[53]</a><a class="cite" href="references.html#r55">[55]</a></td></tr>
+      <tr><td>GPU panel empty after upgrading windows_exporter</td><td>Metric renamed to <span class="mono">..._total</span> in 0.32</td><td>Update the panel query</td><td><a class="cite" href="references.html#r55">[55]</a></td></tr>
+      <tr><td>Wrong card used on a machine with an iGPU</td><td>Vulkan picked the integrated GPU</td><td>Set <span class="mono">GGML_VK_VISIBLE_DEVICES</span> to the discrete card</td><td><a class="cite" href="references.html#r40">[40]</a></td></tr>
+      <tr><td>NVIDIA GPU lost after suspend on Linux</td><td>Driver bug documented by Ollama</td><td><span class="mono">sudo rmmod nvidia_uvm &amp;&amp; sudo modprobe nvidia_uvm</span></td><td><a class="cite" href="references.html#r40">[40]</a></td></tr>
+    </tbody>
+  </table></div>
+  </div>
+</section>
+
+<section id="gaps">
+  <div class="container">
+    <h2>15. What this page does not settle</h2>
+    <ul>
+      <li>The order in which <span class="mono">--fit</span> trades layers against context. The option text does not state it; <span class="mono">--fit-print on</span> shows the result for your model<a class="cite" href="references.html#r43">[43]</a>.</li>
+      <li>Whether <span class="mono">--fit</span> accounts for RPC workers' memory.</li>
+      <li>The driver ceiling for Pascal and older cards comes from a press report<a class="cite" href="references.html#r59">[59]</a>, not from NVIDIA's own page.</li>
+      <li>Radeon support in AMD's Device Metrics Exporter<a class="cite" href="references.html#r58">[58]</a>.</li>
+      <li>Which Windows GPU engine type llama.cpp's CUDA, HIP and Vulkan backends report their work under.</li>
+      <li>The Visual Studio versions accepted by CUDA 12.6, 12.8 and 13.0; only the 12.9 and 13.5 guides were read<a class="cite" href="references.html#r46">[46]</a><a class="cite" href="references.html#r47">[47]</a>.</li>
+    </ul>
+  </div>
+</section>
+<aside class="ailflow-next" aria-label="Next step"><h2>Step 2 of 10 is done when</h2><p><span class="mono">nvidia-smi</span> (or Adrenalin) lists every card, and <span class="mono">ollama ps</span> shows a loaded model at <span class="mono">100% GPU</span>.</p><p>Read alongside:</p><ul><li><a href="ollama-model-selection.html">How much memory a model and its cache take</a></li><li><a href="llama-rpc-vulkan-guide.html">Vulkan device selection across nodes</a></li></ul><p><a class="ailflow-go" href="ollama-model-selection.html">Next: step 3, choose a model that fits &rarr;</a></p></aside>
+</main>
+<footer class="foot">
+  <div class="container">
+    <p><strong>AI_Local</strong> v0.0.6 &middot; William W. Wallace &middot;
+       <a href="CHANGELOG.html">change log</a> &middot;
+       <a href="references.html">references</a></p>
+    <p class="small">Equations typeset offline with KaTeX. Every page in this set opens
+       from local disk with no network access, and nothing here uses browser storage.</p>
+  </div>
+</footer>
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="assets/equations.js"></script>
+<script src="assets/sitenav.js"></script>
+</body>
+</html>

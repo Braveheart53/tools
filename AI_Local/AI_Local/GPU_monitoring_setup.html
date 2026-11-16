@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Vendor GPU Monitoring Documentation</title>
+    <style>
+        :root {
+            --bg: #f4f6f9; --text: #1a1a1a; --card-bg: #ffffff;
+            --primary: #2563eb; --accent: #0d9488; --code-bg: #1e1e1e;
+            --border: #e2e8f0; --nav-bg: #1e293b; --nav-text: #cbd5e1;
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        [data-theme="dark"] {
+            --bg: #0f172a; --text: #e2e8f0; --card-bg: #1e293b;
+            --primary: #60a5fa; --accent: #2dd4bf; --code-bg: #020617;
+            --border: #334155; --nav-bg: #020617; --nav-text: #94a3b8;
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.4);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: var(--text); background: var(--bg); transition: background 0.3s, color 0.3s; }
+        
+        header { background: var(--nav-bg); color: #f8fafc; padding: 2rem 1rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; box-shadow: var(--shadow); }
+        .header-left h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+        .header-left p { opacity: 0.8; font-size: 0.9rem; }
+        .theme-toggle { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; transition: all 0.2s; }
+        .theme-toggle:hover { background: rgba(255,255,255,0.2); }
+        
+        nav { background: var(--card-bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 90; }
+        .nav-container { max-width: 1000px; margin: 0 auto; display: flex; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .nav-container::-webkit-scrollbar { display: none; }
+        .page-btn { flex: 1; min-width: 140px; background: none; border: none; padding: 16px 20px; cursor: pointer; font-size: 15px; color: var(--text); border-bottom: 3px solid transparent; transition: all 0.2s; text-align: center; white-space: nowrap; }
+        .page-btn:hover { background: rgba(0,0,0,0.03); }
+        .page-btn.active { border-bottom-color: var(--primary); color: var(--primary); font-weight: 600; background: rgba(37,99,235,0.05); }
+        
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem 1rem; }
+        .page { display: none; animation: fadeIn 0.25s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        
+        h2 { color: var(--text); border-bottom: 2px solid var(--accent); padding-bottom: 6px; margin: 1.5rem 0 1rem; font-size: 1.4rem; }
+        h3 { color: var(--primary); margin: 1.2rem 0 0.8rem; font-size: 1.15rem; }
+        p, li { margin-bottom: 0.75rem; }
+        code { background: var(--code-bg); color: #abb2bf; padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', Monaco, monospace; font-size: 0.9em; }
+        pre { background: var(--code-bg); color: #abb2bf; padding: 16px; border-radius: 6px; overflow-x: auto; margin: 1rem 0; box-shadow: var(--shadow); }
+        .note { background: rgba(37,99,235,0.1); border-left: 4px solid var(--primary); padding: 14px; margin: 16px 0; border-radius: 4px; }
+        .note strong { color: var(--primary); }
+        [data-theme="dark"] .note { background: rgba(96,165,250,0.15); }
+        
+        .vendor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .vendor-card { background: var(--card-bg); border: 1px solid var(--border); padding: 1.25rem; border-radius: 8px; box-shadow: var(--shadow); }
+        
+        .btn-download { display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 500; cursor: pointer; border: none; margin-top: 2rem; transition: opacity 0.2s; }
+        .btn-download:hover { opacity: 0.9; }
+        
+        footer { text-align: center; padding: 3rem 1rem; color: var(--text); opacity: 0.6; font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+    </style>
+<link rel="stylesheet" href="assets/katex/katex.min.css">
+<link rel="stylesheet" href="assets/equations.css">
+<link rel="stylesheet" href="assets/sitenav.css">
+</head>
+<body>
+<nav class="ailnav" aria-label="AI_Local page set">
+  <div class="ailnav-inner">
+    <a class="ailnav-brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true" fill="none"><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M16 10v5M16 15l-6 6M16 15l6 6"/></g><g fill="currentColor"><circle cx="16" cy="7" r="3"/><circle cx="9" cy="24" r="3"/><circle cx="23" cy="24" r="3"/></g></svg><span>AI_Local</span></a>
+    <span class="ailnav-ver">v0.0.6</span>
+    <div class="ailnav-links">
+      <a href="../index.html" class="ailnav-home"><span aria-hidden="true">⌂</span>&nbsp;Repo home</a><a href="index.html">Overview</a><a href="downloads.html">Downloads</a><a href="gpu-configuration.html">GPU setup</a><a href="local-code-build-test.html">Build &amp; test</a><a href="ollama-model-selection.html">Model choice</a><a href="claude-sandbox-local-env.html">Sandbox access</a><a href="monitoring-sizing.html">Monitor sizing</a><a href="llama-rpc-vulkan-guide.html">llama.cpp RPC</a><a href="Jupyter_Server_Setup_wsl.html">Jupyter WSL2</a><a href="Dockler_Jupyter_withGPU_Passthru_nssm.html">Docker Jupyter</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Monitoring W11</a><a href="GPU_monitoring_setup.html">GPU metrics</a><a href="Grafana_Prometheus_install_windows.html">Install (Win)</a><a href="Grafan_Promethius_install_linux.html">Install (Linux)</a><a href="references.html">References</a><a href="CHANGELOG.html">Change log</a>
+    </div>
+    
+  </div>
+</nav>
+<nav class="ailflow" aria-label="Setup path"><span class="ailflow-where"><span class="ailflow-n">8</span>Step 8 of 10: Export GPU metrics</span><span class="ailflow-move"><a href="index.html#step-gpu-metrics">On the path</a><a href="Grafana_Prometheus_install_windows.html">&larr; 7. Install Prometheus and Grafana</a><a href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">9. Build the fleet dashboard &rarr;</a></span></nav>
+
+    <header>
+        <div class="header-left">
+            <h1>Multi-Vendor GPU Monitoring Stack</h1>
+            <p>NVIDIA ROCm & AMD DCU/ROCm · Windows Exporter · Prometheus · Grafana</p>
+        </div>
+        <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙 Dark Mode</button>
+    </header>
+
+    <nav>
+        <div class="nav-container">
+            <button class="page-btn active" onclick="showPage('page-nvidia', this)">1. NVIDIA GPU Setup</button>
+            <button class="page-btn" onclick="showPage('page-amd', this)">2. AMD GPU Setup</button>
+            <button class="page-btn" onclick="showPage('page-grafana', this)">3. Grafana Dashboards</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- PAGE 1: NVIDIA -->
+        <div id="page-nvidia" class="page active">
+            <h2>NVIDIA GPU Exporter (Windows)</h2>
+            <p>Expose NVML/SMI telemetry to Prometheus. Compatible with Tesla, RTX, and data center architectures.</p>
+            
+            <h3>1. Install & Configure</h3>
+            <div class="ailfix" role="note"><span class="ailfix-tag">Corrected in v0.0.6</span><p>The previous command downloaded from <code>prometheus-community/nvidia_gpu_exporter</code>, a repository that does not exist. The exporter is <a href="https://github.com/utkuozdemir/nvidia_gpu_exporter">utkuozdemir/nvidia_gpu_exporter</a>. It installs through winget and registers itself as a native Windows service, so no NSSM or <code>New-Service</code> step is needed<a class="cite" href="references.html#r56">[56]</a>.</p></div>
+<pre><code># Install machine-wide, then register the native service with the NVML backend
+winget install --scope machine utkuozdemir.nvidia_gpu_exporter
+nvidia_gpu_exporter install --collect.backend=nvml
+Start-Service nvidia_gpu_exporter
+
+# Let Prometheus on another machine on the subnet scrape port 9835
+New-NetFirewallRule -DisplayName "Nvidia GPU Exporter" -Direction Inbound -Action Allow `
+    -Protocol TCP -LocalPort 9835 -Profile Private,Domain -RemoteAddress LocalSubnet</code></pre>
+
+            <h3>2. Verify Telemetry</h3>
+            <p>Visit <code>http://localhost:9835/metrics</code>. Confirm key time-series:</p>
+            <ul>
+                <li><code>nvidia_smi_utilization_gpu_ratio</code></li>
+                <li><code>nvidia_smi_memory_used_bytes</code> / <code>nvidia_smi_memory_total_bytes</code></li>
+                <li><code>nvidia_smi_power_draw_watts</code>, <code>nvidia_smi_temperature_gpu</code> <span class="ailfix-inline">names corrected in v0.0.6<a class="cite" href="references.html#r20">[20]</a></span></li>
+            </ul>
+            <div class="note">ℹ️ <strong>Prometheus Config Snippet:</strong><br><code>scrape_configs:<br>  - job_name: 'nvidia-gpu'<br>    static_configs: [{targets: ['localhost:9835']}</code></div>
+        </div>
+
+        <!-- PAGE 2: AMD -->
+        <div id="page-amd" class="page">
+            <h2>AMD GPU Exporter (ROCm / Windows)</h2>
+            <div class="ailfix" role="note"><span class="ailfix-tag">Corrected in v0.0.6</span><p>This section previously installed <code>prometheus-community/amd-rocm-exporter</code> and listed <code>rocm_*</code> metrics. That repository does not exist, and no exporter publishing those metric names could be found. AMD's own exporter, <code>amd_smi_exporter</code>, receives no further updates and is Linux-only<a class="cite" href="references.html#r57">[57]</a>, and <code>amd-smi</code> is not supported under WSL<a class="cite" href="references.html#r53">[53]</a>, so the WSL bridge in the folder's notes cannot report the GPU either. The route below works for AMD (and NVIDIA and Intel) GPUs on Windows. Full background: <a href="gpu-configuration.html#monitor">GPU configuration, section 13</a>.</p></div>
+            <div class="vendor-grid">
+                <div class="vendor-card">
+                    <h3>📦 Exporter Setup</h3>
+                    <pre><code># gpu collector: vendor-neutral Windows
+# GPU counters, off by default
+.\windows_exporter.exe `
+  --collectors.enabled "[defaults],gpu"
+
+# Or from the MSI:
+msiexec /i windows_exporter.msi `
+  --% ENABLED_COLLECTORS="[defaults],gpu"</code></pre>
+                </div>
+                <div class="vendor-card">
+                    <h3>📊 Key Metrics</h3>
+                    <ul>
+                        <li><code>windows_gpu_engine_time_seconds_total</code> (busy time per engine; use <code>rate()</code>)</li>
+                        <li><code>windows_gpu_adapter_memory_dedicated_bytes</code> and its usage counterparts</li>
+                        <li>Temperature and power sensors where the driver exposes them (0.32.x)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>Prometheus Target Config</h3>
+            <pre><code>- job_name: 'windows-gpu'
+  static_configs: [{targets: ['localhost:9182']}]</code></pre>
+            <div class="note">ℹ️ <strong>Note:</strong> the engine counter is named <code>windows_gpu_engine_time_seconds</code> in windows_exporter 0.31.7 (the version in the folder) and gains <code>_total</code> in 0.32.x. On a Linux host with ROCm, use AMD's Device Metrics Exporter<a class="cite" href="references.html#r58">[58]</a> instead.</div>
+        </div>
+
+        <!-- PAGE 3: GRAFANA -->
+        <div id="page-grafana" class="page">
+            <h2>Grafana Dashboard Configuration</h2>
+            <p>Unified visualization for both NVIDIA and AMD telemetry. Import official community dashboards or build custom panels.</p>
+
+            <h3>1. Add Prometheus Data Source</h3>
+            <ol>
+                <li><strong>Configuration > Data Sources > Add source > Prometheus</strong></li>
+                <li>Set URL: <code>http://localhost:9090</code> (or your cluster endpoint)</li>
+                <li>Click <strong>Save & Test</strong>. Green checkmark = confirmed connectivity.</li>
+            </ol>
+
+            <h3>2. Import GPU Dashboards</h3>
+            <div class="vendor-grid">
+                <div class="vendor-card">
+                    <h3>🟢 NVIDIA Dashboard</h3>
+                    <p><strong>Dashboard ID:</strong> <code>14574</code> <span class="ailfix-inline">corrected in v0.0.6: the exporter's README names 14574, plus 25547 for a multi-GPU overview<a class="cite" href="references.html#r20">[20]</a></span></p>
+                    <ol>
+                        <li><strong>Create > Import</strong> in Grafana</li>
+                        <li>Paste ID or upload JSON</li>
+                        <li>Select your Prometheus DS</li>
+                        <li>Click <strong>Import</strong></li>
+                    </ol>
+                </div>
+                <div class="vendor-card">
+                    <h3>🔵 AMD Dashboard</h3>
+                    <p><strong>No published dashboard confirmed.</strong> <span class="ailfix-inline">corrected in v0.0.6</span></p>
+                    <ol>
+                        <li>The earlier dashboard ID mapped to a <code>rocm_*</code> namespace no exporter publishes</li>
+                        <li>Build a panel from <code>sum by (phys) (rate(windows_gpu_engine_time_seconds_total{phys="0", engtype="3D"}[1m])) * 100</code><a class="cite" href="references.html#r55">[55]</a></li>
+                        <li>List the engine types your driver reports with <code>count by (engtype) (windows_gpu_engine_time_seconds_total)</code></li>
+                    </ol>
+                </div>
+            </div>
+
+            <h3>3. Troubleshooting & Customization</h3>
+            <ul>
+                <li><strong>No Data?</strong> Check Grafana time range (last 5-10 mins), verify exporter service status, and confirm Prometheus scrape targets are UP.</li>
+                <li><strong>Multigpu Filtering:</strong> Edit panel query → Add label matchers: <code>{device=~"0|1|2"}</code></li>
+                <li><strong>Custom Alerts:</strong> Use PromQL thresholds like <code>nvidia_smi_power_draw_watts > 350</code> <span class="ailfix-inline">corrected in v0.0.6: power is a gauge, so <code>rate()</code> does not apply (see <a href="monitoring-sizing.html#counters">counters and gauges</a>); the <code>rocm_*</code> metric does not exist</span></li>
+            </ul>
+        </div>
+    </div>
+
+    <footer>
+        <p>Corrected in v0.0.6 against windows_exporter 0.32.1 and nvidia_gpu_exporter 1.19.0. Current versions of every component are on the <a href="downloads.html">downloads page</a>.</p>
+        <button class="btn-download" onclick="downloadHTML()">⬇️ Download Updated .html</button>
+    </footer>
+
+    <script>
+        function showPage(id, btn) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.page-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            if(btn) btn.classList.add('active');
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'light' ? 'dark' : 'light';
+            html.setAttribute('data-theme', next);
+            document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+            localStorage.setItem('gpu-doc-theme', next);
+        }
+
+        // Load saved theme on init
+        (function() {
+            const saved = localStorage.getItem('gpu-doc-theme');
+            if(saved) document.documentElement.setAttribute('data-theme', saved);
+        })();
+
+        function downloadHTML() {
+            const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'GPU-Monitoring-Guide-Full.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+<aside class="ailflow-next" aria-label="Next step"><h2>Step 8 of 10 is done when</h2><p>A utilisation series for every GPU appears in Prometheus.</p><p>Read alongside:</p><ul><li><a href="gpu-configuration.html#monitor">Which exporter works for which vendor</a></li></ul><p><a class="ailflow-go" href="Promethius_Grafana_windows11-llama-monitoring-tutorial.html">Next: step 9, build the fleet dashboard &rarr;</a></p></aside>
+<script src="assets/katex/katex.min.js"></script>
+<script src="assets/katex/contrib/auto-render.min.js"></script>
+<script src="assets/equations.js"></script>
+<script src="assets/sitenav.js"></script>
+</body>
+</html>
